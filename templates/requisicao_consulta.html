@@ -197,11 +197,9 @@ function renderizar(lista, q) {
                   <div>
                     <label class="form-label mb-0" style="font-size:.7rem">
                       Total na cozinha agora (${uu})
-                      <span style="color:#6b7280;font-size:.65rem">máx: ${fmtN(maxTotal)}</span>
                     </label>
                     <input type="number" class="form-control form-control-sm inp-total"
-                           min="0" step="0.1" placeholder="0"
-                           max="${fmtN(maxTotal)}" style="width:110px">
+                           min="0" step="0.1" placeholder="0" style="width:110px">
                   </div>
                   <div>
                     <label class="form-label mb-0" style="font-size:.7rem">Obs</label>
@@ -378,8 +376,8 @@ function renderizar(lista, q) {
       // Se totalCozinha < estFora, consumiu tudo desta req E parte do resto → sobra=0
       const sobraReq = Math.max(0, Math.min(saldo, Math.round((totalCozinha - estFora) * 10000) / 10000));
 
-      if (totalCozinha < 0 || totalCozinha > estMax + 0.001) {
-        alert(`O total na cozinha deve ser entre 0 e ${fmtN(estMax)} ${uu}.`);
+      if (totalCozinha < 0) {
+        alert(`O total na cozinha não pode ser negativo.`);
         return;
       }
 
