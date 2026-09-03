@@ -1005,7 +1005,7 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
                 ins_map[iid]['valor'] += qtd_uso * r['preco_compra'] / (r['fator_conversao'] or 1)
 
 
-def _calcular_lista(prods, form):
+def _calcular_lista(prods, form, estoque_override=None):
     db = get_db()
     ins_map = {}
     for p in prods:
@@ -1023,7 +1023,10 @@ def _calcular_lista(prods, form):
     _inteiras = {'un','und','unid','pct','pacote','cx','caixa','fardo','saco','bd','bandeja',
                  'dz','duzia','rl','rolo','lt','lata','sc','pt','pote','fatia','balde','galão','galao','garrafa','frasco','maço','maco','mc','bisnaga','bisn'}
     for iid, d in sorted(ins_map.items(), key=lambda x: x[1]['nome']):
-        estoque = d.get('estoque_atual') or 0.0
+        if estoque_override is not None:
+            estoque = float(estoque_override.get(iid, 0.0))
+        else:
+            estoque = d.get('estoque_atual') or 0.0
         qtd_nec = max(0.0, d['qtd_uso'] - estoque)
         _qtd = qtd_nec / d['fator_conversao']
         if (d['unidade_compra'] or '').lower() in _inteiras:
@@ -1031,7 +1034,7 @@ def _calcular_lista(prods, form):
         valor_compra = (_qtd * d['preco_compra']) if d['preco_compra'] is not None else None
         sobra = _qtd * d['fator_conversao'] - qtd_nec
         sobra_valor = (sobra / d['fator_conversao'] * d['preco_compra']) if (sobra > 0 and d['preco_compra'] is not None) else None
-        lista.append({**d, 'qtd_necessaria': d['qtd_uso'], 'estoque_disponivel': estoque,
+        lista.append({**d, 'id': iid, 'qtd_necessaria': d['qtd_uso'], 'estoque_disponivel': estoque,
                       'qtd_compra': _qtd, 'valor': valor_compra, 'sobra': sobra, 'sobra_valor': sobra_valor})
     custo_total = sum(i['valor'] for i in lista if i['valor'] is not None)
     return lista, custo_total
@@ -1662,6 +1665,84 @@ def previsao():
         produtos.append(p)
 
     return render_template('previsao.html', produtos=produtos, base_info=base_info)
+
+
+@app.route('/previsao/necessidade', methods=['POST'])
+def previsao_necessidade():
+    norm_name = _norm_reg_name
+    ALIASES = {
+        'CUSCUZ':                           16,
+        'MIX DE FRUTAS UVA E MANGA':        12,
+        'SALADA TERIYAKI COM PROTEINA':      4,
+        'SANDUICHE DE PEITO DE PERU':       11,
+        'GELATINA DE MORANGO':              17,
+        'GELATINA DE UVA':                  18,
+        'OVERNIGHT 180G':                   31,
+    }
+
+    db = get_db()
+    prods_all = db.execute('SELECT * FROM produtos ORDER BY nome').fetchall()
+    prod_map = {norm_name(p['nome']): p['id'] for p in prods_all}
+    for alias_key, pid in ALIASES.items():
+        prod_map[norm_name(alias_key)] = pid
+
+    slugs = [k[3:] for k in request.form if k.startswith('qs_')]
+    matched_dia = {}
+    matched_sem = {}
+    sem_ficha = []
+
+    for slug in slugs:
+        nome = request.form.get(f'nom_{slug}', '')
+        try: qty_seg = float(request.form.get(f'qs_{slug}', 0) or 0)
+        except Exception: qty_seg = 0
+        try: qty_qua = float(request.form.get(f'qq_{slug}', 0) or 0)
+        except Exception: qty_qua = 0
+        try: qty_sex = float(request.form.get(f'qx_{slug}', 0) or 0)
+        except Exception: qty_sex = 0
+
+        pid = prod_map.get(norm_name(nome))
+        if pid:
+            if qty_seg > 0:
+                matched_dia[pid] = matched_dia.get(pid, 0) + qty_seg
+            if qty_qua + qty_sex > 0:
+                matched_sem[pid] = matched_sem.get(pid, 0) + qty_qua + qty_sex
+        elif qty_seg + qty_qua + qty_sex > 0:
+            sem_ficha.append({'nome': nome, 'qty_dia': qty_seg, 'qty_sem': qty_qua + qty_sex})
+
+    # Lista do próximo dia (vs estoque atual)
+    form_dia = {f'qty_{p["id"]}': matched_dia.get(p['id'], 0) for p in prods_all}
+    lista_dia, custo_dia = _calcular_lista(prods_all, form_dia)
+    lista_dia = [i for i in lista_dia if i['qtd_necessaria'] > 0]
+
+    # Projetar estoque após o dia 1 (após compras + consumo)
+    all_estoques = {r['id']: float(r['estoque_atual'] or 0)
+                    for r in db.execute('SELECT id, estoque_atual FROM insumos').fetchall()}
+    db.close()
+
+    estoque_pos_dia1 = dict(all_estoques)
+    for item in lista_dia:
+        iid = item['id']
+        est = item['estoque_disponivel']
+        uso = item['qtd_necessaria']
+        compra_uso = item['qtd_compra'] * item['fator_conversao']
+        # Após consumir para o dia 1 e receber compras: sobra = est - uso + compra_uso
+        estoque_pos_dia1[iid] = max(0.0, est - uso + compra_uso)
+
+    # Lista do restante da semana (vs estoque projetado após dia 1)
+    form_sem = {f'qty_{p["id"]}': matched_sem.get(p['id'], 0) for p in prods_all}
+    lista_sem, custo_sem = _calcular_lista(prods_all, form_sem, estoque_override=estoque_pos_dia1)
+    lista_sem = [i for i in lista_sem if i['qtd_necessaria'] > 0]
+
+    resultado = {
+        'lista_dia': lista_dia,
+        'custo_dia': custo_dia,
+        'lista_sem': lista_sem,
+        'custo_sem': custo_sem,
+        'custo_total': custo_dia + custo_sem,
+        'sem_ficha': sem_ficha,
+        'falta_preco': any(i['preco_compra'] is None for i in lista_dia + lista_sem),
+    }
+    return render_template('previsao_necessidade.html', resultado=resultado)
 
 
 @app.route('/previsao/lista', methods=['POST'])

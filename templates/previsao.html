@@ -182,18 +182,43 @@
   Coluna <strong>Real</strong> pode ser preenchida conforme a semana avança.
 </div>
 
-<!-- Formulário oculto para calcular lista de compras -->
+<!-- Formulário: Semana completa (total Seg+Qua+Sex) -->
 <form method="post" action="{{ url_for('previsao_lista') }}" id="form-lista-compras">
   {% for p in produtos %}
   <input type="hidden" name="nom_{{ p.slug }}" value="{{ p.nome }}">
   <input type="hidden" name="qty_{{ p.slug }}" id="fhidden-{{ p.slug }}" value="{{ p.prev_total }}">
   {% endfor %}
-  <div class="d-flex justify-content-end">
-    <button type="submit" class="btn btn-success btn-lg px-5">
-      <i class="bi bi-cart3 me-2"></i>Calcular Lista de Compras da Previsão
-    </button>
-  </div>
 </form>
+
+<!-- Formulário: Próximo dia (apenas Seg) -->
+<form method="post" action="{{ url_for('previsao_lista') }}" id="form-proximo-dia">
+  {% for p in produtos %}
+  <input type="hidden" name="nom_{{ p.slug }}" value="{{ p.nome }}">
+  <input type="hidden" name="qty_{{ p.slug }}" value="{{ p.seg }}">
+  {% endfor %}
+</form>
+
+<!-- Formulário: Cascata (Seg / Qua / Sex separados) -->
+<form method="post" action="{{ url_for('previsao_necessidade') }}" id="form-cascata">
+  {% for p in produtos %}
+  <input type="hidden" name="nom_{{ p.slug }}" value="{{ p.nome }}">
+  <input type="hidden" name="qs_{{ p.slug }}" value="{{ p.seg }}">
+  <input type="hidden" name="qq_{{ p.slug }}" value="{{ p.qua }}">
+  <input type="hidden" name="qx_{{ p.slug }}" value="{{ p.sex }}">
+  {% endfor %}
+</form>
+
+<div class="d-flex justify-content-end gap-2 mt-3">
+  <button type="submit" form="form-proximo-dia" class="btn btn-outline-primary btn-lg px-4">
+    <i class="bi bi-1-circle me-2"></i>Lista — Próximo dia
+  </button>
+  <button type="submit" form="form-cascata" class="btn btn-warning btn-lg px-4">
+    <i class="bi bi-layers me-2"></i>Lista em Cascata (Dia + Semana)
+  </button>
+  <button type="submit" form="form-lista-compras" class="btn btn-success btn-lg px-5">
+    <i class="bi bi-cart3 me-2"></i>Lista — Semana completa
+  </button>
+</div>
 {% endblock %}
 
 {% block scripts %}
