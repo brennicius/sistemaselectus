@@ -216,6 +216,36 @@ def init_db():
         );
     ''')
     db.commit()
+
+    # Migrations para estoque central e rastreamento de consumo
+    try:
+        db.execute('ALTER TABLE insumos ADD COLUMN estoque_central REAL DEFAULT 0')
+    except Exception:
+        pass
+    db.executescript('''
+        CREATE TABLE IF NOT EXISTS requisicao_consumos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            requisicao_id INTEGER NOT NULL,
+            item_id INTEGER NOT NULL,
+            insumo_id INTEGER NOT NULL,
+            data TEXT NOT NULL,
+            qtd_consumida REAL NOT NULL DEFAULT 0,
+            qtd_sobra REAL,
+            obs TEXT,
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS insumo_ajuste_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            insumo_id INTEGER NOT NULL,
+            data TEXT NOT NULL,
+            estoque_cozinha_antes REAL,
+            estoque_central_antes REAL,
+            estoque_cozinha_depois REAL,
+            estoque_central_depois REAL,
+            obs TEXT
+        );
+    ''')
+    db.commit()
     db.close()
 
 def _recalcular_historico_fichas(db, insumo_id):
@@ -1283,6 +1313,186 @@ def requisicao_excluir(id):
     db.close()
     flash(f'Requisição #{id} excluída — estoque restaurado.', 'success')
     return redirect(url_for('requisicoes_lista'))
+
+
+@app.route('/requisicoes/consulta')
+def requisicao_consulta():
+    return render_template('requisicao_consulta.html')
+
+
+@app.route('/requisicoes/consulta/buscar')
+def requisicao_consulta_buscar():
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    db = get_db()
+    insumos = db.execute('''
+        SELECT id, nome, unidade_uso, unidade_compra, fator_conversao,
+               COALESCE(estoque_atual, 0) as estoque_atual,
+               COALESCE(estoque_central, 0) as estoque_central
+        FROM insumos
+        WHERE nome LIKE ?
+        ORDER BY nome COLLATE NOCASE
+        LIMIT 8
+    ''', (f'%{q}%',)).fetchall()
+
+    result = []
+    for ins in insumos:
+        iid  = ins['id']
+        fator = ins['fator_conversao'] or 1
+        reqs = db.execute('''
+            SELECT ri.id as item_id, r.id as req_id, r.data as req_data, r.observacao as req_obs,
+                   ri.qtd_enviada,
+                   COALESCE((SELECT SUM(rc.qtd_consumida)
+                              FROM requisicao_consumos rc WHERE rc.item_id = ri.id), 0) as total_consumido
+            FROM requisicao_itens ri
+            JOIN requisicoes r ON r.id = ri.requisicao_id
+            WHERE ri.insumo_id = ? AND r.status = 'aberto'
+            ORDER BY r.data DESC, r.id DESC
+        ''', (iid,)).fetchall()
+
+        reqs_list, req_saldo_total = [], 0.0
+        for rq in reqs:
+            saldo = max(0.0, rq['qtd_enviada'] - rq['total_consumido'])
+            req_saldo_total += saldo
+            reqs_list.append({
+                'item_id': rq['item_id'], 'req_id': rq['req_id'],
+                'req_data': rq['req_data'], 'req_obs': rq['req_obs'],
+                'qtd_enviada': rq['qtd_enviada'],
+                'total_consumido': rq['total_consumido'], 'saldo': saldo,
+            })
+
+        movs = db.execute('''
+            SELECT 'transferencia' as tipo, r.data as data,
+                   ri.qtd_enviada as qtd, r.id as req_id, ri.id as row_id,
+                   NULL as obs, NULL as coz_antes, NULL as coz_depois
+            FROM requisicao_itens ri
+            JOIN requisicoes r ON r.id = ri.requisicao_id
+            WHERE ri.insumo_id = ?
+            UNION ALL
+            SELECT 'consumo' as tipo, rc.data as data,
+                   rc.qtd_consumida as qtd, rc.requisicao_id as req_id, rc.id as row_id,
+                   rc.obs as obs, NULL as coz_antes, NULL as coz_depois
+            FROM requisicao_consumos rc
+            WHERE rc.insumo_id = ?
+            UNION ALL
+            SELECT 'ajuste' as tipo, al.data as data,
+                   NULL as qtd, NULL as req_id, al.id as row_id,
+                   al.obs as obs,
+                   al.estoque_cozinha_antes as coz_antes,
+                   al.estoque_cozinha_depois as coz_depois
+            FROM insumo_ajuste_log al
+            WHERE al.insumo_id = ?
+            ORDER BY data DESC, row_id DESC
+            LIMIT 15
+        ''', (iid, iid, iid)).fetchall()
+
+        result.append({
+            'insumo_id': iid, 'insumo_nome': ins['nome'],
+            'unidade_uso': ins['unidade_uso'], 'unidade_compra': ins['unidade_compra'],
+            'fator': fator,
+            'estoque_atual': ins['estoque_atual'],
+            'estoque_central': ins['estoque_central'],
+            'est_total': ins['estoque_atual'] + ins['estoque_central'],
+            'req_saldo_total': req_saldo_total,
+            'requisicoes': reqs_list,
+            'movimentacoes': [dict(m) for m in movs],
+        })
+
+    db.close()
+    return jsonify(result)
+
+
+@app.route('/requisicoes/<int:id>/consumo', methods=['POST'])
+def requisicao_consumo_add(id):
+    db = get_db()
+    item_id   = int(request.form.get('item_id', 0))
+    data      = request.form.get('data') or date.today().isoformat()
+    qtd_sobra = float((request.form.get('qtd_sobra', '0') or '0').replace(',', '.'))
+    total_cozinha_str = request.form.get('total_cozinha', '').replace(',', '.')
+    obs       = request.form.get('obs', '').strip() or None
+
+    item = db.execute('''
+        SELECT ri.*, r.status FROM requisicao_itens ri
+        JOIN requisicoes r ON r.id = ri.requisicao_id
+        WHERE ri.id = ? AND ri.requisicao_id = ?
+    ''', (item_id, id)).fetchone()
+    if not item or item['status'] != 'aberto':
+        db.close(); return ('', 204)
+
+    total_consumido = db.execute(
+        'SELECT COALESCE(SUM(qtd_consumida),0) FROM requisicao_consumos WHERE item_id=?',
+        (item_id,)).fetchone()[0]
+    saldo        = max(0.0, item['qtd_enviada'] - total_consumido)
+    qtd_sobra    = max(0.0, min(saldo, qtd_sobra))
+    qtd_consumida = max(0.0, saldo - qtd_sobra)
+
+    db.execute('''INSERT INTO requisicao_consumos
+        (requisicao_id, item_id, insumo_id, data, qtd_consumida, qtd_sobra, obs)
+        VALUES (?,?,?,?,?,?,?)''',
+        (id, item_id, item['insumo_id'], data, qtd_consumida, qtd_sobra, obs))
+
+    try:
+        total_cozinha = float(total_cozinha_str)
+        db.execute('UPDATE insumos SET estoque_atual = MAX(0, ?) WHERE id=?',
+                   (total_cozinha, item['insumo_id']))
+    except (ValueError, TypeError):
+        if qtd_consumida > 0:
+            db.execute('UPDATE insumos SET estoque_atual = MAX(0, COALESCE(estoque_atual,0) - ?) WHERE id=?',
+                       (qtd_consumida, item['insumo_id']))
+
+    db.commit(); db.close()
+    return ('', 204)
+
+
+@app.route('/requisicoes/consumo/<int:cid>/excluir', methods=['POST'])
+def requisicao_consumo_excluir(cid):
+    db = get_db()
+    rc = db.execute('SELECT * FROM requisicao_consumos WHERE id=?', (cid,)).fetchone()
+    if not rc:
+        db.close(); return ('', 404)
+    if rc['qtd_consumida'] and rc['qtd_consumida'] > 0:
+        db.execute('UPDATE insumos SET estoque_atual = COALESCE(estoque_atual,0) + ? WHERE id=?',
+                   (rc['qtd_consumida'], rc['insumo_id']))
+    db.execute('DELETE FROM requisicao_consumos WHERE id=?', (cid,))
+    db.commit(); db.close()
+    return ('', 204)
+
+
+@app.route('/insumos/<int:id>/ajustar_estoque', methods=['POST'])
+def insumo_ajustar_estoque(id):
+    coz = request.form.get('estoque_atual', '').replace(',', '.')
+    cen = request.form.get('estoque_central', '').replace(',', '.')
+    try:
+        coz = float(coz); cen = float(cen)
+    except ValueError:
+        return jsonify({'ok': False, 'erro': 'Valor inválido'}), 400
+    db  = get_db()
+    antes = db.execute('SELECT estoque_atual, estoque_central FROM insumos WHERE id=?', (id,)).fetchone()
+    db.execute('UPDATE insumos SET estoque_atual=?, estoque_central=? WHERE id=?', (coz, cen, id))
+    db.execute('''INSERT INTO insumo_ajuste_log
+        (insumo_id, data, estoque_cozinha_antes, estoque_central_antes,
+         estoque_cozinha_depois, estoque_central_depois)
+        VALUES (?, date("now","localtime"), ?, ?, ?, ?)''',
+        (id,
+         antes['estoque_atual']   if antes else None,
+         antes['estoque_central'] if antes else None,
+         coz, cen))
+    db.commit(); db.close()
+    return jsonify({'ok': True, 'estoque_atual': coz, 'estoque_central': cen})
+
+
+@app.route('/insumo_ajuste_log/<int:lid>/desfazer', methods=['POST'])
+def insumo_ajuste_desfazer(lid):
+    db  = get_db()
+    row = db.execute('SELECT * FROM insumo_ajuste_log WHERE id=?', (lid,)).fetchone()
+    if not row:
+        db.close(); return jsonify({'ok': False, 'erro': 'Registro não encontrado'}), 404
+    db.execute('UPDATE insumos SET estoque_atual=?, estoque_central=? WHERE id=?',
+               (row['estoque_cozinha_antes'], row['estoque_central_antes'], row['insumo_id']))
+    db.execute('DELETE FROM insumo_ajuste_log WHERE id=?', (lid,))
+    db.commit(); db.close()
+    return jsonify({'ok': True})
 
 
 @app.route('/alertas')
