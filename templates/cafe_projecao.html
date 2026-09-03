@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}Projeção de Consumo — Café{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-cup-hot me-2"></i>Controle de Café</h1>
+</div>
+
+<ul class="nav nav-tabs mb-4">
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_lista') }}"><i class="bi bi-grid me-1"></i>Visão Geral</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_consolidado') }}"><i class="bi bi-bar-chart-line me-1"></i>Consolidado por PDV</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_financeiro') }}"><i class="bi bi-currency-dollar me-1"></i>Financeiro</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_ficha') }}"><i class="bi bi-journal-text me-1"></i>Ficha Técnica</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link active" href="{{ url_for('cafe_projecao') }}"><i class="bi bi-graph-up me-1"></i>Projeção de Consumo</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_estoque') }}"><i class="bi bi-box-seam me-1"></i>Estoque</a>
+  </li>
+</ul>
+
+<!-- Consolidado geral -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header py-2" style="background:#0f2540">
+    <span class="text-white fw-semibold"><i class="bi bi-sigma me-2"></i>Necessidade Total Semanal — Todos os PDVs</span>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-hover mb-0 align-middle" style="font-size:.85rem">
+      <thead style="background:#1a3a5c">
+        <tr>
+          <th style="color:#fff">Insumo</th>
+          <th class="text-end" style="color:#fff">Tam. PCT</th>
+          <th class="text-end" style="color:#4ade80">g / semana</th>
+          <th class="text-end" style="color:#93c5fd">PCT / semana<br><small style="font-weight:400;font-size:.7rem">exato</small></th>
+          <th class="text-end" style="color:#f59e0b">PCT a comprar<br><small style="font-weight:400;font-size:.7rem">arredondado ↑</small></th>
+          <th class="text-end" style="color:#e2e8f0">Valor Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in consolidado %}
+        <tr>
+          <td class="fw-semibold">{{ l.nome }}</td>
+          <td class="text-end text-muted">{{ l.tam_kg|string|replace('.', ',') }} kg</td>
+          <td class="text-end font-monospace text-success fw-semibold">{{ '%.0f'|format(l.g_semana) }} g</td>
+          <td class="text-end font-monospace text-muted">{{ '%.2f'|format(l.pct_raw) }}</td>
+          <td class="text-end fw-bold">
+            <span class="badge fs-6 {{ 'bg-danger' if l.pct_ceil >= 3 else ('bg-warning text-dark' if l.pct_ceil == 2 else 'bg-success') }}">
+              {{ l.pct_ceil }} PCT
+            </span>
+          </td>
+          <td class="text-end fw-semibold font-monospace" style="color:#fbbf24">{{ l.valor_total|brl(2) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        {% set ns = namespace(total=0) %}
+        {% for l in consolidado %}{% set ns.total = ns.total + l.valor_total %}{% endfor %}
+        <tr>
+          <td colspan="5" class="fw-bold py-2 text-end pe-2" style="background:#1a3a5c;color:#94a3b8;font-size:.75rem">
+            TOTAL GERAL / SEMANA
+          </td>
+          <td class="text-end fw-bold py-2 font-monospace" style="background:#1a3a5c;color:#fbbf24;font-size:1rem">
+            {{ ns.total|brl(2) }}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+<!-- Por PDV -->
+{% for pdv_key, pdv in resultado.items() %}
+{% set cor = pdv.info.cor %}
+<div class="card shadow-sm mb-4">
+  <div class="card-header py-2 d-flex justify-content-between align-items-center" style="background:{{ cor }}">
+    <span class="text-white fw-semibold fs-6"><i class="bi bi-geo-alt me-2"></i>{{ pdv.info.label }}</span>
+    <span class="badge bg-light text-dark" style="font-size:.7rem">Base: {{ pdv.n_dias }} dias</span>
+  </div>
+  <div class="card-body p-0">
+    {% if not pdv.linhas %}
+    <div class="p-3 text-muted text-center">Sem dados suficientes</div>
+    {% else %}
+    <table class="table table-sm table-hover mb-0 align-middle" style="font-size:.83rem">
+      <thead style="background:{{ cor }}">
+        <tr>
+          <th style="color:#fff">Insumo</th>
+          <th class="text-end" style="color:#fff">Tam. PCT</th>
+          <th class="text-end" style="color:#4ade80">g / dia<br><small style="font-weight:400;font-size:.7rem">média</small></th>
+          <th class="text-end" style="color:#4ade80">g / semana</th>
+          <th class="text-end" style="color:#93c5fd">PCT / semana<br><small style="font-weight:400;font-size:.7rem">exato</small></th>
+          <th class="text-end" style="color:#f59e0b">PCT a comprar<br><small style="font-weight:400;font-size:.7rem">arredondado ↑</small></th>
+          <th class="text-end" style="color:#e2e8f0">Valor Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in pdv.linhas %}
+        <tr>
+          <td class="fw-semibold">{{ l.nome }}</td>
+          <td class="text-end text-muted">{{ l.tam_kg|string|replace('.', ',') }} kg</td>
+          <td class="text-end font-monospace text-muted">{{ '%.1f'|format(l.g_dia) }} g</td>
+          <td class="text-end font-monospace text-success fw-semibold">{{ '%.0f'|format(l.g_semana) }} g</td>
+          <td class="text-end font-monospace text-muted small">{{ '%.2f'|format(l.pct_raw) }}</td>
+          <td class="text-end fw-bold">
+            {% if l.pct_ceil == 0 %}
+            <span class="text-muted small">— &lt; 1 PCT</span>
+            {% else %}
+            <span class="badge {{ 'bg-danger' if l.pct_ceil >= 3 else ('bg-warning text-dark' if l.pct_ceil == 2 else 'bg-success') }}">
+              {{ l.pct_ceil }} PCT
+            </span>
+            {% endif %}
+          </td>
+          <td class="text-end fw-semibold font-monospace" style="color:#fbbf24">
+            {% if l.pct_ceil > 0 %}{{ l.valor_total|brl(2) }}{% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="5" class="fw-bold py-2 text-end pe-2" style="background:#1a3a5c;color:#94a3b8;font-size:.75rem">
+            TOTAL INSUMOS / SEMANA
+          </td>
+          <td class="text-end fw-bold py-2" style="background:#1a3a5c">
+            <span class="badge bg-primary fs-6">{{ pdv.linhas|sum(attribute='pct_ceil') }} PCT</span>
+          </td>
+          <td class="text-end fw-semibold py-2 font-monospace" style="background:#1a3a5c;color:#fbbf24">
+            {{ pdv.linhas|sum(attribute='valor_total')|brl(2) }}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <!-- Breakdown por bebida (recolhível) -->
+    <div class="px-3 pt-2 pb-1">
+      <a class="text-muted small" data-bs-toggle="collapse"
+         href="#detalhe-{{ pdv_key|lower }}" role="button">
+        <i class="bi bi-chevron-down me-1"></i>Ver consumo por bebida
+      </a>
+    </div>
+    <div class="collapse" id="detalhe-{{ pdv_key|lower }}">
+      <div class="px-3 pb-3">
+        <div class="d-flex flex-wrap gap-2">
+          {% for col, label in [
+            ('expresso','Expresso'),('curto','Curto'),('duplo','Duplo'),
+            ('americano','Americano'),('capuccino','Capuccino'),
+            ('cafe_leite','Café c/ Leite'),('cafe_leite_curto','Café c/L Curto'),
+            ('achoc_kitkat','Achoc. KitKat'),('capp_alpino','Capp. Alpino'),
+            ('achoc_alpino','Achoc. Alpino'),('mocaccino_2f','Mocaccino 2F'),
+            ('achoc_2f','Achoc. 2F')
+          ] %}
+          {% set v = pdv.avg_dia.get(col, 0) %}
+          {% if v > 0 %}
+          <div class="text-center px-2 py-1 rounded" style="background:#f1f5f9;min-width:90px">
+            <div class="fw-bold" style="color:{{ cor }}">{{ '%.1f'|format(v) }}</div>
+            <small class="text-muted" style="font-size:.65rem">{{ label }}/dia</small>
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

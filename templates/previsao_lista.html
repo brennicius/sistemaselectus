@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Lista de Compras — Previsão{% endblock %}
+{% block content %}
+
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <h1><i class="bi bi-cart3 me-2"></i>Lista de Compras — Previsão Semana 10–14/08</h1>
+    <p>Insumos necessários com base nas quantidades previstas para os dias 10, 12 e 14/08</p>
+  </div>
+  <a href="{{ url_for('previsao') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Voltar à Previsão
+  </a>
+</div>
+
+{% if resultado.sem_ficha %}
+<div class="alert alert-info py-2 px-3 mb-3">
+  <i class="bi bi-exclamation-circle me-1"></i>
+  <strong>{{ resultado.sem_ficha|length }} produto(s) sem ficha técnica cadastrada</strong> — não entram no cálculo:
+  {% for s in resultado.sem_ficha %}
+    <span class="badge bg-secondary ms-1">{{ s.nome }} ({{ s.qty|int }})</span>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if resultado.falta_preco %}
+<div class="alert alert-warning py-2 px-3 mb-3">
+  <i class="bi bi-exclamation-triangle me-1"></i>
+  Alguns insumos estão sem preço — valores marcados com <strong>—</strong>.
+  <a href="{{ url_for('insumos_lista') }}" class="alert-link">Atualizar preços</a>
+</div>
+{% endif %}
+
+<div class="card shadow-sm">
+  <div class="card-header py-2" style="background:#375623">
+    <span class="text-white fw-semibold">
+      <i class="bi bi-list-check me-2"></i>Insumos Necessários
+    </span>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead style="background:#375623">
+        <tr>
+          <th style="color:#fff">#</th>
+          <th style="color:#fff">Insumo</th>
+          <th style="color:#fff" class="text-end">Qtd. Necessária</th>
+          <th style="color:#fff" class="text-end">Em Estoque</th>
+          <th style="color:#fff" class="text-center">Un. Uso</th>
+          <th style="color:#fff" class="text-end">Qtd. a Comprar</th>
+          <th style="color:#fff" class="text-center">Un. Compra</th>
+          <th style="color:#fff" class="text-end">Preço/Un.</th>
+          <th style="color:#fff" class="text-end">Valor Previsto</th>
+          <th style="color:#fff" class="text-end">Sobra Est.</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in resultado.lista %}
+        <tr class="{{ 'table-success' if item.qtd_compra == 0 else '' }}">
+          <td class="text-muted small">{{ loop.index }}</td>
+          <td class="fw-semibold">{{ item.nome }}</td>
+          <td class="text-end font-monospace">{{ item.qtd_necessaria|num_br(2) }}</td>
+          <td class="text-end font-monospace">
+            {% if item.estoque_disponivel > 0 %}
+              <span class="text-success fw-semibold">{{ item.estoque_disponivel|num_br(2) }}</span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-center"><span class="badge bg-info text-dark">{{ item.unidade_uso }}</span></td>
+          <td class="text-end font-monospace">
+            {% if item.qtd_compra == 0 %}
+              <span class="text-success fw-semibold">Coberto</span>
+            {% else %}
+              {{ item.qtd_compra|num_br(4) }}
+              {% if item.qtd_por_embalagem and item.unid_embalagem %}
+                <br><span class="text-muted" style="font-size:.72rem">
+                  × {{ item.qtd_por_embalagem|num_br(3) }} {{ item.unid_embalagem }}
+                  = {{ (item.qtd_compra * item.qtd_por_embalagem)|num_br(3) }} {{ item.unid_embalagem }}
+                </span>
+              {% endif %}
+            {% endif %}
+          </td>
+          <td class="text-center"><span class="badge bg-secondary">{{ item.unidade_compra }}</span></td>
+          <td class="text-end font-monospace small text-muted">
+            {% if item.preco_compra %}{{ item.preco_compra|brl(4) }}{% else %}—{% endif %}
+          </td>
+          <td class="text-end font-monospace fw-semibold">
+            {% if item.qtd_compra == 0 %}
+              <span class="text-success small">—</span>
+            {% elif item.preco_compra %}
+              {{ item.valor|brl(2) }}
+            {% else %}
+              <span class="text-warning">—</span>
+            {% endif %}
+          </td>
+          <td class="text-end font-monospace small">
+            {% if item.qtd_compra == 0 or item.sobra <= 0.001 %}
+              <span class="text-muted">—</span>
+            {% else %}
+              <span class="text-warning fw-semibold">{{ item.sobra|num_br(2) }} {{ item.unidade_uso }}</span>
+              {% if item.sobra_valor %}<br><span style="color:#fbbf24;font-size:.75rem">{{ item.sobra_valor|brl(2) }}</span>{% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="9" class="text-end fw-bold py-2 pe-2" style="background:#1a3a5c;color:#e2e8f0;font-size:.9rem;letter-spacing:.03em">VALOR TOTAL PREVISTO DE COMPRAS</td>
+          <td class="text-end fw-bold py-2 font-monospace" style="background:#1a3a5c;color:#f59e0b;font-size:1.1rem">
+            {{ resultado.custo_total|brl(2) }}
+            {% if resultado.falta_preco %}<span style="color:#fbbf24;font-size:.7rem;display:block">* valor parcial</span>{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td colspan="9" class="text-end fw-bold py-1 pe-2" style="background:#0f2540;color:#94a3b8;font-size:.82rem;letter-spacing:.03em">VALOR TOTAL ESTIMADO DE SOBRAS</td>
+          <td class="text-end fw-bold py-1 font-monospace" style="background:#0f2540;color:#fbbf24;font-size:.95rem">
+            {% if resultado.sobra_total %}{{ resultado.sobra_total|brl(2) }}{% else %}<span style="color:#475569">—</span>{% endif %}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endblock %}

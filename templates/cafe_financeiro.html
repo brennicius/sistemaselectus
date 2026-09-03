@@ -1,0 +1,184 @@
+﻿{% extends "base.html" %}
+{% block title %}Financeiro — Café{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-cup-hot me-2"></i>Controle de Café</h1>
+</div>
+
+<ul class="nav nav-tabs mb-4">
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_lista') }}"><i class="bi bi-grid me-1"></i>Visão Geral</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_consolidado') }}"><i class="bi bi-bar-chart-line me-1"></i>Consolidado por PDV</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link active" href="{{ url_for('cafe_financeiro') }}"><i class="bi bi-currency-dollar me-1"></i>Financeiro</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_ficha') }}"><i class="bi bi-journal-text me-1"></i>Ficha Técnica</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_projecao') }}"><i class="bi bi-graph-up me-1"></i>Projeção de Consumo</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_estoque') }}"><i class="bi bi-box-seam me-1"></i>Estoque</a>
+  </li>
+</ul>
+
+<!-- Filtro -->
+<form method="get" class="card shadow-sm mb-4">
+  <div class="card-body py-2 d-flex align-items-center gap-3 flex-wrap">
+    <span class="fw-semibold text-muted small"><i class="bi bi-funnel me-1"></i>Período:</span>
+    <div class="d-flex align-items-center gap-2">
+      <label class="small text-muted mb-0">De</label>
+      <input type="date" name="de" class="form-control form-control-sm" style="width:150px"
+             value="{{ filtro_de }}" min="{{ data_min }}" max="{{ data_max }}">
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <label class="small text-muted mb-0">Até</label>
+      <input type="date" name="ate" class="form-control form-control-sm" style="width:150px"
+             value="{{ filtro_ate }}" min="{{ data_min }}" max="{{ data_max }}">
+    </div>
+    <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search me-1"></i>Filtrar</button>
+    {% if filtro_de or filtro_ate %}
+    <a href="{{ url_for('cafe_financeiro') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x me-1"></i>Limpar</a>
+    {% endif %}
+  </div>
+</form>
+
+{% macro tabela_fin(rows, totais, n_dias, cor) %}
+{% if not rows %}
+<div class="p-3 text-muted text-center"><i class="bi bi-inbox me-1"></i>Sem dados no período</div>
+{% else %}
+<div class="p-2 text-muted small border-bottom">Base: <strong>{{ n_dias }}</strong> dias com leitura</div>
+<div style="overflow-x:auto">
+<table class="table table-sm table-hover mb-0 align-middle" style="font-size:.82rem">
+  <thead style="background:{{ cor }}">
+    <tr>
+      <th rowspan="2" style="color:#fff;vertical-align:middle">Bebida</th>
+      <th rowspan="2" class="text-end" style="color:#fff;vertical-align:middle">Doses<br>total</th>
+      <th rowspan="2" class="text-end" style="color:#fff;vertical-align:middle">Doses/dia<br><small style="font-weight:400;font-size:.7rem">média</small></th>
+      <th colspan="3" class="text-center" style="color:#4ade80;border-bottom:1px solid rgba(255,255,255,.3)">— Período —</th>
+      <th colspan="3" class="text-center" style="color:#93c5fd;border-bottom:1px solid rgba(255,255,255,.3)">— Média /dia —</th>
+      <th rowspan="2" class="text-end" style="color:#f59e0b;vertical-align:middle">Margem %</th>
+    </tr>
+    <tr>
+      <th class="text-end" style="color:#4ade80">Receita</th>
+      <th class="text-end" style="color:#fca5a5">Insumo</th>
+      <th class="text-end" style="color:#fca5a5">Copo</th>
+      <th class="text-end" style="color:#93c5fd">Receita</th>
+      <th class="text-end" style="color:#93c5fd">Insumo</th>
+      <th class="text-end" style="color:#93c5fd">Copo</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td class="fw-semibold">{{ r.label }}</td>
+      <td class="text-end font-monospace">{{ r.doses_total|int }}</td>
+      <td class="text-end font-monospace text-muted">{{ '%.1f'|format(r.doses_dia) }}</td>
+      <td class="text-end font-monospace fw-semibold text-success">{{ r.receita_periodo|brl(2) }}</td>
+      <td class="text-end font-monospace text-danger">{{ r.custo_insumo_periodo|brl(2) }}</td>
+      <td class="text-end font-monospace text-danger">{{ r.custo_copo_periodo|brl(2) }}</td>
+      <td class="text-end font-monospace text-muted small">{{ r.receita_dia|brl(2) }}</td>
+      <td class="text-end font-monospace text-muted small">{{ r.custo_insumo_dia|brl(2) }}</td>
+      <td class="text-end font-monospace text-muted small">{{ r.custo_copo_dia|brl(2) }}</td>
+      <td class="text-end">
+        <span class="badge {{ 'bg-success' if r.margem_pct >= 60 else ('bg-warning text-dark' if r.margem_pct >= 40 else 'bg-danger') }}">
+          {{ '%.1f'|format(r.margem_pct) }}%
+        </span>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="3" class="fw-bold py-2 text-end pe-2" style="background:#1a3a5c;color:#e2e8f0;font-size:.78rem">TOTAL PERÍODO</td>
+      <td class="text-end fw-bold font-monospace py-2" style="background:#1a3a5c;color:#4ade80">{{ totais.receita_periodo|brl(2) }}</td>
+      <td class="text-end fw-bold font-monospace py-2" style="background:#1a3a5c;color:#f87171">{{ totais.custo_insumo_periodo|brl(2) }}</td>
+      <td class="text-end fw-bold font-monospace py-2" style="background:#1a3a5c;color:#f87171">{{ totais.custo_copo_periodo|brl(2) }}</td>
+      <td class="text-end font-monospace py-2 text-muted small" style="background:#1a3a5c">{{ totais.receita_dia|brl(2) }}</td>
+      <td class="text-end font-monospace py-2 text-muted small" style="background:#1a3a5c">{{ totais.custo_insumo_dia|brl(2) }}</td>
+      <td class="text-end font-monospace py-2 text-muted small" style="background:#1a3a5c">{{ totais.custo_copo_dia|brl(2) }}</td>
+      <td class="text-end fw-bold py-2" style="background:#1a3a5c">
+        <span class="badge {{ 'bg-success' if totais.margem_pct >= 60 else ('bg-warning text-dark' if totais.margem_pct >= 40 else 'bg-danger') }}">
+          {{ '%.1f'|format(totais.margem_pct) }}%
+        </span>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="3" class="fw-bold py-2 text-end pe-2" style="background:#0f2540;color:#94a3b8;font-size:.75rem">CUSTO TOTAL PERÍODO</td>
+      <td colspan="3" class="text-end fw-bold font-monospace py-2" style="background:#0f2540;color:#f59e0b;font-size:1rem">
+        {{ totais.custo_total_periodo|brl(2) }}
+      </td>
+      <td colspan="3" class="text-end font-monospace py-2 text-muted small" style="background:#0f2540">
+        {{ totais.custo_total_dia|brl(2) }}/dia
+      </td>
+      <td style="background:#0f2540"></td>
+    </tr>
+    <tr>
+      <td colspan="3" class="fw-bold py-2 text-end pe-2" style="background:#0a1f35;color:#94a3b8;font-size:.75rem">MARGEM PERÍODO</td>
+      <td colspan="3" class="text-end fw-bold font-monospace py-2" style="background:#0a1f35;color:#f59e0b;font-size:1.05rem">
+        {{ totais.margem_periodo|brl(2) }}
+      </td>
+      <td colspan="3" class="text-end font-monospace py-2 text-muted small" style="background:#0a1f35">
+        {{ totais.margem_dia|brl(2) }}/dia
+      </td>
+      <td style="background:#0a1f35"></td>
+    </tr>
+  </tfoot>
+</table>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% for pdv_key, pdv in resultado.items() %}
+{% set info = pdv.info %}
+{% set cor = info.cor %}
+{% set pid = pdv_key|lower %}
+
+<div class="card shadow-sm mb-4">
+  <div class="card-header py-2 d-flex justify-content-between align-items-center" style="background:{{ cor }}">
+    <span class="text-white fw-semibold fs-6"><i class="bi bi-geo-alt me-2"></i>{{ info.label }}</span>
+  </div>
+
+  {% if pdv.maquinas|length > 1 %}
+  <ul class="nav nav-tabs px-3 pt-2" style="background:#f8f9fa;border-bottom:none">
+    {% for m in pdv.maquinas %}
+    {% set tab_id = pid ~ '-fin-' ~ loop.index %}
+    <li class="nav-item">
+      <button class="nav-link {{ 'active' if loop.first }}" data-bs-toggle="tab"
+              data-bs-target="#{{ tab_id }}" type="button" style="font-size:.82rem">
+        {{ m.maquina.maquina }}
+        {% if m.n_dias %}<span class="badge bg-secondary ms-1" style="font-size:.65rem">{{ m.n_dias }}d</span>{% endif %}
+      </button>
+    </li>
+    {% endfor %}
+    <li class="nav-item">
+      <button class="nav-link fw-semibold" data-bs-toggle="tab"
+              data-bs-target="#{{ pid }}-fin-total" type="button" style="font-size:.82rem;color:{{ cor }}">
+        <i class="bi bi-sigma me-1"></i>Total PDV
+      </button>
+    </li>
+  </ul>
+  <div class="tab-content">
+    {% for m in pdv.maquinas %}
+    {% set tab_id = pid ~ '-fin-' ~ loop.index %}
+    <div class="tab-pane fade {{ 'show active' if loop.first }}" id="{{ tab_id }}">
+      {{ tabela_fin(m.rows, m.totais, m.n_dias, cor) }}
+    </div>
+    {% endfor %}
+    <div class="tab-pane fade" id="{{ pid }}-fin-total">
+      {{ tabela_fin(pdv.consolidado.rows, pdv.consolidado.totais, pdv.consolidado.n_dias, cor) }}
+    </div>
+  </div>
+
+  {% else %}
+  {% set m = pdv.maquinas[0] %}
+  {{ tabela_fin(m.rows, m.totais, m.n_dias, cor) }}
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}
+

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Editar Requisição #{{ req.id }}{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+  <div>
+    <h1><i class="bi bi-pencil me-2"></i>Editar Requisição #{{ req.id }}</h1>
+    <p>Data: <strong>{{ req.data | replace('-','/') }}</strong>{% if req.observacao %} · {{ req.observacao }}{% endif %}</p>
+  </div>
+  <a href="{{ url_for('requisicao_ver', id=req.id) }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Voltar
+  </a>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-header py-2" style="background:#1a3a5c">
+    <span class="text-white fw-semibold"><i class="bi bi-list-check me-2"></i>Quantidades enviadas</span>
+    <small class="text-white-50 ms-2">Digite em unidade de compra · o estoque é ajustado automaticamente</small>
+  </div>
+  <div class="card-body p-0">
+    <form method="post">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Insumo</th>
+            <th class="text-center">Unidade</th>
+            <th class="text-end">Qtd atual (uc)</th>
+            <th class="text-end">Já consumido</th>
+            <th class="text-end">Nova qtd (uc)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in itens %}
+          {% set qtd_uc = (it.qtd_enviada / it.fator) | round(3) %}
+          {% set cons_uc = (it.consumido / it.fator) | round(3) %}
+          {% set min_uc = (it.consumido / it.fator) | round(3) %}
+          <tr>
+            <td class="fw-semibold">{{ it.nome }}</td>
+            <td class="text-center">
+              <span class="badge bg-info text-dark">{{ it.unidade_compra }}</span>
+              {% if it.unidade_compra != it.unidade_uso %}
+              <br><small class="text-muted" style="font-size:.68rem">= {{ it.fator|int if it.fator == it.fator|int else it.fator }} {{ it.unidade_uso }}/un</small>
+              {% endif %}
+            </td>
+            <td class="text-end font-monospace">
+              {{ qtd_uc|int if qtd_uc == qtd_uc|int else '%.3f'|format(qtd_uc) }}
+              {% if it.unidade_compra != it.unidade_uso %}
+              <br><small class="text-muted" style="font-size:.7rem">{{ it.qtd_enviada|int if it.qtd_enviada == it.qtd_enviada|int else '%.0f'|format(it.qtd_enviada) }} {{ it.unidade_uso }}</small>
+              {% endif %}
+            </td>
+            <td class="text-end font-monospace text-danger">
+              {% if it.consumido > 0 %}
+              {{ cons_uc|int if cons_uc == cons_uc|int else '%.3f'|format(cons_uc) }} {{ it.unidade_compra }}
+              <br><small style="font-size:.7rem">{{ it.consumido|int }} {{ it.unidade_uso }}</small>
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td class="text-end" style="width:140px">
+              <input type="number" name="qtd_{{ it.id }}"
+                     class="form-control form-control-sm text-end"
+                     value="{{ '%.3f'|format(qtd_uc) }}"
+                     min="{{ '%.4f'|format(min_uc) }}"
+                     step="0.001" required>
+              {% if it.consumido > 0 %}
+              <small class="text-danger" style="font-size:.68rem">mín: {{ '%.3f'|format(min_uc) }}</small>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="p-3 border-top d-flex justify-content-end gap-2">
+        <a href="{{ url_for('requisicao_ver', id=req.id) }}" class="btn btn-outline-secondary btn-sm">Cancelar</a>
+        <button type="submit" class="btn btn-primary btn-sm"
+                onclick="return confirm('Salvar alterações? O estoque será ajustado pela diferença.')">
+          <i class="bi bi-check-circle me-1"></i>Salvar Alterações
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

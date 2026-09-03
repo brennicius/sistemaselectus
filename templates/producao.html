@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% block title %}Programar Produção{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-clipboard2-check me-2"></i>Programação de Produção</h1>
+  <p>Informe a quantidade a produzir de cada produto e veja a lista de compras automática</p>
+</div>
+
+<!-- Filtros de categoria + ordenação -->
+<div class="mb-3 d-flex flex-wrap gap-2 align-items-center justify-content-between">
+  <div class="d-flex flex-wrap gap-2 align-items-center">
+    <span class="text-muted small me-1">Filtrar:</span>
+    <button type="button" class="btn btn-sm btn-dark active cat-filter" data-cat="">Todos</button>
+    {% for nome, cls in categorias %}
+    <button type="button" class="btn btn-sm {{ cls }} cat-filter" data-cat="{{ nome }}">{{ nome }}</button>
+    {% endfor %}
+  </div>
+  <div class="d-flex gap-2 align-items-center flex-wrap">
+    <span class="text-muted small">Ordenar por:</span>
+    <div class="btn-group btn-group-sm" role="group">
+      <button type="button" class="btn btn-outline-secondary active sort-field-btn" data-field="produto">Produto</button>
+      <button type="button" class="btn btn-outline-secondary sort-field-btn" data-field="categoria">Categoria</button>
+    </div>
+    <div class="btn-group btn-group-sm" role="group">
+      <button type="button" class="btn btn-outline-secondary active sort-dir-btn" data-dir="asc" title="A → Z">
+        <i class="bi bi-sort-alpha-down"></i> A–Z
+      </button>
+      <button type="button" class="btn btn-outline-secondary sort-dir-btn" data-dir="desc" title="Z → A">
+        <i class="bi bi-sort-alpha-up"></i> Z–A
+      </button>
+    </div>
+  </div>
+</div>
+
+<form method="post">
+  <!-- Products -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header py-2" style="background:#1a3a5c">
+      <span class="text-white fw-semibold"><i class="bi bi-box-seam me-2"></i>Produtos a Produzir</span>
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Produto</th>
+            <th>Categoria</th>
+            <th>Descrição</th>
+            <th class="text-end">Custo Unit.</th>
+            <th class="text-center" style="width:160px">Qtd. a Produzir</th>
+            <th class="text-end">Custo Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in prods %}
+          <tr class="prod-row" data-cat="{{ p.categoria or '' }}">
+            <td class="fw-semibold">{{ p.nome }}</td>
+            <td>
+              {% if p.categoria %}
+              <span class="badge {{ cat_map.get(p.categoria, 'bg-secondary') }}" style="font-size:.72rem">{{ p.categoria }}</span>
+              {% else %}
+              <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+            <td class="text-muted small">{{ p.descricao or '—' }}</td>
+            <td class="text-end font-monospace small">
+              {% if custos[p.id].completo %}
+                {{ custos[p.id].custo|brl(4) }}
+              {% else %}
+                <span class="text-warning small">preços incompletos</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              <input type="number" name="qty_{{ p.id }}" class="form-control form-control-sm text-center qty-input"
+                     min="0" step="1" value="{{ qtds[p.id]|int if qtds[p.id] else '' }}"
+                     placeholder="0" data-custo="{{ custos[p.id].custo if custos[p.id].completo else '' }}"
+                     data-pid="{{ p.id }}">
+            </td>
+            <td class="text-end font-monospace" id="custo_total_{{ p.id }}">—</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-end mb-4">
+    <button type="submit" class="btn btn-primary btn-lg px-5">
+      <i class="bi bi-calculator me-2"></i>Calcular Necessidade de Compras
+    </button>
+  </div>
+</form>
+
+<!-- Results -->
+{% if resultado %}
+<div class="card shadow-sm">
+  <div class="card-header py-2 d-flex justify-content-between align-items-center" style="background:#375623">
+    <span class="text-white fw-semibold">
+      <i class="bi bi-cart3 me-2"></i>Lista de Compras — Insumos Necessários
+    </span>
+    <form method="post" action="{{ url_for('producao_exportar') }}" id="form-exportar">
+      {% for pid, qty in qtds.items() %}{% if qty > 0 %}
+      <input type="hidden" name="qty_{{ pid }}" value="{{ qty }}">
+      {% endif %}{% endfor %}
+      <button type="submit" class="btn btn-sm btn-light fw-semibold">
+        <i class="bi bi-file-earmark-excel me-1 text-success"></i>Exportar Excel
+      </button>
+    </form>
+  </div>
+  <div class="card-body p-0">
+    {% if resultado.falta_preco %}
+    <div class="alert alert-warning rounded-0 mb-0 py-2 px-3 border-0">
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      Alguns insumos estão sem preço — valores marcados com <strong>—</strong>.
+      <a href="{{ url_for('insumos_lista') }}" class="alert-link">Atualizar preços</a>
+    </div>
+    {% endif %}
+    <table class="table table-hover mb-0">
+      <thead style="background:#375623">
+        <tr>
+          <th style="color:#fff">#</th>
+          <th style="color:#fff">Insumo</th>
+          <th style="color:#fff" class="text-end">Qtd. Necessária</th>
+          <th style="color:#fff" class="text-end">Em Estoque</th>
+          <th style="color:#fff" class="text-center">Unid. Uso</th>
+          <th style="color:#fff" class="text-end">Qtd. a Comprar</th>
+          <th style="color:#fff" class="text-center">Unid. Compra</th>
+          <th style="color:#fff" class="text-end">Preço / Unid.</th>
+          <th style="color:#fff" class="text-end">Valor Previsto</th>
+          <th style="color:#fff" class="text-end">Sobra Est.</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in resultado.lista %}
+        <tr class="{{ 'table-success' if item.qtd_compra == 0 else '' }}">
+          <td class="text-muted small">{{ loop.index }}</td>
+          <td class="fw-semibold">{{ item.nome }}</td>
+          <td class="text-end font-monospace">{{ item.qtd_necessaria|num_br(2) }}</td>
+          <td class="text-end font-monospace">
+            {% if item.estoque_disponivel > 0 %}
+              <span class="text-success fw-semibold">{{ item.estoque_disponivel|num_br(2) }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-center"><span class="badge bg-info text-dark">{{ item.unidade_uso }}</span></td>
+          <td class="text-end font-monospace">
+            {% if item.qtd_compra == 0 %}
+              <span class="text-success fw-semibold">Coberto</span>
+            {% else %}
+              {{ item.qtd_compra|num_br(4) }}
+            {% endif %}
+          </td>
+          <td class="text-center"><span class="badge bg-secondary">{{ item.unidade_compra }}</span></td>
+          <td class="text-end font-monospace small text-muted">
+            {% if item.preco_compra %}{{ item.preco_compra|brl(4) }}{% else %}—{% endif %}
+          </td>
+          <td class="text-end font-monospace fw-semibold">
+            {% if item.qtd_compra == 0 %}
+              <span class="text-success small">—</span>
+            {% elif item.preco_compra %}
+              {{ item.valor|brl(2) }}
+            {% else %}
+              <span class="text-warning">—</span>
+            {% endif %}
+          </td>
+          <td class="text-end font-monospace small">
+            {% if item.qtd_compra == 0 or item.sobra <= 0.001 %}
+              <span class="text-muted">—</span>
+            {% else %}
+              <span class="text-warning fw-semibold">{{ item.sobra|num_br(2) }} {{ item.unidade_uso }}</span>
+              {% if item.sobra_valor %}<br><span style="color:#fbbf24;font-size:.75rem">{{ item.sobra_valor|brl(2) }}</span>{% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="9" class="text-end fw-bold py-2 pe-2" style="background:#1a3a5c;color:#e2e8f0;font-size:.9rem;letter-spacing:.03em">VALOR TOTAL PREVISTO DE COMPRAS</td>
+          <td class="text-end fw-bold py-2 font-monospace" style="background:#1a3a5c;color:#f59e0b;font-size:1.1rem">
+            {% if resultado.custo_total %}{{ resultado.custo_total|brl(2) }}{% else %}<span style="color:#fbbf24">parcial</span>{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td colspan="9" class="text-end fw-bold py-1 pe-2" style="background:#0f2540;color:#94a3b8;font-size:.82rem;letter-spacing:.03em">VALOR TOTAL ESTIMADO DE SOBRAS</td>
+          <td class="text-end fw-bold py-1 font-monospace" style="background:#0f2540;color:#fbbf24;font-size:.95rem">
+            {% if resultado.sobra_total %}{{ resultado.sobra_total|brl(2) }}{% else %}<span style="color:#475569">—</span>{% endif %}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Filtro de categorias
+document.querySelectorAll('.cat-filter').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.cat-filter').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const cat = btn.dataset.cat;
+    document.querySelectorAll('.prod-row').forEach(row => {
+      row.style.display = (!cat || row.dataset.cat === cat) ? '' : 'none';
+    });
+  });
+});
+
+// Ordenação
+let sortField = 'produto';
+let sortDir   = 'asc';
+
+function applySort() {
+  const tbody = document.querySelector('table tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr.prod-row'));
+  rows.sort((a, b) => {
+    let na, nb;
+    if (sortField === 'categoria') {
+      na = a.querySelector('td:nth-child(2)').textContent.trim();
+      nb = b.querySelector('td:nth-child(2)').textContent.trim();
+    } else {
+      na = a.querySelector('td.fw-semibold').textContent.trim();
+      nb = b.querySelector('td.fw-semibold').textContent.trim();
+    }
+    return sortDir === 'asc' ? na.localeCompare(nb, 'pt-BR') : nb.localeCompare(na, 'pt-BR');
+  });
+  rows.forEach(r => tbody.appendChild(r));
+}
+
+document.querySelectorAll('.sort-field-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.sort-field-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    sortField = btn.dataset.field;
+    applySort();
+  });
+});
+
+document.querySelectorAll('.sort-dir-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.sort-dir-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    sortDir = btn.dataset.dir;
+    applySort();
+  });
+});
+
+applySort();
+
+document.querySelectorAll('.qty-input').forEach(input => {
+  input.addEventListener('input', () => {
+    const pid = input.dataset.pid;
+    const custo = parseFloat(input.dataset.custo);
+    const qty = parseFloat(input.value) || 0;
+    const el = document.getElementById('custo_total_' + pid);
+    if (custo && qty > 0) {
+      el.textContent = 'R$ ' + (custo * qty).toFixed(2).replace('.', ',');
+      el.classList.add('text-success', 'fw-semibold');
+    } else {
+      el.textContent = '—';
+      el.classList.remove('text-success', 'fw-semibold');
+    }
+  });
+  // trigger on load if pre-filled
+  if (input.value) input.dispatchEvent(new Event('input'));
+});
+</script>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Insumos Sem Uso{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1><i class="bi bi-box-seam me-2"></i>Insumos Sem Uso em Fichas Técnicas</h1>
+  <p>{{ insumos|length }} insumo(s) cadastrado(s) que não estão vinculados a nenhuma ficha técnica</p>
+</div>
+
+{% if not insumos %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-check-circle" style="font-size:2.5rem;color:#198754"></i>
+  <p class="mt-2 fw-semibold">Todos os insumos estão sendo utilizados em pelo menos uma ficha técnica.</p>
+</div>
+{% else %}
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Nome</th>
+          <th class="text-center">Un. Uso</th>
+          <th class="text-center">Un. Compra</th>
+          <th class="text-end">Preço / Un. Compra</th>
+          <th class="text-center">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ins in insumos %}
+        <tr>
+          <td class="text-muted small">{{ loop.index }}</td>
+          <td class="fw-semibold">{{ ins.nome }}</td>
+          <td class="text-center"><span class="badge bg-info text-dark">{{ ins.unidade_uso }}</span></td>
+          <td class="text-center"><span class="badge bg-secondary">{{ ins.unidade_compra }}</span></td>
+          <td class="text-end font-monospace">
+            {% if ins.preco_compra %}
+              R$ {{ '%.4f'|format(ins.preco_compra)|replace('.',',') }}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            <a href="{{ url_for('insumo_editar', id=ins.id) }}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-pencil me-1"></i>Editar
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

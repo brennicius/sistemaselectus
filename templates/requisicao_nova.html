@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Nova Requisição{% endblock %}
+{% block content %}
+<style>
+  .insumo-row { display:none; }
+  .insumo-row.selecionado { display:table-row; }
+  #lista-add tr:hover { background:#eef4fc; cursor:pointer; }
+  .qtd-input { width:90px; text-align:right; }
+</style>
+
+<div class="page-header">
+  <h1><i class="bi bi-arrow-right-circle me-2"></i>Nova Requisição de Produção</h1>
+  <p>Selecione os insumos e informe a quantidade enviada para a produção</p>
+</div>
+
+<form method="post">
+<div class="row g-3 mb-4">
+  <div class="col-auto">
+    <label class="form-label fw-semibold">Data do envio</label>
+    <input type="date" name="data" class="form-control" value="{{ today }}" required>
+  </div>
+  <div class="col">
+    <label class="form-label fw-semibold">Observação (opcional)</label>
+    <input type="text" name="observacao" class="form-control" placeholder="Ex: turno da manhã">
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Coluna esquerda: busca de insumos -->
+  <div class="col-md-5">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold bg-light">
+        <i class="bi bi-search me-1"></i> Adicionar insumo
+      </div>
+      <div class="card-body p-2">
+        <input type="text" id="busca-add" class="form-control form-control-sm mb-2" placeholder="Buscar insumo…" autocomplete="off">
+        <div style="max-height:400px;overflow-y:auto">
+          <table class="table table-sm mb-0" id="lista-add">
+            <tbody>
+              {% for ins in insumos %}
+              <tr data-nome="{{ ins.nome|lower }}" data-id="{{ ins.id }}"
+                  data-nome-orig="{{ ins.nome }}" data-un="{{ ins.unidade_uso }}"
+                  data-estoque="{{ ins.estoque_atual or 0 }}">
+                <td>{{ ins.nome }}</td>
+                <td class="text-center"><span class="badge bg-info text-dark">{{ ins.unidade_uso }}</span></td>
+                <td class="text-end text-muted small">{{ '%.1f'|format(ins.estoque_atual or 0) }}</td>
+                <td><button type="button" class="btn btn-xs btn-outline-success btn-add-item" style="padding:1px 6px;font-size:.75rem"><i class="bi bi-plus"></i></button></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Coluna direita: itens selecionados -->
+  <div class="col-md-7">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold bg-light d-flex justify-content-between">
+        <span><i class="bi bi-list-check me-1"></i> Itens a enviar</span>
+        <span class="badge bg-primary" id="n-itens">0</span>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0" id="tabela-itens">
+          <thead>
+            <tr>
+              <th>Insumo</th>
+              <th class="text-center">Unidade</th>
+              <th class="text-end">Estoque atual</th>
+              <th class="text-end">Qtd enviada</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-itens">
+            <tr id="linha-vazia">
+              <td colspan="5" class="text-center text-muted py-4">
+                <i class="bi bi-arrow-left-circle me-1"></i>Selecione insumos ao lado
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mt-3 d-flex gap-2 justify-content-end">
+      <a href="{{ url_for('requisicoes_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-primary" id="btn-submit" disabled>
+        <i class="bi bi-send me-1"></i>Enviar para Produção
+      </button>
+    </div>
+  </div>
+</div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+const selected = new Set();
+
+// Busca
+document.getElementById('busca-add').addEventListener('input', function() {
+  const q = norm(this.value.trim());
+  document.querySelectorAll('#lista-add tbody tr').forEach(tr => {
+    tr.style.display = (!q || norm(tr.dataset.nome).includes(q)) ? '' : 'none';
+  });
+});
+
+// Adicionar item
+document.querySelectorAll('.btn-add-item').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const tr = this.closest('tr');
+    const id = tr.dataset.id;
+    if (selected.has(id)) return;
+    selected.add(id);
+    addRow(id, tr.dataset.nomeOrig, tr.dataset.un, parseFloat(tr.dataset.estoque));
+    this.disabled = true;
+    this.classList.replace('btn-outline-success','btn-secondary');
+    this.innerHTML = '<i class="bi bi-check"></i>';
+  });
+});
+
+function addRow(id, nome, un, estoque) {
+  document.getElementById('linha-vazia').style.display = 'none';
+  const tbody = document.getElementById('tbody-itens');
+  const tr = document.createElement('tr');
+  tr.dataset.id = id;
+  tr.innerHTML = `
+    <td class="fw-semibold">${nome}
+      <input type="hidden" name="insumo_id" value="${id}">
+    </td>
+    <td class="text-center"><span class="badge bg-info text-dark">${un}</span></td>
+    <td class="text-end text-muted small">${estoque.toFixed(1)}</td>
+    <td class="text-end">
+      <input type="number" name="qtd_enviada" min="0.01" step="0.01" class="form-control form-control-sm qtd-input" required placeholder="0">
+    </td>
+    <td>
+      <button type="button" class="btn btn-sm btn-outline-danger btn-remove" style="padding:2px 6px">
+        <i class="bi bi-x"></i>
+      </button>
+    </td>`;
+  tbody.appendChild(tr);
+
+  tr.querySelector('.btn-remove').addEventListener('click', () => {
+    selected.delete(id);
+    tr.remove();
+    // Re-enable add button
+    const addBtn = document.querySelector(`#lista-add [data-id="${id}"] .btn-add-item`);
+    if (addBtn) {
+      addBtn.disabled = false;
+      addBtn.classList.replace('btn-secondary','btn-outline-success');
+      addBtn.innerHTML = '<i class="bi bi-plus"></i>';
+    }
+    if (!selected.size) document.getElementById('linha-vazia').style.display = '';
+    updateCount();
+  });
+
+  updateCount();
+}
+
+function updateCount() {
+  const n = selected.size;
+  document.getElementById('n-itens').textContent = n;
+  document.getElementById('btn-submit').disabled = n === 0;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+{% block title %}Editar — {{ prod.nome }}{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <h1><i class="bi bi-pencil-square me-2"></i>{{ prod.nome }}</h1>
+    <p>Editar ficha técnica e ingredientes</p>
+  </div>
+  <a href="{{ url_for('ficha_ver', id=prod.id) }}" class="btn btn-outline-primary">
+    <i class="bi bi-eye me-1"></i>Ver Ficha
+  </a>
+</div>
+
+<div class="row g-4">
+  <!-- Dados do produto -->
+  <div class="col-lg-4">
+    <div class="card shadow-sm">
+      <div class="card-header py-2" style="background:#1a3a5c">
+        <span class="text-white fw-semibold"><i class="bi bi-info-circle me-2"></i>Dados do Produto</span>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nome</label>
+            <input type="text" name="nome" class="form-control" required value="{{ prod.nome }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Descrição</label>
+            <input type="text" name="descricao" class="form-control" value="{{ prod.descricao or '' }}">
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Rendimento</label>
+              <input type="number" name="rendimento" class="form-control" step="any" value="{{ prod.rendimento }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Unidade</label>
+              <input type="text" name="unidade_rendimento" class="form-control" value="{{ prod.unidade_rendimento }}">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Categoria</label>
+            <select name="categoria" class="form-select">
+              <option value="">— Sem categoria —</option>
+              {% for nome, cls in categorias %}
+              <option value="{{ nome }}" {% if prod.categoria == nome %}selected{% endif %}>{{ nome }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Valor de Referência (R$)</label>
+            <input type="number" name="valor_referencia" class="form-control" step="any" min="0"
+                   placeholder="Ex: 5,50"
+                   value="{{ prod.valor_referencia if prod.valor_referencia is not none else '' }}">
+            <div class="form-text">Preço de venda ou valor alvo para comparar com o custo calculado.</div>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-check-lg me-1"></i>Salvar
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ingredientes -->
+  <div class="col-lg-8">
+    <div class="card shadow-sm mb-3">
+      <div class="card-header py-2" style="background:#1a3a5c">
+        <span class="text-white fw-semibold"><i class="bi bi-list-ul me-2"></i>Ingredientes ({{ items|length }})</span>
+      </div>
+      <div class="card-body p-0">
+        {% if items %}
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Insumo</th>
+              <th class="text-end">Quantidade</th>
+              <th class="text-center">Unid.</th>
+              <th class="text-end">Custo</th>
+              <th class="text-center">Ajustar</th>
+              <th class="text-center" title="% do insumo comprado que é realmente aproveitado na receita">Aprov. %</th>
+              <th class="text-center">Remover</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for it in items %}
+            {% set c = custos_items[loop.index0] %}
+            <tr id="row-{{ it.ft_id }}">
+              <td>
+                {{ it.ins_nome }}
+                {% if it.produto_vinculado_id %}
+                <a href="{{ url_for('ficha_ver', id=it.produto_vinculado_id) }}"
+                   class="badge text-decoration-none ms-1"
+                   style="background:#e8f0fe;color:#1a3a5c;border:1px solid #b3c8f5;font-size:.65rem"
+                   title="Este componente é uma ficha técnica — clique para ver" target="_blank">
+                  <i class="bi bi-file-earmark-text"></i> ficha técnica
+                </a>
+                {% endif %}
+              </td>
+              <td class="text-end font-monospace" id="qty-display-{{ it.ft_id }}">
+                {{ it.quantidade|int if it.quantidade == it.quantidade|int else it.quantidade|num_br(2) }}
+              </td>
+              <td class="text-center"><span class="badge bg-info text-dark">{{ it.unidade_uso }}</span></td>
+              <td class="text-end font-monospace small">
+                {% if c is not none %}
+                  {{ c|brl(4) }}
+                {% else %}
+                  <span class="text-warning">—</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        onclick="abrirAjuste({{ it.ft_id }}, {{ it.quantidade }}, {{ it.aproveitamento or 100 }})">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <form id="form-ajuste-{{ it.ft_id }}" method="post"
+                      action="{{ url_for('ficha_ajustar_ing', pid=prod.id, ft_id=it.ft_id) }}"
+                      class="d-none d-flex align-items-center gap-1 justify-content-center mt-1 flex-wrap">
+                  <input type="number" name="quantidade" step="any" min="0.001"
+                         class="form-control form-control-sm text-center" style="width:80px"
+                         id="input-ajuste-{{ it.ft_id }}" title="Quantidade">
+                  <div class="input-group input-group-sm" style="width:90px" title="Aproveitamento (%)">
+                    <input type="number" name="aproveitamento" step="0.1" min="1" max="100"
+                           class="form-control form-control-sm text-center"
+                           id="aprov-ajuste-{{ it.ft_id }}"
+                           value="{{ it.aproveitamento|int if it.aproveitamento else 100 }}">
+                    <span class="input-group-text" style="font-size:.65rem;padding:2px 4px">%</span>
+                  </div>
+                  <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i></button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary"
+                          onclick="fecharAjuste({{ it.ft_id }})"><i class="bi bi-x"></i></button>
+                </form>
+              </td>
+              <td class="text-center" id="aprov-cell-{{ it.ft_id }}">
+                <span id="aprov-display-{{ it.ft_id }}"
+                      class="badge {% if it.aproveitamento and it.aproveitamento < 100 %}bg-warning text-dark{% else %}bg-light text-secondary border{% endif %}"
+                      style="cursor:pointer;font-size:.75rem;min-width:42px"
+                      title="Clique para editar"
+                      onclick="abrirAprov({{ it.ft_id }}, {{ it.aproveitamento or 100 }})">
+                  {{ it.aproveitamento|int if it.aproveitamento else 100 }}%
+                </span>
+                <div id="form-aprov-{{ it.ft_id }}" class="d-none" style="min-width:90px">
+                  <div class="input-group input-group-sm" style="width:85px;margin:0 auto">
+                    <input type="number" step="0.1" min="1" max="100"
+                           id="input-aprov-{{ it.ft_id }}"
+                           class="form-control form-control-sm text-center"
+                           style="padding:2px 4px">
+                    <span class="input-group-text" style="padding:2px 4px;font-size:.7rem">%</span>
+                  </div>
+                  <div class="d-flex gap-1 justify-content-center mt-1">
+                    <button class="btn btn-xs btn-success" style="padding:1px 6px;font-size:.7rem"
+                            onclick="salvarAprov({{ it.ft_id }}, {{ prod.id }})">
+                      <i class="bi bi-check-lg"></i>
+                    </button>
+                    <button class="btn btn-xs btn-outline-secondary" style="padding:1px 6px;font-size:.7rem"
+                            onclick="fecharAprov({{ it.ft_id }}, {{ it.aproveitamento or 100 }})">
+                      <i class="bi bi-x"></i>
+                    </button>
+                  </div>
+                </div>
+              </td>
+              <td class="text-center">
+                <form method="post" action="{{ url_for('ficha_rem_ing', pid=prod.id, ft_id=it.ft_id) }}"
+                      onsubmit="return confirm('Remover {{ it.ins_nome }}?')">
+                  <button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg"></i></button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-4 text-muted">
+          <i class="bi bi-plus-circle" style="font-size:2rem"></i>
+          <p class="mt-2 mb-0">Nenhum ingrediente ainda. Adicione abaixo.</p>
+        </div>
+        {% endif %}
+      </div>
+      {% if items %}
+      <div class="d-flex justify-content-between align-items-center px-3 py-2 fw-bold"
+           style="background:#1a3a5c; color:#fff; border-top:2px solid #0d2240">
+        <span><i class="bi bi-calculator me-1"></i>Custo Total da Ficha</span>
+        <span class="font-monospace fs-5">
+          {% if custo_completo %}
+            {{ custo_total|brl(4) }}
+          {% elif custo_total > 0 %}
+            {{ custo_total|brl(4) }} <span class="text-warning fs-6">*incompleto</span>
+          {% else %}
+            <span class="text-warning fs-6">preços incompletos</span>
+          {% endif %}
+        </span>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Add ingredient -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header py-2" style="background:#2e75b6">
+        <span class="text-white fw-semibold"><i class="bi bi-plus-circle me-2"></i>Adicionar Ingrediente</span>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('ficha_add_ing', id=prod.id) }}">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Insumo</label>
+              <div class="position-relative" id="insumo-combo">
+                <input type="text" id="insumo-busca" class="form-control" placeholder="Digite para buscar…"
+                       autocomplete="off" required>
+                <input type="hidden" name="insumo_id" id="insumo-id-hidden">
+                <div id="insumo-dropdown"
+                     style="display:none;position:absolute;z-index:1000;width:100%;max-height:220px;
+                            overflow-y:auto;background:#fff;border:1px solid #ced4da;border-radius:4px;
+                            box-shadow:0 4px 12px rgba(0,0,0,.15)">
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Quantidade</label>
+              <input type="number" name="quantidade" class="form-control" step="any" min="0.001"
+                     required placeholder="0">
+            </div>
+            <div class="col-md-3">
+              <button type="submit" class="btn btn-success w-100">
+                <i class="bi bi-plus-lg me-1"></i>Adicionar
+              </button>
+            </div>
+          </div>
+          <div class="form-text mt-1">
+            A quantidade deve estar na unidade de uso do insumo (g, ml, un…)
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Add sub-recipe -->
+    <div class="card shadow-sm">
+      <div class="card-header py-2" style="background:#4a7c59">
+        <span class="text-white fw-semibold"><i class="bi bi-file-earmark-text me-2"></i>Adicionar Sub-receita (outra ficha técnica)</span>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('ficha_add_subreceita', id=prod.id) }}">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Ficha Técnica</label>
+              <div class="position-relative" id="sub-combo">
+                <input type="text" id="sub-busca" class="form-control" placeholder="Digite para buscar…"
+                       autocomplete="off" required>
+                <input type="hidden" name="produto_id" id="sub-id-hidden">
+                <div id="sub-dropdown"
+                     style="display:none;position:absolute;z-index:1000;width:100%;max-height:220px;
+                            overflow-y:auto;background:#fff;border:1px solid #ced4da;border-radius:4px;
+                            box-shadow:0 4px 12px rgba(0,0,0,.15)">
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Quantidade</label>
+              <input type="number" name="quantidade" class="form-control" step="any" min="0.001"
+                     required placeholder="0">
+            </div>
+            <div class="col-md-3">
+              <button type="submit" class="btn w-100" style="background:#4a7c59;color:#fff">
+                <i class="bi bi-plus-lg me-1"></i>Adicionar
+              </button>
+            </div>
+          </div>
+          <div class="form-text mt-1">
+            A quantidade deve estar na unidade de rendimento da sub-receita.
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const INSUMOS = [
+  {% for ins in todos %}
+  { id: {{ ins.id }}, label: "{{ ins.nome|e }} ({{ ins.unidade_uso }})" },
+  {% endfor %}
+];
+
+const buscaInput  = document.getElementById('insumo-busca');
+const hiddenInput = document.getElementById('insumo-id-hidden');
+const dropdown    = document.getElementById('insumo-dropdown');
+
+function normalize(s) { return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+
+function renderDropdown(q) {
+  const nq = normalize(q);
+  const matches = q.length < 1 ? INSUMOS : INSUMOS.filter(i => normalize(i.label).includes(nq));
+  dropdown.innerHTML = '';
+  if (!matches.length) {
+    dropdown.innerHTML = '<div class="px-3 py-2 text-muted small">Nenhum resultado</div>';
+  } else {
+    matches.forEach(i => {
+      const d = document.createElement('div');
+      d.className = 'px-3 py-2 insumo-opt';
+      d.style.cssText = 'cursor:pointer;font-size:.9rem;border-bottom:1px solid #f0f0f0';
+      d.textContent = i.label;
+      d.dataset.id = i.id;
+      d.addEventListener('mousedown', e => { e.preventDefault(); selectInsumo(i); });
+      d.addEventListener('mouseover', () => d.style.background = '#e8f0fe');
+      d.addEventListener('mouseout',  () => d.style.background = '');
+      dropdown.appendChild(d);
+    });
+  }
+  dropdown.style.display = '';
+}
+
+function selectInsumo(i) {
+  buscaInput.value  = i.label;
+  hiddenInput.value = i.id;
+  dropdown.style.display = 'none';
+}
+
+buscaInput.addEventListener('input', () => {
+  hiddenInput.value = '';
+  renderDropdown(buscaInput.value.trim());
+});
+buscaInput.addEventListener('focus', () => renderDropdown(buscaInput.value.trim()));
+buscaInput.addEventListener('blur',  () => { setTimeout(() => { dropdown.style.display = 'none'; }, 150); });
+
+buscaInput.addEventListener('keydown', e => {
+  const opts = [...dropdown.querySelectorAll('.insumo-opt')];
+  let cur = opts.findIndex(o => o.style.background === 'rgb(232, 240, 254)');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (cur >= 0) opts[cur].style.background = '';
+    const next = (cur + 1) % opts.length;
+    opts[next].style.background = '#e8f0fe';
+    opts[next].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (cur >= 0) opts[cur].style.background = '';
+    const prev = (cur - 1 + opts.length) % opts.length;
+    opts[prev].style.background = '#e8f0fe';
+    opts[prev].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter' && dropdown.style.display !== 'none') {
+    const active = opts.find(o => o.style.background === 'rgb(232, 240, 254)');
+    if (active) { e.preventDefault(); active.dispatchEvent(new MouseEvent('mousedown')); }
+  } else if (e.key === 'Escape') {
+    dropdown.style.display = 'none';
+  }
+});
+
+buscaInput.closest('form').addEventListener('submit', e => {
+  if (!hiddenInput.value) {
+    e.preventDefault();
+    buscaInput.classList.add('is-invalid');
+    buscaInput.focus();
+  }
+});
+buscaInput.addEventListener('input', () => buscaInput.classList.remove('is-invalid'));
+
+// ── Sub-receita autocomplete ──
+const PRODUTOS = [
+  {% for p in produtos_lista %}
+  { id: {{ p.id }}, label: "{{ p.nome|e }} ({{ p.unidade_rendimento }})" },
+  {% endfor %}
+];
+
+const subBusca  = document.getElementById('sub-busca');
+const subHidden = document.getElementById('sub-id-hidden');
+const subDrop   = document.getElementById('sub-dropdown');
+
+function renderSubDrop(q) {
+  const nq = normalize(q);
+  const matches = q.length < 1 ? PRODUTOS : PRODUTOS.filter(p => normalize(p.label).includes(nq));
+  subDrop.innerHTML = '';
+  if (!matches.length) {
+    subDrop.innerHTML = '<div class="px-3 py-2 text-muted small">Nenhum resultado</div>';
+  } else {
+    matches.forEach(p => {
+      const d = document.createElement('div');
+      d.className = 'px-3 py-2 sub-opt';
+      d.style.cssText = 'cursor:pointer;font-size:.9rem;border-bottom:1px solid #f0f0f0';
+      d.textContent = p.label;
+      d.dataset.id = p.id;
+      d.addEventListener('mousedown', e => { e.preventDefault(); subHidden.value = p.id; subBusca.value = p.label; subDrop.style.display = 'none'; });
+      d.addEventListener('mouseover', () => d.style.background = '#e8ffe8');
+      d.addEventListener('mouseout',  () => d.style.background = '');
+      subDrop.appendChild(d);
+    });
+  }
+  subDrop.style.display = '';
+}
+
+subBusca.addEventListener('input', () => { subHidden.value = ''; renderSubDrop(subBusca.value.trim()); });
+subBusca.addEventListener('focus', () => renderSubDrop(subBusca.value.trim()));
+subBusca.addEventListener('blur',  () => { setTimeout(() => { subDrop.style.display = 'none'; }, 150); });
+subBusca.closest('form').addEventListener('submit', e => {
+  if (!subHidden.value) { e.preventDefault(); subBusca.classList.add('is-invalid'); subBusca.focus(); }
+});
+subBusca.addEventListener('input', () => subBusca.classList.remove('is-invalid'));
+
+function abrirAprov(ftId, aprovAtual) {
+  document.getElementById('input-aprov-' + ftId).value = aprovAtual;
+  document.getElementById('aprov-display-' + ftId).classList.add('d-none');
+  document.getElementById('form-aprov-' + ftId).classList.remove('d-none');
+  document.getElementById('input-aprov-' + ftId).focus();
+  document.getElementById('input-aprov-' + ftId).select();
+}
+
+function fecharAprov(ftId, aprovAtual) {
+  document.getElementById('form-aprov-' + ftId).classList.add('d-none');
+  document.getElementById('aprov-display-' + ftId).classList.remove('d-none');
+}
+
+function salvarAprov(ftId, pid) {
+  const val = parseFloat(document.getElementById('input-aprov-' + ftId).value);
+  if (!val || val < 1 || val > 100) return;
+  fetch('/fichas/' + pid + '/ingrediente/' + ftId + '/aproveitamento', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({aproveitamento: val})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      location.reload();
+    }
+  });
+}
+
+function abrirAjuste(ftId, qtdAtual, aprovAtual) {
+  document.getElementById('input-ajuste-' + ftId).value = qtdAtual;
+  const aprovEl = document.getElementById('aprov-ajuste-' + ftId);
+  if (aprovEl) aprovEl.value = aprovAtual || 100;
+  document.getElementById('form-ajuste-' + ftId).classList.remove('d-none');
+  document.getElementById('form-ajuste-' + ftId).classList.add('d-flex');
+  document.getElementById('input-ajuste-' + ftId).focus();
+}
+function fecharAjuste(ftId) {
+  document.getElementById('form-ajuste-' + ftId).classList.add('d-none');
+  document.getElementById('form-ajuste-' + ftId).classList.remove('d-flex');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Importar NF — Estoque{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-file-earmark-arrow-up me-2"></i>Importar Nota Fiscal</h1>
+  <p>Faça upload do PDF da NF-e. O sistema irá ler os itens, cruzar com os insumos cadastrados e apresentar para revisão antes de lançar.</p>
+</div>
+
+<div class="card shadow-sm" style="max-width:640px">
+  <div class="card-body">
+    <form method="POST" enctype="multipart/form-data" action="{{ url_for('estoque_importar_nf') }}">
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Arquivo PDF da NF-e <span class="text-danger">*</span></label>
+        <input type="file" name="pdf_file" accept=".pdf" class="form-control" required>
+        <div class="form-text">Suportado: NF-e em formato DANFE PDF (WMS, Atacadão, etc.)</div>
+      </div>
+      <div class="row g-2 mb-3">
+        <div class="col-4">
+          <label class="form-label fw-semibold">Data de entrada</label>
+          <input type="date" name="data_nf" class="form-control" value="{{ now }}">
+        </div>
+        <div class="col-4">
+          <label class="form-label fw-semibold">Origem</label>
+          <input type="text" name="origem" class="form-control" value="Fornecedor">
+        </div>
+        <div class="col-4">
+          <label class="form-label fw-semibold">Observação</label>
+          <input type="text" name="obs" class="form-control" placeholder="NF, lote…">
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-search me-1"></i>Ler e cruzar itens
+        </button>
+        <a href="{{ url_for('alertas') }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

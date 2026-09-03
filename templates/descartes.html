@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block title %}Descartes{% endblock %}
+{% block content %}
+<style>
+  .badge-pdv { font-size:.72rem; padding:2px 7px; border-radius:20px; font-weight:600; }
+  .pdv-Amaro    { background:#dbeafe; color:#1d4ed8; }
+  .pdv-Portugues{ background:#e0f2fe; color:#0369a1; }
+  .pdv-Izabel   { background:#dcfce7; color:#15803d; }
+  .pdv-Agnus    { background:#fef9c3; color:#a16207; }
+  .pdv-Cris     { background:#f3e8ff; color:#7e22ce; }
+  .filter-bar   { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 16px; }
+  .add-card     { border-left:4px solid #2e75b6; }
+</style>
+
+<div class="page-header d-flex justify-content-between align-items-center">
+  <div>
+    <h1><i class="bi bi-trash3 me-2"></i>Descartes</h1>
+    <p class="mb-0">Registro de descarte por data, PDV e item</p>
+  </div>
+</div>
+
+{# ── Formulário de adição ── #}
+<div class="card shadow-sm mb-4 add-card">
+  <div class="card-header py-2" style="background:#1a3a5c">
+    <span class="text-white fw-semibold"><i class="bi bi-plus-circle me-2"></i>Registrar Descarte</span>
+  </div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('descartes_novo') }}" class="row g-2 align-items-end">
+      <input type="hidden" name="filtro_data_ini" value="{{ filtro.data_ini }}">
+      <input type="hidden" name="filtro_data_fim" value="{{ filtro.data_fim }}">
+      <input type="hidden" name="filtro_local"    value="{{ filtro.local }}">
+
+      <div class="col-auto">
+        <label class="form-label fw-semibold mb-1" style="font-size:.82rem">Data</label>
+        <input type="date" name="data" class="form-control form-control-sm" value="{{ hoje }}" required style="width:140px">
+      </div>
+      <div class="col-auto">
+        <label class="form-label fw-semibold mb-1" style="font-size:.82rem">PDV</label>
+        <select name="local" class="form-select form-select-sm" required style="width:130px">
+          <option value="">Selecione…</option>
+          {% for pdv in pdvs %}
+          <option value="{{ pdv }}">{{ pdv }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col">
+        <label class="form-label fw-semibold mb-1" style="font-size:.82rem">Produto</label>
+        <input type="text" name="produto" list="lista-produtos" class="form-control form-control-sm"
+               placeholder="Nome do produto…" required autocomplete="off">
+        <datalist id="lista-produtos">
+          {% for n in nomes_auto %}
+          <option value="{{ n }}">
+          {% endfor %}
+        </datalist>
+      </div>
+      <div class="col-auto">
+        <label class="form-label fw-semibold mb-1" style="font-size:.82rem">Qtd</label>
+        <input type="number" name="qtd_descartada" class="form-control form-control-sm"
+               min="1" step="1" placeholder="0" required style="width:80px">
+      </div>
+      <div class="col-auto">
+        <label class="form-label fw-semibold mb-1" style="font-size:.82rem">Lote (opcional)</label>
+        <input type="text" name="lote" class="form-control form-control-sm" placeholder="ex: 26A19" style="width:110px">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-plus-circle me-1"></i>Registrar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Filtros ── #}
+<form method="get" class="filter-bar mb-3 d-flex flex-wrap gap-2 align-items-end">
+  <div>
+    <label class="form-label mb-1" style="font-size:.78rem;font-weight:600">De</label>
+    <input type="date" name="data_ini" class="form-control form-control-sm" value="{{ filtro.data_ini }}" style="width:140px">
+  </div>
+  <div>
+    <label class="form-label mb-1" style="font-size:.78rem;font-weight:600">Até</label>
+    <input type="date" name="data_fim" class="form-control form-control-sm" value="{{ filtro.data_fim }}" style="width:140px">
+  </div>
+  <div>
+    <label class="form-label mb-1" style="font-size:.78rem;font-weight:600">PDV</label>
+    <select name="local" class="form-select form-select-sm" style="width:130px">
+      <option value="">Todos</option>
+      {% for pdv in pdvs %}
+      <option value="{{ pdv }}" {{ 'selected' if filtro.local == pdv }}>{{ pdv }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-funnel me-1"></i>Filtrar
+  </button>
+  {% if filtro.data_ini or filtro.data_fim or filtro.local %}
+  <a href="{{ url_for('descartes_lista') }}" class="btn btn-outline-danger btn-sm">
+    <i class="bi bi-x-circle me-1"></i>Limpar
+  </a>
+  {% endif %}
+
+  {% if totais %}
+  <div class="ms-auto d-flex flex-wrap gap-2 align-items-center">
+    <small class="text-muted fw-semibold">Totais:</small>
+    {% for pdv, tot in totais.items() | sort %}
+    <span class="badge-pdv pdv-{{ pdv }}">{{ pdv }}: {{ tot }}</span>
+    {% endfor %}
+    <span class="badge bg-secondary" style="font-size:.72rem">
+      Total: {{ rows | sum(attribute='qtd_descartada') }}
+    </span>
+  </div>
+  {% endif %}
+</form>
+
+{# ── Tabela ── #}
+{% if rows %}
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-sm table-hover align-middle mb-0" style="font-size:.85rem">
+      <thead style="background:#1a3a5c;color:#fff">
+        <tr>
+          <th style="width:90px">Data</th>
+          <th style="width:100px">PDV</th>
+          <th>Produto</th>
+          <th style="width:75px">Lote</th>
+          <th class="text-end" style="width:55px">Qtd</th>
+          <th class="text-end" style="width:70px;font-size:.75rem">Enviado</th>
+          <th class="text-end" style="width:70px;font-size:.75rem">Total Desc.</th>
+          <th class="text-end" style="width:65px;font-size:.75rem">% Desc.</th>
+          <th style="width:90px;font-size:.7rem">Vinculado</th>
+          <th style="width:40px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set ns = namespace(cur_date='') %}
+        {% for r in rows %}
+        {% if r.data != ns.cur_date %}
+        {% set ns.cur_date = r.data %}
+        <tr style="background:#f1f5f9">
+          <td colspan="10" class="fw-semibold" style="font-size:.78rem;color:#475569;padding:4px 12px">
+            <i class="bi bi-calendar3 me-1"></i>
+            {{ r.data[8:10] }}/{{ r.data[5:7] }}/{{ r.data[0:4] }}
+          </td>
+        </tr>
+        {% endif %}
+        {% set cm = comp_map.get((r.produto|upper, r.local, r.lote), {}) %}
+        <tr>
+          <td class="text-muted" style="font-size:.78rem">{{ r.data[8:10] }}/{{ r.data[5:7] }}</td>
+          <td><span class="badge-pdv pdv-{{ r.local }}">{{ r.local }}</span></td>
+          <td class="fw-semibold">{{ r.produto }}</td>
+          <td class="text-muted font-monospace" style="font-size:.78rem">{{ r.lote or '—' }}</td>
+          <td class="text-end fw-semibold text-danger">{{ r.qtd_descartada }}</td>
+          <td class="text-end font-monospace text-muted" style="font-size:.82rem">
+            {{ cm.enviado if cm.enviado else '—' }}
+          </td>
+          <td class="text-end font-monospace" style="font-size:.82rem">
+            {% if cm.descartado %}
+            <span class="text-danger fw-semibold">{{ cm.descartado }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-end" style="font-size:.82rem">
+            {% if cm.pct is not none and cm.pct is defined %}
+            {% set pct = cm.pct %}
+            <span class="fw-semibold {{ 'text-danger' if pct >= 15 else ('text-warning' if pct >= 8 else 'text-success') }}">
+              {{ pct }}%
+            </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-muted" style="font-size:.7rem">
+            {% if r.registro_item_id %}
+            <span class="badge bg-light text-secondary border">vinculado</span>
+            {% else %}
+            <span class="text-muted">avulso</span>
+            {% endif %}
+          </td>
+          <td>
+            <form method="post" action="{{ url_for('descartes_excluir', id=r.id) }}"
+                  onsubmit="return confirm('Excluir este descarte?')">
+              <button class="btn btn-link btn-sm text-danger p-0" title="Excluir">
+                <i class="bi bi-trash3"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-inbox" style="font-size:2.5rem;opacity:.3"></i>
+  <p class="mt-2">Nenhum descarte encontrado para os filtros selecionados.</p>
+</div>
+{% endif %}
+
+{% if comparativo %}
+<div class="mt-4">
+  <h6 class="fw-semibold mb-2" style="color:#1a3a5c">
+    <i class="bi bi-bar-chart-line me-1"></i>Total por Produto × PDV
+  </h6>
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <table class="table table-sm table-hover align-middle mb-0" style="font-size:.83rem">
+        <thead style="background:#1a3a5c;color:#fff">
+          <tr>
+            <th>Produto</th>
+            <th style="width:110px">PDV</th>
+            <th class="text-end" style="width:90px">Total Enviado</th>
+            <th class="text-end" style="width:90px">Total Desc.</th>
+            <th class="text-end" style="width:75px">% Desc.</th>
+            <th style="width:120px"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set ns3 = namespace(cur_prod='') %}
+          {% for c in comparativo %}
+          {% if c.produto != ns3.cur_prod %}
+          {% set ns3.cur_prod = c.produto %}
+          <tr style="background:#f1f5f9">
+            <td colspan="6" class="fw-semibold" style="font-size:.78rem;color:#475569;padding:4px 12px">
+              {{ c.produto }}
+            </td>
+          </tr>
+          {% endif %}
+          <tr>
+            <td></td>
+            <td><span class="badge-pdv pdv-{{ c.pdv }}">{{ c.pdv }}</span></td>
+            <td class="text-end font-monospace text-muted">{{ c.enviado }}</td>
+            <td class="text-end font-monospace fw-semibold text-danger">{{ c.descartado }}</td>
+            <td class="text-end font-monospace">
+              {% if c.pct is not none %}
+              <span class="fw-semibold {{ 'text-danger' if c.pct >= 15 else ('text-warning' if c.pct >= 8 else 'text-success') }}">
+                {{ c.pct }}%
+              </span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td>
+              {% if c.pct is not none %}
+              <div style="background:#e5e7eb;border-radius:4px;height:7px;overflow:hidden;margin:0 8px">
+                <div style="height:100%;width:{{ [c.pct,100]|min }}%;background:{{ '#dc2626' if c.pct >= 15 else ('#f59e0b' if c.pct >= 8 else '#16a34a') }}"></div>
+              </div>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

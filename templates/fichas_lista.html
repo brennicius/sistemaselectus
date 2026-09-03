@@ -1,0 +1,657 @@
+{% extends "base.html" %}
+{% block title %}Fichas Técnicas{% endblock %}
+{% block content %}
+<style>
+  .custo-subiu { color: #c0392b; font-size:.85rem; }
+  .custo-caiu  { color: #1e8449; font-size:.85rem; }
+  .selo-revisao { font-size:.7rem; font-weight:700; letter-spacing:.04em; padding:2px 7px; border-radius:4px; display:inline-block; }
+  .selo-nao_revisada { background:#fff3cd; color:#856404; border:1px solid #ffc107; }
+  .selo-em_revisao   { background:#cff4fc; color:#055160; border:1px solid #0dcaf0; }
+  .selo-revisada     { background:#d1e7dd; color:#0f5132; border:1px solid #198754; }
+  .ficha-hidden { display: none !important; }
+  .selo-custo-nao_revisado { background:#fff3cd; color:#856404; border:1px solid #ffc107; }
+  .selo-custo-incompleta   { background:#ffe5d0; color:#7c3400; border:1px solid #fd7e14; }
+  .selo-custo-revisado     { background:#d1e7dd; color:#0f5132; border:1px solid #198754; }
+  .selo-ativo   { background:#d1e7dd; color:#0f5132; border:1px solid #198754; }
+  /* Observação fichas */
+  .obs-wrapper { position:relative; display:inline-block; }
+  .obs-icon { font-size:.8rem; color:#6366f1; cursor:pointer; vertical-align:middle; margin-left:4px; }
+  .obs-icon-empty { color:#adb5bd; }
+  .obs-panel { display:none; position:absolute; left:0; top:100%; z-index:200;
+               background:#fff; border:1px solid #c7d2fe; border-radius:8px;
+               padding:8px; min-width:260px; max-width:320px; box-shadow:0 4px 16px rgba(0,0,0,.15); }
+  .obs-wrapper:hover .obs-panel { display:block; }
+  .obs-panel textarea { width:100%; border:1px solid #c7d2fe; border-radius:6px;
+                        font-size:.8rem; padding:4px 6px; resize:vertical; min-height:60px; outline:none; }
+  .obs-panel textarea:focus { border-color:#6366f1; }
+  .obs-save-btn { margin-top:4px; font-size:.75rem; padding:2px 10px; }
+  .obs-saved-msg { font-size:.7rem; color:#16a34a; margin-left:6px; display:none; }
+  .selo-inativo { background:#dc3545; color:#fff; border:1px solid #b02a37; }
+</style>
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <h1><i class="bi bi-journal-text me-2"></i>Fichas Técnicas</h1>
+    <p>Receitas dos produtos com custo calculado automaticamente</p>
+  </div>
+  <a href="{{ url_for('ficha_nova') }}" class="btn btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>Novo Produto
+  </a>
+</div>
+
+{% if resultado %}
+<!-- Buscador -->
+<div class="mb-3">
+  <div class="input-group" style="max-width:360px">
+    <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+    <input type="text" id="busca-ficha" class="form-control" placeholder="Buscar produto…" autocomplete="off">
+    <button class="btn btn-outline-secondary" id="busca-clear" type="button" style="display:none">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+</div>
+
+<!-- Barra de ordenação -->
+<div class="mb-3 d-flex gap-2 align-items-center flex-wrap">
+  <span class="text-muted small">Ordenar por:</span>
+  <div class="btn-group btn-group-sm">
+    <button type="button" class="btn btn-outline-secondary active sort-field-btn" data-field="nome">Produto</button>
+    <button type="button" class="btn btn-outline-secondary sort-field-btn" data-field="cat">Categoria</button>
+  </div>
+  <div class="btn-group btn-group-sm">
+    <button type="button" class="btn btn-outline-secondary active sort-dir-btn" data-dir="asc">
+      <i class="bi bi-sort-alpha-down"></i> A–Z
+    </button>
+    <button type="button" class="btn btn-outline-secondary sort-dir-btn" data-dir="desc">
+      <i class="bi bi-sort-alpha-up"></i> Z–A
+    </button>
+  </div>
+  <span class="text-muted small ms-2">Revisão:</span>
+  <button type="button" class="btn btn-sm btn-outline-warning filter-rev-btn" data-rev="nao_revisada" style="color:#856404">Não revisadas</button>
+  <button type="button" class="btn btn-sm btn-outline-info filter-rev-btn"    data-rev="em_revisao">Em revisão</button>
+  <button type="button" class="btn btn-sm btn-outline-success filter-rev-btn" data-rev="revisada">Revisadas</button>
+  <button type="button" id="filter-clear-btn" class="btn btn-sm btn-outline-secondary ms-1" title="Limpar filtros" style="display:none">
+    <i class="bi bi-x-lg"></i>
+  </button>
+  <span class="text-muted small ms-2">Status:</span>
+  <button type="button" class="btn btn-sm btn-outline-success filter-ativo-btn" data-ativo="ativo">Ativos</button>
+  <button type="button" class="btn btn-sm btn-outline-danger  filter-ativo-btn" data-ativo="inativo">Inativos</button>
+  <button type="button" id="filter-ativo-clear" class="btn btn-sm btn-outline-secondary" style="display:none" title="Limpar">
+    <i class="bi bi-x-lg"></i>
+  </button>
+</div>
+
+<div class="row g-3" id="fichas-grid">
+  {% for r in resultado %}
+  {% set mud = mudancas_custo.get(r.p.id) %}
+  {% set rev = r.p.status_revisao or 'nao_revisada' %}
+  {% set is_ativo = (r.p.ativo if r.p.ativo is not none else 1) %}
+  <div class="col-md-6 col-lg-4 ficha-col"
+       data-nome="{{ r.p.nome }}"
+       data-cat="{{ r.p.categoria or '' }}"
+       data-revisao="{{ rev }}"
+       data-ativo="{{ 'ativo' if is_ativo else 'inativo' }}">
+    <div class="card shadow-sm h-100" style="border-top: 3px solid {{ '#198754' if r.completo else '#ffc107' }}">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+          <h6 class="card-title fw-bold mb-0">
+            {{ r.p.nome }}
+            <span class="obs-wrapper">
+              <i class="bi bi-chat-left-text obs-icon {{ '' if r.p.observacao else 'obs-icon-empty' }}"
+                 title="{{ 'Ver/editar observação' if r.p.observacao else 'Adicionar observação' }}"></i>
+              <div class="obs-panel" onclick="event.stopPropagation()">
+                <div class="fw-semibold mb-1" style="font-size:.72rem;color:#6366f1"><i class="bi bi-chat-left-text me-1"></i>Observação</div>
+                <textarea class="obs-textarea" data-endpoint="/fichas/{{ r.p.id }}/observacao"
+                  >{{ r.p.observacao or '' }}</textarea>
+                <div class="d-flex align-items-center">
+                  <button class="btn btn-primary obs-save-btn" onclick="salvarObs(this)">Salvar</button>
+                  <span class="obs-saved-msg">Salvo!</span>
+                </div>
+              </div>
+            </span>
+          </h6>
+          <div class="d-flex align-items-center gap-1">
+            {% if mud and mud.custo_anterior is not none %}
+              {% if mud.custo_novo > mud.custo_anterior %}
+                <span class="custo-subiu" title="Custo subiu de {{ mud.custo_anterior|brl(4) }} para {{ mud.custo_novo|brl(4) }}">
+                  <i class="bi bi-arrow-up-circle-fill"></i>
+                </span>
+              {% elif mud.custo_novo < mud.custo_anterior %}
+                <span class="custo-caiu" title="Custo caiu de {{ mud.custo_anterior|brl(4) }} para {{ mud.custo_novo|brl(4) }}">
+                  <i class="bi bi-arrow-down-circle-fill"></i>
+                </span>
+              {% endif %}
+            {% endif %}
+            <span class="badge {{ 'bg-success' if r.completo else 'bg-warning text-dark' }}">
+              {{ 'Completo' if r.completo else 'Incompleto' }}
+            </span>
+          </div>
+        </div>
+        <div class="mb-2 d-flex gap-2 flex-wrap">
+          <span class="selo-revisao selo-{{ rev }} selo-btn" style="cursor:pointer"
+                data-id="{{ r.p.id }}" data-status="{{ rev }}"
+                title="Clique para alterar status de revisão{% if r.p.data_revisao %} · Revisada em {{ r.p.data_revisao[:10] }}{% endif %}">
+            {{ {'nao_revisada':'NÃO REVISADA','em_revisao':'EM REVISÃO','revisada':'REVISADA'}[rev] }}
+          </span>
+          {% set custo_label = {'nao_revisado':'CUSTO NÃO REVISADO','incompleta':'CUSTO REVISÃO INCOMPLETA','revisado':'CUSTO REVISADO'} %}
+          <span class="selo-revisao selo-custo-{{ r.custo_revisao }}"
+                title="{{ {'nao_revisado':'Nenhum insumo desta ficha foi revisado','incompleta':'Alguns insumos ainda não foram revisados','revisado':'Todos os insumos foram revisados'}[r.custo_revisao] }}">
+            {{ custo_label[r.custo_revisao] }}
+          </span>
+          <span class="selo-revisao selo-ativo-btn {{ 'selo-ativo' if is_ativo else 'selo-inativo' }}"
+                style="cursor:pointer" data-id="{{ r.p.id }}"
+                title="Clique para {{ 'inativar' if is_ativo else 'ativar' }} esta ficha">
+            {{ 'ATIVO' if is_ativo else 'INATIVO' }}
+          </span>
+        </div>
+        <div class="mb-2 cat-badge-wrap" data-id="{{ r.p.id }}" data-cat="{{ r.p.categoria or '' }}">
+          {% if r.p.categoria %}
+          <span class="badge {{ cat_map.get(r.p.categoria, 'bg-secondary') }} cat-badge" style="cursor:pointer" title="Clique para mudar categoria">{{ r.p.categoria }}</span>
+          {% else %}
+          <span class="badge bg-light text-secondary border cat-badge" style="cursor:pointer;font-size:.7rem" title="Clique para definir categoria"><i class="bi bi-tag me-1"></i>Sem categoria</span>
+          {% endif %}
+        </div>
+        {% if r.p.descricao %}<p class="text-muted small mb-2">{{ r.p.descricao }}</p>{% endif %}
+        <div class="mt-3 pt-2 border-top">
+          {% if r.completo and r.p.rendimento and r.p.rendimento > 1 %}
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <div>
+              <div class="text-muted small">Rendimento</div>
+              <span class="fw-semibold">{{ r.p.rendimento|int if r.p.rendimento == r.p.rendimento|int else r.p.rendimento }} {{ r.p.unidade_rendimento }}</span>
+            </div>
+            <div class="text-end">
+              <div class="text-muted small">Custo unitário</div>
+              <strong class="text-success">{{ (r.custo / r.p.rendimento)|brl(4) }}</strong>
+            </div>
+          </div>
+          {% endif %}
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              {% if r.completo %}
+                {% if r.p.rendimento and r.p.rendimento > 1 %}
+                <div class="text-muted small">Custo total da receita</div>
+                {% else %}
+                <div class="text-muted small">Custo unitário</div>
+                {% endif %}
+                <strong class="text-success fs-5">{{ r.custo|brl(4) }}</strong>
+                {% if r.p.valor_referencia is not none %}
+                  {% set vref = r.p.valor_referencia %}
+                  {% set custo_base = (r.custo / r.p.rendimento) if r.p.rendimento and r.p.rendimento > 1 else r.custo %}
+                  {% set diff = custo_base - vref %}
+                  {% set pct  = (diff / vref * 100) if vref else 0 %}
+                  <div class="mt-1 p-1 rounded" style="background:{{ '#fdecea' if diff > 0 else '#e9f7ef' }};font-size:.78rem">
+                    <span class="text-muted">Ref:</span>
+                    <span class="fw-semibold">{{ vref|brl(2) }}</span>
+                    &nbsp;
+                    {% if diff > 0 %}
+                      <span style="color:#c0392b"><i class="bi bi-arrow-up-circle-fill"></i> +{{ pct|round(1) }}% acima</span>
+                    {% elif diff < 0 %}
+                      <span style="color:#1e8449"><i class="bi bi-arrow-down-circle-fill"></i> {{ pct|round(1) }}% abaixo</span>
+                    {% else %}
+                      <span class="text-muted">= igual</span>
+                    {% endif %}
+                  </div>
+                {% endif %}
+              {% else %}
+                <div class="text-muted small">Custo unitário</div>
+                <span class="text-warning small"><i class="bi bi-exclamation-circle me-1"></i>preços pendentes</span>
+              {% endif %}
+            </div>
+            <div class="d-flex gap-1">
+              <button class="btn btn-sm btn-outline-info" title="Histórico de custo"
+                      onclick="verHistoricoCusto({{ r.p.id }}, '{{ r.p.nome|e }}')">
+                <i class="bi bi-graph-up"></i>
+              </button>
+              <a href="{{ url_for('ficha_ver', id=r.p.id) }}" class="btn btn-sm btn-outline-primary" title="Ver ficha">
+                <i class="bi bi-eye"></i>
+              </a>
+              <a href="{{ url_for('ficha_editar', id=r.p.id) }}" class="btn btn-sm btn-outline-secondary" title="Editar">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form method="post" action="{{ url_for('ficha_excluir', id=r.p.id) }}" class="d-inline"
+                    onsubmit="return confirm('Excluir {{ r.p.nome }}?')">
+                <button class="btn btn-sm btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-journal-plus" style="font-size:3rem"></i>
+  <p class="mt-3">Nenhuma ficha técnica cadastrada.</p>
+  <a href="{{ url_for('ficha_nova') }}" class="btn btn-primary">Criar primeiro produto</a>
+</div>
+{% endif %}
+
+<!-- Modal Histórico de Custo -->
+<div class="modal fade" id="modalHistoricoCusto" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#1a3a5c;color:#fff">
+        <h5 class="modal-title"><i class="bi bi-graph-up me-2"></i>Evolução de Custo — <span id="hc-nome"></span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="hc-vazio" class="text-center text-muted py-4" style="display:none">
+          <i class="bi bi-clock-history" style="font-size:2rem"></i>
+          <p class="mt-2">Nenhum registro de alteração de custo ainda.</p>
+        </div>
+        <div id="hc-conteudo" style="display:none">
+          <canvas id="hc-chart" height="120" style="width:100%;margin-bottom:16px"></canvas>
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th class="text-end">Custo Anterior</th>
+                <th class="text-end">Custo Novo</th>
+                <th class="text-end">Variação</th>
+                <th class="text-end">%</th>
+              </tr>
+            </thead>
+            <tbody id="hc-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let sortField = 'nome', sortDir = 'asc';
+
+function applySort() {
+  const grid = document.getElementById('fichas-grid');
+  if (!grid) return;
+  const cols = Array.from(grid.querySelectorAll('.ficha-col'));
+  cols.sort((a, b) => {
+    const na = a.dataset[sortField] || '';
+    const nb = b.dataset[sortField] || '';
+    return sortDir === 'asc' ? na.localeCompare(nb, 'pt-BR') : nb.localeCompare(na, 'pt-BR');
+  });
+  cols.forEach(c => grid.appendChild(c));
+}
+
+document.querySelectorAll('.sort-field-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.sort-field-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    sortField = btn.dataset.field;
+    applySort();
+  });
+});
+
+document.querySelectorAll('.sort-dir-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.sort-dir-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    sortDir = btn.dataset.dir;
+    applySort();
+  });
+});
+
+applySort();
+
+// ── Filtros client-side (busca + revisão) ──
+const buscaInput   = document.getElementById('busca-ficha');
+const buscaClear   = document.getElementById('busca-clear');
+const clearRevBtn  = document.getElementById('filter-clear-btn');
+const revAtivos    = new Set();
+const ativoAtivos  = new Set();
+const filterAtivoClear = document.getElementById('filter-ativo-clear');
+
+const REV_ON  = { nao_revisada: ['btn-warning','btn-outline-warning'], em_revisao: ['btn-info','btn-outline-info'], revisada: ['btn-success','btn-outline-success'] };
+const ATIVO_ON = { ativo: ['btn-success','btn-outline-success'], inativo: ['btn-danger','btn-outline-danger'] };
+
+function applyVisible() {
+  const q = buscaInput.value.trim().toLowerCase();
+  buscaClear.style.display = q ? '' : 'none';
+  document.querySelectorAll('.ficha-col').forEach(col => {
+    const okBusca = !q || col.dataset.nome.toLowerCase().includes(q) || col.dataset.cat.toLowerCase().includes(q);
+    const okRev   = revAtivos.size === 0 || revAtivos.has(col.dataset.revisao || 'nao_revisada');
+    const okAtivo = ativoAtivos.size === 0 || ativoAtivos.has(col.dataset.ativo || 'ativo');
+    col.style.display = (okBusca && okRev && okAtivo) ? '' : 'none';
+  });
+  clearRevBtn.style.display = revAtivos.size > 0 ? '' : 'none';
+  filterAtivoClear.style.display = ativoAtivos.size > 0 ? '' : 'none';
+}
+
+// Filtro Ativo/Inativo
+document.querySelectorAll('.filter-ativo-btn').forEach(btn => {
+  btn.dataset.label = btn.textContent.trim();
+  btn.addEventListener('click', () => {
+    const val = btn.dataset.ativo;
+    const [on, off] = ATIVO_ON[val];
+    if (ativoAtivos.has(val)) {
+      ativoAtivos.delete(val);
+      btn.classList.replace(on, off);
+      btn.textContent = btn.dataset.label;
+    } else {
+      ativoAtivos.add(val);
+      btn.classList.replace(off, on);
+      btn.innerHTML = '<i class="bi bi-check2 me-1"></i>' + btn.dataset.label;
+    }
+    applyVisible();
+  });
+});
+filterAtivoClear.addEventListener('click', () => {
+  ativoAtivos.clear();
+  document.querySelectorAll('.filter-ativo-btn').forEach(btn => {
+    const [on, off] = ATIVO_ON[btn.dataset.ativo];
+    btn.classList.replace(on, off);
+    btn.textContent = btn.dataset.label;
+  });
+  applyVisible();
+});
+
+// Toggle Ativo/Inativo via clique no badge
+document.querySelectorAll('.selo-ativo-btn').forEach(badge => {
+  badge.addEventListener('click', () => {
+    const id = badge.dataset.id;
+    fetch(`/fichas/${id}/toggle-ativo`, { method: 'POST' })
+      .then(r => r.json())
+      .then(d => {
+        const col = badge.closest('.ficha-col');
+        if (d.ativo) {
+          badge.textContent = 'ATIVO';
+          badge.className = badge.className.replace('selo-inativo','selo-ativo');
+          badge.title = 'Clique para inativar esta ficha';
+          col.dataset.ativo = 'ativo';
+        } else {
+          badge.textContent = 'INATIVO';
+          badge.className = badge.className.replace('selo-ativo','selo-inativo');
+          badge.title = 'Clique para ativar esta ficha';
+          col.dataset.ativo = 'inativo';
+        }
+        applyVisible();
+      });
+  });
+});
+
+function updateRevBtn(btn) {
+  const rev = btn.dataset.rev;
+  const [on, off] = REV_ON[rev];
+  if (revAtivos.has(rev)) {
+    btn.classList.replace(off, on);
+    if (rev === 'nao_revisada') btn.style.color = '';
+    btn.innerHTML = '<i class="bi bi-check2 me-1"></i>' + btn.dataset.label;
+  } else {
+    btn.classList.replace(on, off);
+    if (rev === 'nao_revisada') btn.style.color = '#856404';
+    btn.textContent = btn.dataset.label;
+  }
+}
+
+document.querySelectorAll('.filter-rev-btn').forEach(btn => {
+  btn.dataset.label = btn.textContent.trim();
+  btn.addEventListener('click', () => {
+    const rev = btn.dataset.rev;
+    if (revAtivos.has(rev)) { revAtivos.delete(rev); } else { revAtivos.add(rev); }
+    updateRevBtn(btn);
+    applyVisible();
+  });
+});
+
+clearRevBtn.addEventListener('click', () => {
+  revAtivos.clear();
+  document.querySelectorAll('.filter-rev-btn').forEach(updateRevBtn);
+  applyVisible();
+});
+
+buscaInput.addEventListener('input', applyVisible);
+buscaClear.addEventListener('click', () => { buscaInput.value = ''; applyVisible(); buscaInput.focus(); });
+
+applyVisible();
+
+// ── Histórico de Custo ──
+function brl4(v) {
+  if (v === null || v === undefined) return '—';
+  return 'R$ ' + parseFloat(v).toFixed(4).replace('.', ',');
+}
+
+function verHistoricoCusto(id, nome) {
+  document.getElementById('hc-nome').textContent = nome;
+  document.getElementById('hc-vazio').style.display = 'none';
+  document.getElementById('hc-conteudo').style.display = 'none';
+  const modal = new bootstrap.Modal(document.getElementById('modalHistoricoCusto'));
+  modal.show();
+
+  fetch(`/fichas/${id}/historico-custo`)
+    .then(r => r.json())
+    .then(data => {
+      const hist = data.historico;
+      if (!hist || hist.length === 0) {
+        document.getElementById('hc-vazio').style.display = '';
+        return;
+      }
+      // Filtrar apenas registros com custo_anterior (exclui seed inicial sem comparação)
+      const comMudanca = hist.filter(h => h.custo_anterior !== null);
+      if (comMudanca.length === 0) {
+        document.getElementById('hc-vazio').style.display = '';
+        return;
+      }
+      document.getElementById('hc-conteudo').style.display = '';
+
+      // Tabela (mais recente primeiro)
+      const tbody = document.getElementById('hc-tbody');
+      tbody.innerHTML = '';
+      [...comMudanca].reverse().forEach(h => {
+        const ant = h.custo_anterior, nov = h.custo_novo;
+        const diff = nov - ant;
+        const pct  = ant ? (diff / ant * 100) : null;
+        const cor  = diff > 0 ? 'color:#c0392b' : diff < 0 ? 'color:#1e8449' : '';
+        const seta = diff > 0 ? '▲' : diff < 0 ? '▼' : '=';
+        const dt   = h.data_registro ? h.data_registro.slice(0,16).replace('T',' ') : '—';
+        tbody.insertAdjacentHTML('beforeend', `
+          <tr>
+            <td class="font-monospace small">${dt}</td>
+            <td class="text-end font-monospace">${brl4(ant)}</td>
+            <td class="text-end font-monospace fw-semibold">${brl4(nov)}</td>
+            <td class="text-end font-monospace" style="${cor}">${seta} ${brl4(diff)}</td>
+            <td class="text-end font-monospace small" style="${cor}">${pct !== null ? pct.toFixed(1)+'%' : '—'}</td>
+          </tr>`);
+      });
+
+      // Gráfico: pontos = [custo_anterior do 1º] + cada custo_novo
+      const labels = [], valores = [];
+      if (comMudanca[0].custo_anterior !== null) {
+        labels.push(comMudanca[0].data_registro ? comMudanca[0].data_registro.slice(0,10) : 'início');
+        valores.push(comMudanca[0].custo_anterior);
+      }
+      comMudanca.forEach(h => {
+        labels.push(h.data_registro ? h.data_registro.slice(0,10) : '?');
+        valores.push(h.custo_novo);
+      });
+      desenharGraficoCusto(labels, valores);
+    });
+}
+
+// ── Selo de Revisão ──
+const REVISAO_CYCLE = ['nao_revisada', 'em_revisao', 'revisada'];
+const REVISAO_LABEL = { nao_revisada: 'NÃO REVISADA', em_revisao: 'EM REVISÃO', revisada: 'REVISADA' };
+
+document.querySelectorAll('.selo-btn').forEach(el => {
+  el.addEventListener('click', function() {
+    const id = this.dataset.id;
+    const cur = this.dataset.status;
+    const next = REVISAO_CYCLE[(REVISAO_CYCLE.indexOf(cur) + 1) % REVISAO_CYCLE.length];
+    fetch(`/fichas/${id}/revisao`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: next })
+    }).then(r => r.json()).then(d => {
+      if (d.ok) {
+        this.dataset.status = next;
+        this.className = `selo-revisao selo-${next} selo-btn`;
+        this.textContent = REVISAO_LABEL[next];
+        this.style.cursor = 'pointer';
+        const dt = d.data_revisao ? ' · Revisada em ' + d.data_revisao.slice(0,10) : '';
+        this.title = 'Clique para alterar status de revisão' + dt;
+      }
+    });
+  });
+});
+
+
+// ── Edição inline de categoria ──
+const CATS = [
+  { nome: '', cls: 'bg-light text-secondary border' },
+  {% for nome, cls in categorias %}
+  { nome: "{{ nome|e }}", cls: "{{ cls }}" },
+  {% endfor %}
+];
+const CAT_MAP = {};
+CATS.forEach(c => { if (c.nome) CAT_MAP[c.nome] = c.cls; });
+
+let catPopover = null;
+
+function closeCatPopover() {
+  if (catPopover) { catPopover.remove(); catPopover = null; }
+}
+
+document.addEventListener('click', e => {
+  if (catPopover && !catPopover.contains(e.target) && !e.target.closest('.cat-badge')) {
+    closeCatPopover();
+  }
+});
+
+document.querySelectorAll('.cat-badge-wrap').forEach(wrap => {
+  wrap.querySelector('.cat-badge').addEventListener('click', function(e) {
+    e.stopPropagation();
+    closeCatPopover();
+
+    const id = wrap.dataset.id;
+    const current = wrap.dataset.cat;
+    const rect = this.getBoundingClientRect();
+
+    const pop = document.createElement('div');
+    pop.style.cssText = `position:fixed;z-index:9999;background:#fff;border:1px solid #ced4da;
+      border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);padding:6px 4px;min-width:180px`;
+    pop.style.top  = (rect.bottom + 4) + 'px';
+    pop.style.left = rect.left + 'px';
+
+    CATS.forEach(c => {
+      const opt = document.createElement('div');
+      opt.style.cssText = 'padding:5px 10px;cursor:pointer;border-radius:5px;font-size:.85rem;display:flex;align-items:center;gap:6px';
+      const badge = document.createElement('span');
+      badge.className = 'badge ' + (c.nome ? c.cls : 'bg-light text-secondary border');
+      badge.textContent = c.nome || 'Sem categoria';
+      if (c.nome === current) { opt.style.background = '#e8f0fe'; }
+      opt.appendChild(badge);
+      opt.addEventListener('mouseenter', () => opt.style.background = '#f0f4ff');
+      opt.addEventListener('mouseleave', () => opt.style.background = c.nome === current ? '#e8f0fe' : '');
+      opt.addEventListener('click', () => {
+        closeCatPopover();
+        fetch(`/fichas/${id}/categoria`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ categoria: c.nome })
+        }).then(r => r.json()).then(d => {
+          if (!d.ok) return;
+          wrap.dataset.cat = c.nome;
+          const badgeEl = wrap.querySelector('.cat-badge');
+          if (c.nome) {
+            badgeEl.className = 'badge ' + (CAT_MAP[c.nome] || 'bg-secondary') + ' cat-badge';
+            badgeEl.style.cursor = 'pointer';
+            badgeEl.title = 'Clique para mudar categoria';
+            badgeEl.innerHTML = c.nome;
+          } else {
+            badgeEl.className = 'badge bg-light text-secondary border cat-badge';
+            badgeEl.style.cursor = 'pointer';
+            badgeEl.title = 'Clique para definir categoria';
+            badgeEl.innerHTML = '<i class="bi bi-tag me-1"></i>Sem categoria';
+          }
+          // Atualiza data-cat no card pai para filtros/ordenação funcionarem
+          const col = wrap.closest('.ficha-col');
+          if (col) col.dataset.cat = c.nome;
+        });
+      });
+      pop.appendChild(opt);
+    });
+
+    catPopover = pop;
+    document.body.appendChild(pop);
+
+    // Garante que o popover não saia da tela
+    const pr = pop.getBoundingClientRect();
+    if (pr.right > window.innerWidth - 8) pop.style.left = (window.innerWidth - pr.width - 8) + 'px';
+    if (pr.bottom > window.innerHeight - 8) pop.style.top = (rect.top - pr.height - 4) + 'px';
+  });
+});
+
+function desenharGraficoCusto(labels, valores) {
+  const canvas = document.getElementById('hc-chart');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 700, H = 120;
+  canvas.width = W; canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
+
+  const pad = {top: 12, right: 20, bottom: 28, left: 78};
+  const pw = W - pad.left - pad.right, ph = H - pad.top - pad.bottom;
+  const minV = Math.min(...valores) * 0.93;
+  const maxV = Math.max(...valores) * 1.07 || 1;
+  const xOf = i => pad.left + (i / Math.max(valores.length - 1, 1)) * pw;
+  const yOf = v => pad.top + ph - ((v - minV) / (maxV - minV)) * ph;
+
+  // Grade
+  ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1;
+  [0, 0.25, 0.5, 0.75, 1].forEach(f => {
+    const y = pad.top + ph * (1 - f);
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + pw, y); ctx.stroke();
+    const v = minV + f * (maxV - minV);
+    ctx.fillStyle = '#888'; ctx.font = '10px Arial'; ctx.textAlign = 'right';
+    ctx.fillText('R$' + v.toFixed(4), pad.left - 4, y + 3);
+  });
+
+  // Linha
+  ctx.strokeStyle = '#1a3a5c'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  valores.forEach((v, i) => { i === 0 ? ctx.moveTo(xOf(i), yOf(v)) : ctx.lineTo(xOf(i), yOf(v)); });
+  ctx.stroke();
+
+  // Pontos
+  valores.forEach((v, i) => {
+    const x = xOf(i), y = yOf(v);
+    const prev = i > 0 ? valores[i-1] : null;
+    const cor = prev === null ? '#1a3a5c' : v > prev ? '#c0392b' : v < prev ? '#1e8449' : '#1a3a5c';
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = cor; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#555'; ctx.font = '9px Arial'; ctx.textAlign = 'center';
+    ctx.fillText(labels[i] ? labels[i].slice(5) : '', x, H - 8);
+  });
+}
+
+// ── Observação Fichas ──
+function salvarObs(btn) {
+  const panel    = btn.closest('.obs-panel');
+  const ta       = panel.querySelector('.obs-textarea');
+  const endpoint = ta.dataset.endpoint;
+  const msg      = panel.querySelector('.obs-saved-msg');
+  fetch(endpoint, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ observacao: ta.value })
+  }).then(r => r.json()).then(d => {
+    if (!d.ok) return;
+    const icon = panel.closest('.obs-wrapper').querySelector('.obs-icon');
+    if (ta.value.trim()) {
+      icon.classList.remove('obs-icon-empty');
+      icon.title = 'Ver/editar observação';
+    } else {
+      icon.classList.add('obs-icon-empty');
+      icon.title = 'Adicionar observação';
+    }
+    msg.style.display = 'inline';
+    setTimeout(() => msg.style.display = 'none', 2000);
+  });
+}
+</script>
+{% endblock %}

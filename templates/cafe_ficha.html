@@ -1,0 +1,156 @@
+﻿{% extends "base.html" %}
+{% block title %}Ficha Técnica — Café Nestlé{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-cup-hot me-2"></i>Controle de Café</h1>
+</div>
+
+<ul class="nav nav-tabs mb-4">
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_lista') }}">
+      <i class="bi bi-grid me-1"></i>Visão Geral
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_consolidado') }}">
+      <i class="bi bi-bar-chart-line me-1"></i>Consolidado por PDV
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_financeiro') }}">
+      <i class="bi bi-currency-dollar me-1"></i>Financeiro
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link active" href="{{ url_for('cafe_ficha') }}">
+      <i class="bi bi-journal-text me-1"></i>Ficha Técnica
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_projecao') }}"><i class="bi bi-graph-up me-1"></i>Projeção de Consumo</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_estoque') }}"><i class="bi bi-box-seam me-1"></i>Estoque</a>
+  </li>
+</ul>
+
+<!-- Insumos e preços -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header py-2" style="background:#1a3a5c">
+    <span class="text-white fw-semibold"><i class="bi bi-box-seam me-2"></i>Insumos — Pacotes e Preços</span>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead style="background:#1a3a5c">
+        <tr>
+          <th style="color:#fff">Insumo</th>
+          <th class="text-center" style="color:#fff">Tam. PCT</th>
+          <th class="text-center" style="color:#fff">PCT / Caixa</th>
+          <th class="text-end" style="color:#fff">R$ / Caixa</th>
+          <th class="text-end" style="color:#fff">R$ / PCT</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ins in insumos %}
+        <tr>
+          <td class="fw-semibold">{{ ins.nome }}</td>
+          <td class="text-center">{{ ins.tam_kg|string|replace('.', ',') }} kg</td>
+          <td class="text-center">{{ ins.pct_cx }}</td>
+          <td class="text-end font-monospace">{{ ins.rs_cx|brl(2) }}</td>
+          <td class="text-end font-monospace fw-bold text-success">{{ ins.rs_pct|brl(2) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Custo por dose -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header py-2" style="background:#375623">
+    <span class="text-white fw-semibold"><i class="bi bi-currency-dollar me-2"></i>Custo e Preço por Dose</span>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead style="background:#375623">
+        <tr>
+          <th style="color:#fff">Bebida</th>
+          <th class="text-end" style="color:#fff">Custo Nestlé<br><small style="font-weight:400;font-size:.72rem">R$/dose</small></th>
+          <th class="text-end" style="color:#fff">Copo Térmico<br><small style="font-weight:400;font-size:.72rem">R$/dose</small></th>
+          <th class="text-end" style="color:#fff">Custo Total<br><small style="font-weight:400;font-size:.72rem">insumo + copo</small></th>
+          <th class="text-end" style="color:#fff">Preço Venda<br><small style="font-weight:400;font-size:.72rem">Amaro</small></th>
+          <th class="text-end" style="color:#fff">Margem<br><small style="font-weight:400;font-size:.72rem">R$/dose</small></th>
+          <th class="text-end" style="color:#fff">Margem %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for col, label, custo, preco in bebidas_custo %}
+        {% if custo %}
+        {% set custo_total = custo + custo_copo %}
+        {% set margem = (preco - custo_total) if preco else none %}
+        {% set margem_pct = (margem / preco * 100) if (margem is not none and preco) else none %}
+        <tr>
+          <td class="fw-semibold">{{ label }}</td>
+          <td class="text-end font-monospace">{{ custo|brl(2) }}</td>
+          <td class="text-end font-monospace text-muted">{{ custo_copo|brl(2) }}</td>
+          <td class="text-end font-monospace fw-semibold text-danger">{{ custo_total|brl(2) }}</td>
+          <td class="text-end font-monospace">{{ preco|brl(2) if preco else '—' }}</td>
+          <td class="text-end font-monospace fw-bold text-success">{{ margem|brl(2) if margem is not none else '—' }}</td>
+          <td class="text-end">
+            {% if margem_pct is not none %}
+            <span class="badge {{ 'bg-success' if margem_pct >= 60 else ('bg-warning text-dark' if margem_pct >= 40 else 'bg-danger') }}">
+              {{ '%.1f'|format(margem_pct) }}%
+            </span>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Composição por produto -->
+<div class="card shadow-sm">
+  <div class="card-header py-2" style="background:#5a1a3a">
+    <span class="text-white fw-semibold"><i class="bi bi-diagram-3 me-2"></i>Composição por Produto</span>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead style="background:#5a1a3a">
+        <tr>
+          <th style="color:#fff">Produto Final</th>
+          <th style="color:#fff">Insumo</th>
+          <th class="text-end" style="color:#fff">Gramatura<br><small style="font-weight:400;font-size:.72rem">g/dose</small></th>
+          <th class="text-end" style="color:#fff">Doses/PCT</th>
+          <th class="text-end" style="color:#fff">Custo Insumo<br><small style="font-weight:400;font-size:.72rem">R$/dose</small></th>
+          <th class="text-end" style="color:#f59e0b">Custo Produto<br><small style="font-weight:400;font-size:.72rem">total R$/dose</small></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in composicao %}
+        {% for ins in item.insumos %}
+        <tr>
+          {% if loop.first %}
+          <td class="fw-semibold align-top" rowspan="{{ item.insumos|length }}">{{ item.produto }}</td>
+          {% endif %}
+          <td class="text-muted">{{ ins.nome }}</td>
+          <td class="text-end font-monospace">{{ ins.gram }}</td>
+          <td class="text-end font-monospace fw-semibold">{{ ins.doses_pct }}</td>
+          <td class="text-end font-monospace text-muted small">{{ ins.custo_dose|brl(4) }}</td>
+          {% if loop.first %}
+          <td class="text-end font-monospace fw-bold text-warning align-top" rowspan="{{ item.insumos|length }}"
+              style="background:#1a1a2e">
+            {{ item.custo_total|brl(2) }}
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+

@@ -1,0 +1,780 @@
+{% extends "base.html" %}
+{% block title %}Insumos{% endblock %}
+{% block content %}
+<style>
+  tr.sem-preco td { background: #ffe0b2 !important; }
+  tr.sem-preco td:first-child { border-left: 6px solid #d84315 !important; padding-left: 10px !important; }
+  tr.sem-preco:hover td { background: #ffcc80 !important; }
+  .preco-subiu { color: #c0392b; }
+  .preco-caiu  { color: #1e8449; }
+  .selo-revisao { font-size:.65rem; font-weight:700; letter-spacing:.04em; padding:1px 6px; border-radius:4px; display:inline-block; }
+  .selo-custo-nao_revisado { background:#fff3cd; color:#856404; border:1px solid #ffc107; }
+  .selo-custo-em_revisao   { background:#cff4fc; color:#055160; border:1px solid #0dcaf0; }
+  .selo-custo-revisado     { background:#d1e7dd; color:#0f5132; border:1px solid #198754; }
+  .selo-nome-nao_revisado  { background:#fde8e8; color:#9b1c1c; border:1px solid #f05252; }
+  .selo-nome-em_revisao    { background:#feecdc; color:#7e3a00; border:1px solid #ff8a4c; }
+  .selo-nome-revisado      { background:#edebfe; color:#3e1c96; border:1px solid #9061f9; }
+  /* Observação */
+  .obs-wrapper { position:relative; display:inline-block; }
+  .obs-icon { font-size:.75rem; color:#6366f1; cursor:pointer; vertical-align:middle; margin-left:4px; }
+  .obs-icon-empty { color:#adb5bd; }
+  .obs-panel { display:none; position:absolute; left:0; top:100%; z-index:200;
+               background:#fff; border:1px solid #c7d2fe; border-radius:8px;
+               padding:8px; min-width:260px; max-width:340px; box-shadow:0 4px 16px rgba(0,0,0,.15); }
+  .obs-wrapper:hover .obs-panel { display:block; }
+  .obs-panel textarea { width:100%; border:1px solid #c7d2fe; border-radius:6px;
+                        font-size:.8rem; padding:4px 6px; resize:vertical; min-height:60px; outline:none; }
+  .obs-panel textarea:focus { border-color:#6366f1; }
+  .obs-save-btn { margin-top:4px; font-size:.75rem; padding:2px 10px; }
+  .obs-saved-msg { font-size:.7rem; color:#16a34a; margin-left:6px; display:none; }
+</style>
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <h1><i class="bi bi-box-seam me-2"></i>Insumos</h1>
+    <p>Cadastro de ingredientes, embalagens e materiais com preços e conversões</p>
+  </div>
+  <a href="{{ url_for('insumo_novo') }}" class="btn btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>Novo Insumo
+  </a>
+</div>
+
+<div class="mb-3 d-flex flex-wrap align-items-end gap-2">
+  <div class="input-group" style="max-width:360px">
+    <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+    <input type="text" id="busca-insumo" class="form-control" placeholder="Buscar insumo…" autocomplete="off">
+    <button class="btn btn-outline-secondary" id="busca-clear" type="button" style="display:none">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+  <span class="text-muted small mb-1 ms-1">Custo:</span>
+  <div class="d-flex flex-column align-items-center gap-0">
+    <span class="text-muted mb-1" style="font-size:.65rem;font-weight:600;letter-spacing:.03em" id="cnt-custo-nao_revisado">—</span>
+    <button type="button" class="btn btn-sm btn-outline-warning custo-filter-btn" data-custo="nao_revisado" style="color:#856404">Não revisados</button>
+  </div>
+  <div class="d-flex flex-column align-items-center gap-0">
+    <span class="text-muted mb-1" style="font-size:.65rem;font-weight:600;letter-spacing:.03em" id="cnt-custo-em_revisao">—</span>
+    <button type="button" class="btn btn-sm btn-outline-info custo-filter-btn" data-custo="em_revisao">Em revisão</button>
+  </div>
+  <div class="d-flex flex-column align-items-center gap-0">
+    <span class="text-muted mb-1" style="font-size:.65rem;font-weight:600;letter-spacing:.03em" id="cnt-custo-revisado">—</span>
+    <button type="button" class="btn btn-sm btn-outline-success custo-filter-btn" data-custo="revisado">Revisados</button>
+  </div>
+  <button type="button" id="custo-filter-clear" class="btn btn-sm btn-outline-secondary mb-0" style="display:none" title="Limpar filtro de custo">
+    <i class="bi bi-x-lg"></i>
+  </button>
+  <span class="text-muted small mb-1 ms-2">Nome:</span>
+  <div class="d-flex flex-column align-items-center gap-0">
+    <span class="text-muted mb-1" style="font-size:.65rem;font-weight:600;letter-spacing:.03em" id="cnt-nome-nao_revisado">—</span>
+    <button type="button" class="btn btn-sm btn-outline-danger nome-filter-btn" data-nome-status="nao_revisado">Não revisados</button>
+  </div>
+  <div class="d-flex flex-column align-items-center gap-0">
+    <span class="text-muted mb-1" style="font-size:.65rem;font-weight:600;letter-spacing:.03em" id="cnt-nome-em_revisao">—</span>
+    <button type="button" class="btn btn-sm nome-filter-btn" data-nome-status="em_revisao" style="color:#7e3a00;border:1px solid #ff8a4c">Em revisão</button>
+  </div>
+  <div class="d-flex flex-column align-items-center gap-0">
+    <span class="text-muted mb-1" style="font-size:.65rem;font-weight:600;letter-spacing:.03em" id="cnt-nome-revisado">—</span>
+    <button type="button" class="btn btn-sm nome-filter-btn" data-nome-status="revisado" style="color:#3e1c96;border:1px solid #9061f9">Revisados</button>
+  </div>
+  <button type="button" id="nome-filter-clear" class="btn btn-sm btn-outline-secondary mb-0" style="display:none" title="Limpar filtro de nome">
+    <i class="bi bi-x-lg"></i>
+  </button>
+  <div class="d-flex flex-column">
+    <span class="text-muted mb-1" style="font-size:.65rem">&nbsp;</span>
+    <div class="d-flex align-items-center gap-1">
+      <span class="text-muted small">Fornecedor:</span>
+      <select id="forn-filter" class="form-select form-select-sm" style="max-width:200px">
+        <option value="">Todos</option>
+        {# opções geradas pelo JS abaixo #}
+      </select>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle" id="tabela-insumos">
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th class="text-center">Unid. Compra</th>
+          <th class="text-end" style="min-width:185px">Preço de Compra (R$)</th>
+          <th>Conversão de Embalagem</th>
+          <th class="text-center">Unid. Uso</th>
+          <th class="text-end">R$ / Unid. Uso</th>
+          <th class="text-end" style="min-width:120px">Estoque Atual</th>
+          <th class="text-end" style="min-width:120px">Estoque Mín.</th>
+          <th class="text-center">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ins in insumos %}
+        {% set mud = mudancas.get(ins.id) %}
+        <tr class="{{ 'sem-preco' if ins.id in sem_preco_ids else '' }}" data-nome="{{ ins.nome|lower }}" data-custo="{{ ins.status_revisao_custo or 'nao_revisado' }}" data-nome-status="{{ ins.status_revisao_nome or 'nao_revisado' }}" data-fornecedor="{{ (ins.fornecedor or '')|lower }}">
+          {% set rc = ins.status_revisao_custo or 'nao_revisado' %}
+          {% set rn = ins.status_revisao_nome or 'nao_revisado' %}
+          <td class="fw-semibold">
+            <span class="ins-uso-trigger" data-id="{{ ins.id }}" style="cursor:pointer;border-bottom:1px dashed #aaa"
+                  title="Ver onde é usado">{{ ins.nome }}</span>
+            {% if ins.id in sem_preco_ids %}
+            <span class="badge ms-1 text-white" style="background:#d84315;font-size:.72rem"><i class="bi bi-exclamation-circle me-1"></i>SEM PREÇO</span>
+            {% endif %}
+            <br>
+            <span class="selo-revisao selo-custo-{{ rc }} ins-custo-btn mt-1" style="cursor:pointer"
+                  data-id="{{ ins.id }}" data-status="{{ rc }}"
+                  title="Clique para alterar status de custo">
+              CUSTO {{ {'nao_revisado':'NÃO REVISADO','em_revisao':'EM REVISÃO','revisado':'REVISADO'}[rc] }}
+              {% if rc == 'revisado' and ins.data_revisao_custo %}
+              <span class="d-block" style="font-size:.6rem;font-weight:400;opacity:.85">{{ ins.data_revisao_custo[:10] }}</span>
+              {% endif %}
+            </span>
+            <span class="selo-revisao selo-nome-{{ rn }} ins-nome-btn ms-1 mt-1" style="cursor:pointer"
+                  data-id="{{ ins.id }}" data-status="{{ rn }}"
+                  title="Clique para alterar status de revisão do nome">
+              NOME {{ {'nao_revisado':'NÃO REVISADO','em_revisao':'EM REVISÃO','revisado':'REVISADO'}[rn] }}
+            </span>
+            <span class="obs-wrapper">
+              <i class="bi bi-chat-left-text obs-icon {{ '' if ins.observacao else 'obs-icon-empty' }}"
+                 title="{{ 'Ver/editar observação' if ins.observacao else 'Adicionar observação' }}"></i>
+              <div class="obs-panel" onclick="event.stopPropagation()">
+                <div class="fw-semibold mb-1" style="font-size:.72rem;color:#6366f1"><i class="bi bi-chat-left-text me-1"></i>Observação</div>
+                <textarea class="obs-textarea" data-id="{{ ins.id }}" data-endpoint="/insumos/{{ ins.id }}/observacao"
+                  >{{ ins.observacao or '' }}</textarea>
+                <div class="d-flex align-items-center">
+                  <button class="btn btn-primary obs-save-btn" onclick="salvarObs(this)">Salvar</button>
+                  <span class="obs-saved-msg">Salvo!</span>
+                </div>
+              </div>
+            </span>
+            {% if ins.fornecedor %}
+            <span class="d-block mt-1" style="font-size:.7rem;color:#0f5132;background:#d1e7dd;border:1px solid #a3cfbb;border-radius:4px;padding:1px 6px;display:inline-block">
+              <i class="bi bi-truck me-1"></i>{{ ins.fornecedor }}
+            </span>
+            {% endif %}
+          </td>
+          <td class="text-center"><span class="badge bg-secondary">{{ ins.unidade_compra }}</span></td>
+          <td class="text-end">
+            <div class="d-flex justify-content-end align-items-center gap-1 price-row">
+              {% if mud %}
+                {% if mud.preco_novo and mud.preco_anterior and mud.preco_novo > mud.preco_anterior %}
+                  <span class="preco-subiu" title="Subiu de R$ {{ '%.2f'|format(mud.preco_anterior) }} para R$ {{ '%.2f'|format(mud.preco_novo) }}">
+                    <i class="bi bi-arrow-up-circle-fill"></i>
+                  </span>
+                {% elif mud.preco_novo and mud.preco_anterior and mud.preco_novo < mud.preco_anterior %}
+                  <span class="preco-caiu" title="Caiu de R$ {{ '%.2f'|format(mud.preco_anterior) }} para R$ {{ '%.2f'|format(mud.preco_novo) }}">
+                    <i class="bi bi-arrow-down-circle-fill"></i>
+                  </span>
+                {% endif %}
+              {% endif %}
+              <input type="number" step="0.0001" min="0"
+                     class="form-control form-control-sm price-input text-end"
+                     value="{{ '%.4f'|format(ins.preco_compra) if ins.preco_compra is not none else '' }}"
+                     placeholder="0,0000" data-id="{{ ins.id }}">
+              <button class="btn btn-sm btn-success save-btn" onclick="salvarPreco({{ ins.id }}, this)" title="Salvar">
+                <i class="bi bi-check-lg"></i>
+              </button>
+            </div>
+          </td>
+          <td class="small text-muted">
+            {% if ins.qtd_por_embalagem and ins.unid_embalagem %}
+              <span class="text-dark">1 {{ ins.unidade_compra }}</span>
+              <i class="bi bi-arrow-right mx-1 text-secondary"></i>
+              <span class="text-primary fw-semibold">{{ ins.qtd_por_embalagem|int if ins.qtd_por_embalagem == ins.qtd_por_embalagem|int else ins.qtd_por_embalagem }} {{ ins.unid_embalagem }}</span>
+              <i class="bi bi-arrow-right mx-1 text-secondary"></i>
+              <span class="text-success fw-semibold">{{ ins.fator_conversao|int if ins.fator_conversao == ins.fator_conversao|int else ins.fator_conversao }} {{ ins.unidade_uso }}</span>
+            {% elif ins.fator_conversao != 1 %}
+              <span class="text-secondary">fator: {{ ins.fator_conversao|int if ins.fator_conversao == ins.fator_conversao|int else ins.fator_conversao }} {{ ins.unidade_uso }}</span>
+            {% else %}
+              <span class="text-secondary">—</span>
+            {% endif %}
+          </td>
+          <td class="text-center"><span class="badge bg-info text-dark">{{ ins.unidade_uso }}</span></td>
+          <td class="text-end font-monospace small">
+            {% if ins.produto_vinculado_id %}
+              <span class="badge bg-success"><i class="bi bi-link-45deg me-1"></i>pela ficha</span>
+            {% elif ins.preco_compra %}
+              {{ (ins.preco_compra / ins.fator_conversao)|brl(6) }}
+            {% else %}
+              <span class="text-warning">—</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <div class="d-flex justify-content-end align-items-center gap-1 estoque-row" data-id="{{ ins.id }}">
+              <input type="number" step="0.01" min="0"
+                     class="form-control form-control-sm text-end estoque-input"
+                     value="{{ ins.estoque_atual if ins.estoque_atual else '' }}"
+                     placeholder="0" style="width:80px">
+              <button class="btn btn-sm btn-success save-estoque-btn" title="Salvar">
+                <i class="bi bi-check-lg"></i>
+              </button>
+            </div>
+            <div class="text-muted small text-end">{{ ins.unidade_uso }}</div>
+          </td>
+          <td class="text-end">
+            <div class="d-flex justify-content-end align-items-center gap-1 estoque-min-row" data-id="{{ ins.id }}">
+              <input type="number" step="0.01" min="0"
+                     class="form-control form-control-sm text-end estoque-min-input"
+                     value="{{ ins.estoque_minimo if ins.estoque_minimo else '' }}"
+                     placeholder="0" style="width:80px">
+              <button class="btn btn-sm btn-warning save-estoque-min-btn" title="Salvar">
+                <i class="bi bi-check-lg"></i>
+              </button>
+            </div>
+          </td>
+          <td class="text-center" style="white-space:nowrap">
+            <button class="btn btn-sm btn-outline-info me-1" title="Histórico de preços"
+                    onclick="verHistorico({{ ins.id }}, '{{ ins.nome|e }}')">
+              <i class="bi bi-graph-up"></i>
+            </button>
+            <a href="{{ url_for('insumo_editar', id=ins.id) }}" class="btn btn-sm btn-outline-secondary me-1" title="Editar">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <form method="post" action="{{ url_for('insumo_excluir', id=ins.id) }}" class="d-inline"
+                  onsubmit="return confirm('Excluir {{ ins.nome }}?')">
+              <button class="btn btn-sm btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="mt-3 text-muted small">
+  <i class="bi bi-info-circle me-1"></i>
+  Clique no campo de preço, edite e pressione <kbd>Enter</kbd> ou clique em <strong>✓</strong> para salvar.
+  &nbsp;·&nbsp; Para configurar a conversão de embalagem, clique em <i class="bi bi-pencil"></i> Editar.
+  &nbsp;·&nbsp; <span class="preco-subiu"><i class="bi bi-arrow-up-circle-fill"></i></span> = subiu &nbsp;
+               <span class="preco-caiu"><i class="bi bi-arrow-down-circle-fill"></i></span> = caiu em relação ao registro anterior.
+</div>
+
+<!-- Modal Histórico de Preços -->
+<div class="modal fade" id="modalHistorico" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#1a3a5c;color:#fff">
+        <h5 class="modal-title"><i class="bi bi-graph-up me-2"></i><span id="hist-nome"></span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="hist-vazio" class="text-center text-muted py-4" style="display:none">
+          <i class="bi bi-clock-history" style="font-size:2rem"></i>
+          <p class="mt-2">Nenhum registro de alteração de preço ainda.</p>
+        </div>
+        <div id="hist-conteudo" style="display:none">
+          <canvas id="hist-chart" height="120" style="width:100%;margin-bottom:16px"></canvas>
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th class="text-end">Preço Anterior</th>
+                <th class="text-end">Preço Novo</th>
+                <th class="text-end">Variação</th>
+                <th class="text-end">%</th>
+              </tr>
+            </thead>
+            <tbody id="hist-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function salvarPreco(id, btn) {
+  const input = btn.closest('.price-row').querySelector('input');
+  const val = input.value.trim();
+  fetch(`/insumos/${id}/preco`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({preco: val === '' ? null : parseFloat(val)})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      btn.innerHTML = '<i class="bi bi-check2-all"></i>';
+      setTimeout(() => location.reload(), 600);
+    }
+  });
+}
+document.querySelectorAll('.price-input').forEach(input => {
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.closest('.price-row').querySelector('.save-btn').click(); }
+  });
+});
+
+// Estoque atual
+function salvarEstoque(row) {
+  const id  = row.dataset.id;
+  const val = row.querySelector('.estoque-input').value;
+  const btn = row.querySelector('.save-estoque-btn');
+  fetch(`/insumos/${id}/estoque`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({estoque: val === '' ? 0 : parseFloat(val)})
+  }).then(r=>r.json()).then(d => {
+    if (d.ok) { btn.innerHTML='<i class="bi bi-check2-all"></i>'; setTimeout(()=>location.reload(),500); }
+  });
+}
+document.querySelectorAll('.save-estoque-btn').forEach(btn =>
+  btn.addEventListener('click', () => salvarEstoque(btn.closest('.estoque-row')))
+);
+document.querySelectorAll('.estoque-input').forEach(input =>
+  input.addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); input.closest('.estoque-row').querySelector('.save-estoque-btn').click(); } })
+);
+
+// Estoque mínimo
+function salvarEstoqueMin(row) {
+  const id  = row.dataset.id;
+  const val = row.querySelector('.estoque-min-input').value;
+  const btn = row.querySelector('.save-estoque-min-btn');
+  fetch(`/insumos/${id}/estoque_minimo`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({estoque_minimo: val === '' ? 0 : parseFloat(val)})
+  }).then(r=>r.json()).then(d => {
+    if (d.ok) { btn.innerHTML='<i class="bi bi-check2-all"></i>'; setTimeout(()=>location.reload(),500); }
+  });
+}
+document.querySelectorAll('.save-estoque-min-btn').forEach(btn =>
+  btn.addEventListener('click', () => salvarEstoqueMin(btn.closest('.estoque-min-row')))
+);
+document.querySelectorAll('.estoque-min-input').forEach(input =>
+  input.addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); input.closest('.estoque-min-row').querySelector('.save-estoque-min-btn').click(); } })
+);
+
+// ── Histórico de Preços ──
+let chartInstance = null;
+
+function brl(v) {
+  if (v === null || v === undefined) return '—';
+  return 'R$ ' + parseFloat(v).toFixed(4).replace('.', ',');
+}
+
+function verHistorico(id, nome) {
+  document.getElementById('hist-nome').textContent = nome;
+  document.getElementById('hist-vazio').style.display = 'none';
+  document.getElementById('hist-conteudo').style.display = 'none';
+  const modal = new bootstrap.Modal(document.getElementById('modalHistorico'));
+  modal.show();
+
+  fetch(`/insumos/${id}/historico`)
+    .then(r => r.json())
+    .then(data => {
+      const hist = data.historico;
+      if (!hist || hist.length === 0) {
+        document.getElementById('hist-vazio').style.display = '';
+        return;
+      }
+      document.getElementById('hist-conteudo').style.display = '';
+
+      // Tabela
+      const tbody = document.getElementById('hist-tbody');
+      tbody.innerHTML = '';
+      // Mostrar em ordem decrescente (mais recente primeiro)
+      [...hist].reverse().forEach(h => {
+        const ant = h.preco_anterior;
+        const nov = h.preco_novo;
+        const diff = (nov !== null && ant !== null) ? nov - ant : null;
+        const pct  = (diff !== null && ant) ? (diff / ant * 100) : null;
+        const cor = diff === null ? '' : diff > 0 ? 'color:#c0392b' : diff < 0 ? 'color:#1e8449' : '';
+        const seta = diff === null ? '' : diff > 0 ? '▲' : diff < 0 ? '▼' : '=';
+        const dt = h.data_registro ? h.data_registro.slice(0,16).replace('T',' ') : '—';
+        tbody.insertAdjacentHTML('beforeend', `
+          <tr>
+            <td class="font-monospace small">${dt}</td>
+            <td class="text-end font-monospace">${brl(ant)}</td>
+            <td class="text-end font-monospace fw-semibold">${brl(nov)}</td>
+            <td class="text-end font-monospace" style="${cor}">${seta} ${diff !== null ? brl(diff) : '—'}</td>
+            <td class="text-end font-monospace small" style="${cor}">${pct !== null ? pct.toFixed(1)+'%' : '—'}</td>
+          </tr>`);
+      });
+
+      // Gráfico — pontos: [data inicial com preco_anterior do 1º registro] + cada preco_novo
+      const labels = [];
+      const valores = [];
+
+      // Ponto inicial: data do 1º registro, preço anterior
+      if (hist[0].preco_anterior !== null) {
+        labels.push(hist[0].data_registro ? hist[0].data_registro.slice(0,10) : 'início');
+        valores.push(hist[0].preco_anterior);
+      }
+      hist.forEach(h => {
+        labels.push(h.data_registro ? h.data_registro.slice(0,10) : '?');
+        valores.push(h.preco_novo);
+      });
+
+      desenharGrafico(labels, valores);
+    });
+}
+
+function desenharGrafico(labels, valores) {
+  const canvas = document.getElementById('hist-chart');
+  const ctx = canvas.getContext('2d');
+
+  // Destruir chart anterior se existir (usando Chart.js — não temos, então SVG manual)
+  // Vamos usar canvas puro
+  const W = canvas.offsetWidth || 700;
+  const H = 120;
+  canvas.width = W;
+  canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
+
+  const pad = {top: 12, right: 20, bottom: 28, left: 68};
+  const pw = W - pad.left - pad.right;
+  const ph = H - pad.top - pad.bottom;
+
+  const minV = Math.min(...valores) * 0.95;
+  const maxV = Math.max(...valores) * 1.05 || 1;
+
+  const xOf = i => pad.left + (i / Math.max(valores.length - 1, 1)) * pw;
+  const yOf = v => pad.top + ph - ((v - minV) / (maxV - minV)) * ph;
+
+  // Grade horizontal
+  ctx.strokeStyle = '#e0e0e0';
+  ctx.lineWidth = 1;
+  [0, 0.25, 0.5, 0.75, 1].forEach(f => {
+    const y = pad.top + ph * (1 - f);
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + pw, y); ctx.stroke();
+    const v = minV + f * (maxV - minV);
+    ctx.fillStyle = '#888'; ctx.font = '10px Arial'; ctx.textAlign = 'right';
+    ctx.fillText('R$' + v.toFixed(2), pad.left - 4, y + 3);
+  });
+
+  // Linha de preço
+  ctx.strokeStyle = '#2e75b6';
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  valores.forEach((v, i) => {
+    const x = xOf(i), y = yOf(v);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Pontos e labels de data
+  valores.forEach((v, i) => {
+    const x = xOf(i), y = yOf(v);
+    const prev = i > 0 ? valores[i-1] : null;
+    const cor = prev === null ? '#2e75b6' : v > prev ? '#c0392b' : v < prev ? '#1e8449' : '#2e75b6';
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = cor; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+
+    // Label data
+    ctx.fillStyle = '#555'; ctx.font = '9px Arial'; ctx.textAlign = 'center';
+    ctx.fillText(labels[i] ? labels[i].slice(5) : '', x, H - 8);
+  });
+}
+
+// ── Observação ──
+function salvarObs(btn) {
+  const panel   = btn.closest('.obs-panel');
+  const ta      = panel.querySelector('.obs-textarea');
+  const endpoint = ta.dataset.endpoint;
+  const msg     = panel.querySelector('.obs-saved-msg');
+  fetch(endpoint, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ observacao: ta.value })
+  }).then(r => r.json()).then(d => {
+    if (!d.ok) return;
+    const icon = panel.closest('.obs-wrapper').querySelector('.obs-icon');
+    if (ta.value.trim()) {
+      icon.classList.remove('obs-icon-empty');
+      icon.title = 'Ver/editar observação';
+    } else {
+      icon.classList.add('obs-icon-empty');
+      icon.title = 'Adicionar observação';
+    }
+    msg.style.display = 'inline';
+    setTimeout(() => msg.style.display = 'none', 2000);
+  });
+}
+
+// ── Selo Nome Insumos ──
+const INS_NOME_CYCLE = ['nao_revisado', 'em_revisao', 'revisado'];
+const INS_NOME_LABEL = { nao_revisado: 'NOME NÃO REVISADO', em_revisao: 'NOME EM REVISÃO', revisado: 'NOME REVISADO' };
+
+document.querySelectorAll('.ins-nome-btn').forEach(el => {
+  el.addEventListener('click', function() {
+    const id = this.dataset.id;
+    const cur = this.dataset.status;
+    const next = INS_NOME_CYCLE[(INS_NOME_CYCLE.indexOf(cur) + 1) % INS_NOME_CYCLE.length];
+    fetch(`/insumos/${id}/revisao-nome`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: next })
+    }).then(r => r.json()).then(d => {
+      if (d.ok) {
+        this.dataset.status = next;
+        this.className = `selo-revisao selo-nome-${next} ins-nome-btn ms-1 mt-1`;
+        this.style.cursor = 'pointer';
+        this.textContent = INS_NOME_LABEL[next];
+        const tr = this.closest('tr');
+        if (tr) tr.dataset.nomeStatus = next;
+        applyVisible();
+      }
+    });
+  });
+});
+
+// ── Filtro Nome ──
+const nomeAtivos    = new Set();
+const nomeFilterClr = document.getElementById('nome-filter-clear');
+const NOME_ON = {
+  nao_revisado: ['btn-danger',  'btn-outline-danger'],
+  em_revisao:   ['btn-warning', 'btn-outline-warning'],
+  revisado:     ['btn-primary', 'btn-outline-primary'],
+};
+
+function updateNomeBtn(btn) {
+  const c = btn.dataset.nomeStatus;
+  if (!NOME_ON[c]) return;
+  const [on, off] = NOME_ON[c];
+  if (nomeAtivos.has(c)) {
+    btn.classList.replace(off, on);
+    btn.innerHTML = '<i class="bi bi-check2 me-1"></i>' + btn.dataset.label;
+  } else {
+    btn.classList.replace(on, off);
+    btn.textContent = btn.dataset.label;
+  }
+}
+
+document.querySelectorAll('.nome-filter-btn').forEach(btn => {
+  btn.dataset.label = btn.textContent.trim();
+  btn.addEventListener('click', () => {
+    const c = btn.dataset.nomeStatus;
+    nomeAtivos.has(c) ? nomeAtivos.delete(c) : nomeAtivos.add(c);
+    updateNomeBtn(btn);
+    applyVisible();
+  });
+});
+
+if (nomeFilterClr) {
+  nomeFilterClr.addEventListener('click', () => {
+    nomeAtivos.clear();
+    document.querySelectorAll('.nome-filter-btn').forEach(updateNomeBtn);
+    applyVisible();
+  });
+}
+
+// ── Selo Custo Insumos ──
+const INS_CUSTO_CYCLE = ['nao_revisado', 'em_revisao', 'revisado'];
+const INS_CUSTO_LABEL = { nao_revisado: 'CUSTO NÃO REVISADO', em_revisao: 'CUSTO EM REVISÃO', revisado: 'CUSTO REVISADO' };
+
+document.querySelectorAll('.ins-custo-btn').forEach(el => {
+  el.addEventListener('click', function() {
+    const id = this.dataset.id;
+    const cur = this.dataset.status;
+    const next = INS_CUSTO_CYCLE[(INS_CUSTO_CYCLE.indexOf(cur) + 1) % INS_CUSTO_CYCLE.length];
+    fetch(`/insumos/${id}/revisao-custo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: next })
+    }).then(r => r.json()).then(d => {
+      if (d.ok) {
+        this.dataset.status = next;
+        this.className = `selo-revisao selo-custo-${next} ins-custo-btn mt-1`;
+        this.style.cursor = 'pointer';
+        this.title = 'Clique para alterar status de custo';
+        if (next === 'revisado' && d.data_revisao_custo) {
+          const data = d.data_revisao_custo.slice(0, 10);
+          this.innerHTML = INS_CUSTO_LABEL[next] +
+            `<span class="d-block" style="font-size:.6rem;font-weight:400;opacity:.85">${data}</span>`;
+        } else {
+          this.textContent = INS_CUSTO_LABEL[next];
+        }
+      }
+    });
+  });
+});
+
+// ── Buscador + Filtro de custo + Filtro de fornecedor ──
+const buscaInput     = document.getElementById('busca-insumo');
+const buscaClear     = document.getElementById('busca-clear');
+const custoFilterClr = document.getElementById('custo-filter-clear');
+const fornFilter     = document.getElementById('forn-filter');
+const custoAtivos    = new Set();
+
+const CUSTO_ON = {
+  nao_revisado: ['btn-warning',  'btn-outline-warning'],
+  em_revisao:   ['btn-info',     'btn-outline-info'],
+  revisado:     ['btn-success',  'btn-outline-success'],
+};
+
+const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+// Popular select de fornecedores com valores únicos da tabela
+(function populateFornecedores() {
+  const vals = new Set();
+  document.querySelectorAll('#tabela-insumos tbody tr').forEach(tr => {
+    const f = tr.dataset.fornecedor;
+    if (f) vals.add(f);
+  });
+  // Opção "Não classificados" primeiro
+  const optNc = document.createElement('option');
+  optNc.value = '__sem_fornecedor__';
+  optNc.textContent = 'Não classificados';
+  fornFilter.appendChild(optNc);
+  [...vals].sort().forEach(f => {
+    const opt = document.createElement('option');
+    opt.value = f;
+    opt.textContent = f.charAt(0).toUpperCase() + f.slice(1);
+    fornFilter.appendChild(opt);
+  });
+})();
+
+function applyVisible() {
+  const q    = norm(buscaInput.value.trim());
+  const forn = fornFilter.value;
+  buscaClear.style.display = q ? '' : 'none';
+  document.querySelectorAll('#tabela-insumos tbody tr').forEach(tr => {
+    const okBusca = !q    || norm(tr.dataset.nome).includes(q);
+    const okCusto = custoAtivos.size === 0 || custoAtivos.has(tr.dataset.custo || 'nao_revisado');
+    const okNome  = nomeAtivos.size  === 0 || nomeAtivos.has(tr.dataset.nomeStatus || 'nao_revisado');
+    const okForn  = !forn || (forn === '__sem_fornecedor__' ? !tr.dataset.fornecedor : tr.dataset.fornecedor === forn);
+    tr.style.display = (okBusca && okCusto && okNome && okForn) ? '' : 'none';
+  });
+  custoFilterClr.style.display = custoAtivos.size > 0 ? '' : 'none';
+  if (nomeFilterClr) nomeFilterClr.style.display = nomeAtivos.size > 0 ? '' : 'none';
+}
+
+fornFilter.addEventListener('change', applyVisible);
+
+function updateCustoBtn(btn) {
+  const c = btn.dataset.custo;
+  const [on, off] = CUSTO_ON[c];
+  if (custoAtivos.has(c)) {
+    btn.classList.replace(off, on);
+    if (c === 'nao_revisado') btn.style.color = '';
+    btn.innerHTML = '<i class="bi bi-check2 me-1"></i>' + btn.dataset.label;
+  } else {
+    btn.classList.replace(on, off);
+    if (c === 'nao_revisado') btn.style.color = '#856404';
+    btn.textContent = btn.dataset.label;
+  }
+}
+
+document.querySelectorAll('.custo-filter-btn').forEach(btn => {
+  btn.dataset.label = btn.textContent.trim();
+  btn.addEventListener('click', () => {
+    const c = btn.dataset.custo;
+    custoAtivos.has(c) ? custoAtivos.delete(c) : custoAtivos.add(c);
+    updateCustoBtn(btn);
+    applyVisible();
+  });
+});
+
+custoFilterClr.addEventListener('click', () => {
+  custoAtivos.clear();
+  document.querySelectorAll('.custo-filter-btn').forEach(updateCustoBtn);
+  applyVisible();
+});
+
+buscaInput.addEventListener('input', applyVisible);
+buscaClear.addEventListener('click', () => { buscaInput.value = ''; applyVisible(); buscaInput.focus(); });
+
+// ── Contadores de status ──
+(function updateCounts() {
+  const rows = document.querySelectorAll('#tabela-insumos tbody tr');
+  const cc = { nao_revisado: 0, em_revisao: 0, revisado: 0 };
+  const nc = { nao_revisado: 0, em_revisao: 0, revisado: 0 };
+  rows.forEach(tr => {
+    const c = tr.dataset.custo || 'nao_revisado';
+    const n = tr.dataset.nomeStatus || 'nao_revisado';
+    if (cc[c] !== undefined) cc[c]++;
+    if (nc[n] !== undefined) nc[n]++;
+  });
+  ['nao_revisado','em_revisao','revisado'].forEach(s => {
+    document.getElementById('cnt-custo-' + s).textContent = cc[s];
+    document.getElementById('cnt-nome-'  + s).textContent = nc[s];
+  });
+})();
+
+// ── Popover "onde é usado" ──
+const usoCache = {};
+let usoPopover = null;
+let usoHideTimer = null;
+
+function closeUsoPopover() {
+  if (usoPopover) { usoPopover.remove(); usoPopover = null; }
+}
+
+document.querySelectorAll('.ins-uso-trigger').forEach(el => {
+  el.addEventListener('mouseenter', function() {
+    clearTimeout(usoHideTimer);
+    const id = this.dataset.id;
+    const trigger = this;
+
+    function showPop(fichas) {
+      closeUsoPopover();
+      const pop = document.createElement('div');
+      pop.style.cssText = `position:fixed;z-index:9999;background:#fff;border:1px solid #ced4da;
+        border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.18);min-width:280px;max-width:400px;
+        font-size:.82rem;overflow:hidden`;
+
+      // Header
+      const hdr = document.createElement('div');
+      hdr.style.cssText = 'background:#1a3a5c;color:#fff;padding:7px 12px;font-weight:600;font-size:.85rem';
+      hdr.innerHTML = '<i class="bi bi-journal-text me-2"></i>Usado em ' + fichas.length + ' ficha(s)';
+      pop.appendChild(hdr);
+
+      if (fichas.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'padding:12px;color:#6c757d;text-align:center';
+        empty.textContent = 'Não está sendo usado em nenhuma ficha.';
+        pop.appendChild(empty);
+      } else {
+        fichas.forEach((f, i) => {
+          const row = document.createElement('div');
+          row.style.cssText = `padding:6px 12px;border-bottom:1px solid #f0f0f0;
+            display:flex;justify-content:space-between;align-items:center;gap:8px;
+            background:${i % 2 === 0 ? '#f8f9fa' : '#fff'}`;
+          const left = document.createElement('div');
+          left.innerHTML = `<div style="font-weight:600;color:#1a3a5c">${f.produto}</div>
+            <div style="color:#6c757d;font-size:.75rem">${f.categoria}</div>`;
+          const right = document.createElement('div');
+          right.style.cssText = 'white-space:nowrap;font-weight:600;color:#198754;text-align:right';
+          right.textContent = f.quantidade.toFixed(f.quantidade % 1 === 0 ? 0 : 1) + ' ' + f.unidade;
+          row.appendChild(left);
+          row.appendChild(right);
+          pop.appendChild(row);
+        });
+      }
+
+      // Position
+      const rect = trigger.getBoundingClientRect();
+      pop.style.top  = (rect.bottom + 6) + 'px';
+      pop.style.left = rect.left + 'px';
+      document.body.appendChild(pop);
+      usoPopover = pop;
+
+      // Keep open when hovering the popover itself
+      pop.addEventListener('mouseenter', () => clearTimeout(usoHideTimer));
+      pop.addEventListener('mouseleave', () => { usoHideTimer = setTimeout(closeUsoPopover, 200); });
+
+      // Adjust if off-screen
+      const pr = pop.getBoundingClientRect();
+      if (pr.right > window.innerWidth - 8) pop.style.left = (window.innerWidth - pr.width - 8) + 'px';
+      if (pr.bottom > window.innerHeight - 8) pop.style.top = (rect.top - pr.height - 6) + 'px';
+    }
+
+    if (usoCache[id] !== undefined) {
+      showPop(usoCache[id]);
+    } else {
+      fetch(`/insumos/${id}/uso`)
+        .then(r => r.json())
+        .then(data => { usoCache[id] = data; showPop(data); });
+    }
+  });
+
+  el.addEventListener('mouseleave', () => {
+    usoHideTimer = setTimeout(closeUsoPopover, 200);
+  });
+});
+</script>
+{% endblock %}

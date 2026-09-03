@@ -1,0 +1,188 @@
+﻿{% extends "base.html" %}
+{% block title %}Consolidado por PDV — Café{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-cup-hot me-2"></i>Controle de Café</h1>
+</div>
+
+<ul class="nav nav-tabs mb-4">
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_lista') }}">
+      <i class="bi bi-grid me-1"></i>Visão Geral
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link active" href="{{ url_for('cafe_consolidado') }}">
+      <i class="bi bi-bar-chart-line me-1"></i>Consolidado por PDV
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_financeiro') }}">
+      <i class="bi bi-currency-dollar me-1"></i>Financeiro
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_ficha') }}">
+      <i class="bi bi-journal-text me-1"></i>Ficha Técnica
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_projecao') }}"><i class="bi bi-graph-up me-1"></i>Projeção de Consumo</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_estoque') }}"><i class="bi bi-box-seam me-1"></i>Estoque</a>
+  </li>
+</ul>
+
+<!-- Filtro de período -->
+<form method="get" class="card shadow-sm mb-4">
+  <div class="card-body py-2 d-flex align-items-center gap-3 flex-wrap">
+    <span class="fw-semibold text-muted small"><i class="bi bi-funnel me-1"></i>Período:</span>
+    <div class="d-flex align-items-center gap-2">
+      <label class="small text-muted mb-0">De</label>
+      <input type="date" name="de" class="form-control form-control-sm" style="width:150px"
+             value="{{ filtro_de }}" min="{{ data_min }}" max="{{ data_max }}">
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <label class="small text-muted mb-0">Até</label>
+      <input type="date" name="ate" class="form-control form-control-sm" style="width:150px"
+             value="{{ filtro_ate }}" min="{{ data_min }}" max="{{ data_max }}">
+    </div>
+    <button type="submit" class="btn btn-sm btn-primary">
+      <i class="bi bi-search me-1"></i>Filtrar
+    </button>
+    {% if filtro_de or filtro_ate %}
+    <a href="{{ url_for('cafe_consolidado') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-x me-1"></i>Limpar
+    </a>
+    {% endif %}
+  </div>
+</form>
+
+{% macro tabela_dias(dias, acum, cor, pdv_id, tab_id) %}
+{% set cols_ativos = [] %}
+{% for col, label in bebidas %}{% if acum[col] > 0 %}{% set _ = cols_ativos.append((col, label)) %}{% endif %}{% endfor %}
+
+<!-- Totais acumulados -->
+<div class="p-3 border-bottom d-flex flex-wrap gap-2 align-items-center">
+  {% for col, label in cols_ativos %}
+  <div class="text-center px-2 py-1 rounded" style="background:#f8f9fa;min-width:75px">
+    <div class="fw-bold" style="color:{{ cor }}">{{ acum[col]|int }}</div>
+    <small class="text-muted" style="font-size:.65rem">{{ label }}</small>
+  </div>
+  {% endfor %}
+  <div class="text-center px-3 py-1 rounded ms-auto" style="background:#1a3a5c;min-width:90px">
+    <div class="fw-bold fs-6 text-warning">{{ acum.values()|sum|int }}</div>
+    <small class="text-white" style="font-size:.65rem">TOTAL ACUM.</small>
+  </div>
+</div>
+
+{% if not dias %}
+<div class="p-3 text-muted text-center"><i class="bi bi-inbox me-1"></i>Sem dados no período</div>
+{% else %}
+<div style="overflow-x:auto">
+  <table class="table table-sm table-hover mb-0 align-middle" style="font-size:.82rem;min-width:700px">
+    <thead style="background:{{ cor }}">
+      <tr>
+        <th style="color:#fff;min-width:85px">Data</th>
+        {% for col, label in cols_ativos %}
+        <th class="text-center" style="color:#fff;min-width:70px">{{ label }}</th>
+        {% endfor %}
+        <th class="text-center" style="color:#f59e0b;min-width:65px">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in dias|reverse %}
+      <tr>
+        <td class="fw-semibold font-monospace" style="white-space:nowrap">
+          {{ d.data[8:10] }}/{{ d.data[5:7] }}/{{ d.data[0:4] }}
+        </td>
+        {% for col, label in cols_ativos %}
+        <td class="text-center">
+          {% set v = d.totais[col] %}
+          {% if v > 0 %}<span class="badge bg-warning text-dark" style="font-size:.75rem">{{ v }}</span>
+          {% else %}<span class="text-muted">—</span>{% endif %}
+        </td>
+        {% endfor %}
+        <td class="text-center fw-bold">
+          {% if d.total > 0 %}<span class="badge bg-success" style="font-size:.8rem">{{ d.total }}</span>
+          {% else %}<span class="text-muted">—</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td class="fw-bold py-2" style="background:#1a3a5c;color:#e2e8f0;font-size:.78rem">TOTAL PERÍODO</td>
+        {% for col, label in cols_ativos %}
+        {% set soma = namespace(v=0) %}{% for d in dias %}{% set soma.v = soma.v + d.totais[col] %}{% endfor %}
+        <td class="text-center fw-bold font-monospace py-2" style="background:#1a3a5c;color:#f59e0b">
+          {{ soma.v if soma.v > 0 else '—' }}
+        </td>
+        {% endfor %}
+        {% set soma_t = namespace(v=0) %}{% for d in dias %}{% set soma_t.v = soma_t.v + d.total %}{% endfor %}
+        <td class="text-center fw-bold py-2 font-monospace" style="background:#1a3a5c;color:#f59e0b">{{ soma_t.v }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% for pdv_key, pdv in resultado.items() %}
+{% set info = pdv.info %}
+{% set cor = info.cor %}
+{% set pid = pdv_key | lower %}
+
+<div class="card shadow-sm mb-4">
+  <div class="card-header py-2 d-flex justify-content-between align-items-center" style="background:{{ cor }}">
+    <span class="text-white fw-semibold fs-6">
+      <i class="bi bi-geo-alt me-2"></i>{{ info.label }}
+    </span>
+    <span class="badge bg-light text-dark">{{ pdv.dias|length }} dias</span>
+  </div>
+
+  {% if pdv.maquinas|length > 1 %}
+  <!-- Abas por máquina + total -->
+  <ul class="nav nav-tabs px-3 pt-2" id="tabs-{{ pid }}" role="tablist" style="background:#f8f9fa;border-bottom:none">
+    {% for m in pdv.maquinas %}
+    {% set tab_id = pid ~ '-maq-' ~ loop.index %}
+    <li class="nav-item" role="presentation">
+      <button class="nav-link {{ 'active' if loop.first }}" id="tab-{{ tab_id }}-btn"
+              data-bs-toggle="tab" data-bs-target="#tab-{{ tab_id }}"
+              type="button" role="tab" style="font-size:.82rem">
+        {{ m.maquina.maquina }}
+        {% if m.dias %}<span class="badge bg-secondary ms-1" style="font-size:.65rem">{{ m.dias|length }}d</span>{% endif %}
+      </button>
+    </li>
+    {% endfor %}
+    <li class="nav-item" role="presentation">
+      <button class="nav-link fw-semibold" id="tab-{{ pid }}-total-btn"
+              data-bs-toggle="tab" data-bs-target="#tab-{{ pid }}-total"
+              type="button" role="tab" style="font-size:.82rem;color:#1a3a5c">
+        <i class="bi bi-sigma me-1"></i>Total
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content">
+    {% for m in pdv.maquinas %}
+    {% set tab_id = pid ~ '-maq-' ~ loop.index %}
+    <div class="tab-pane fade {{ 'show active' if loop.first }}" id="tab-{{ tab_id }}" role="tabpanel">
+      {{ tabela_dias(m.dias, m.acum, cor, pid, tab_id) }}
+    </div>
+    {% endfor %}
+    <div class="tab-pane fade" id="tab-{{ pid }}-total" role="tabpanel">
+      {{ tabela_dias(pdv.dias, pdv.acum, cor, pid, pid ~ '-total') }}
+    </div>
+  </div>
+
+  {% else %}
+  <!-- PDV com uma máquina só: sem abas -->
+  {% set m = pdv.maquinas[0] %}
+  {{ tabela_dias(m.dias, m.acum, cor, pid, pid ~ '-unico') }}
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}
+

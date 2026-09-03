@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Requisição #{{ req.id }}{% endblock %}
+{% block content %}
+<style>
+  .consumo-ok   { color:#166534; font-weight:700; }
+  .consumo-alto { color:#991b1b; font-weight:700; }
+  .ret-input    { width:90px; text-align:right; }
+  .row-summary  { background:#f8fafc; }
+</style>
+
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <h1>
+      <i class="bi bi-arrow-left-right me-2"></i>Requisição #{{ req.id }}
+      {% if req.status == 'aberto' %}
+        <span class="badge bg-warning text-dark ms-2" style="font-size:.65rem;vertical-align:middle">Aberta</span>
+      {% elif req.status == 'fechado' %}
+        <span class="badge bg-success ms-2" style="font-size:.65rem;vertical-align:middle">Fechada</span>
+      {% else %}
+        <span class="badge bg-secondary ms-2" style="font-size:.65rem;vertical-align:middle">Cancelada</span>
+      {% endif %}
+    </h1>
+    <p>
+      Data: <strong>{{ req.data | replace('-','/') }}</strong>
+      {% if req.observacao %} · {{ req.observacao }}{% endif %}
+      {% if req.fechado_em %} · Fechada em {{ req.fechado_em[:16] }}{% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('requisicoes_lista') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Voltar
+    </a>
+    {% if req.status == 'aberto' %}
+    <form method="post" action="{{ url_for('requisicao_cancelar', id=req.id) }}"
+          onsubmit="return confirm('Cancelar requisição e devolver tudo ao estoque?')">
+      <button class="btn btn-outline-warning btn-sm">
+        <i class="bi bi-x-circle me-1"></i>Cancelar
+      </button>
+    </form>
+    {% endif %}
+    <form method="post" action="{{ url_for('requisicao_excluir', id=req.id) }}"
+          onsubmit="return confirm('Excluir requisição? O estoque será restaurado.')">
+      <button class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-trash me-1"></i>Excluir
+      </button>
+    </form>
+  </div>
+</div>
+
+{% if req.status == 'aberto' %}
+<!-- FECHAR: entrar com retorno -->
+<div class="card shadow-sm mb-3 border-warning">
+  <div class="card-header bg-warning text-dark fw-semibold">
+    <i class="bi bi-box-arrow-in-left me-2"></i>Registrar Retorno (fim do dia)
+  </div>
+  <div class="card-body p-0">
+    <form method="post" action="{{ url_for('requisicao_fechar', id=req.id) }}">
+      <table class="table table-sm table-hover mb-0 align-middle">
+        <thead>
+          <tr>
+            <th>Insumo</th>
+            <th class="text-center">Unidade</th>
+            <th class="text-end">Enviado</th>
+            <th class="text-end text-success fw-bold">Retornou</th>
+            <th class="text-end text-danger fw-bold">Consumo (calculado)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in itens %}
+          <tr>
+            <td class="fw-semibold">{{ it.nome }}</td>
+            <td class="text-center"><span class="badge bg-info text-dark">{{ it.unidade_uso }}</span></td>
+            <td class="text-end font-monospace">{{ '%.2f'|format(it.qtd_enviada) }}</td>
+            <td class="text-end">
+              <input type="hidden" name="item_id" value="{{ it.id }}">
+              <input type="number" name="qtd_retornada" min="0" step="0.01"
+                     max="{{ it.qtd_enviada }}" placeholder="0"
+                     class="form-control form-control-sm ret-input d-inline-block consumo-input"
+                     data-enviado="{{ it.qtd_enviada }}"
+                     oninput="calcConsumo(this)">
+            </td>
+            <td class="text-end font-monospace consumo-cell">—</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="p-3 text-end border-top">
+        <button type="submit" class="btn btn-success">
+          <i class="bi bi-check-circle me-1"></i>Fechar Requisição
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% else %}
+<!-- VISUALIZAR: requisição fechada ou cancelada -->
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-sm table-hover mb-0 align-middle">
+      <thead>
+        <tr>
+          <th>Insumo</th>
+          <th class="text-center">Unidade</th>
+          <th class="text-end">Enviado</th>
+          <th class="text-end">Retornou</th>
+          <th class="text-end">Consumo Real</th>
+          <th class="text-end">% Usado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set total_env = namespace(v=0) %}
+        {% set total_cons = namespace(v=0) %}
+        {% for it in itens %}
+        {% set ret   = it.qtd_retornada if it.qtd_retornada is not none else 0 %}
+        {% set cons  = it.qtd_enviada - ret %}
+        {% set pct   = (cons / it.qtd_enviada * 100) | round(0) | int if it.qtd_enviada > 0 else 0 %}
+        {% set total_env.v  = total_env.v  + it.qtd_enviada %}
+        {% set total_cons.v = total_cons.v + cons %}
+        <tr>
+          <td class="fw-semibold">{{ it.nome }}</td>
+          <td class="text-center"><span class="badge bg-info text-dark">{{ it.unidade_uso }}</span></td>
+          <td class="text-end font-monospace">{{ '%.2f'|format(it.qtd_enviada) }}</td>
+          <td class="text-end font-monospace text-success">
+            {{ '%.2f'|format(ret) if it.qtd_retornada is not none else '—' }}
+          </td>
+          <td class="text-end font-monospace {{ 'consumo-alto' if pct > 90 else 'consumo-ok' }}">
+            {{ '%.2f'|format(cons) }}
+          </td>
+          <td class="text-end">
+            <div class="d-flex align-items-center justify-content-end gap-1">
+              <div style="width:60px;background:#e5e7eb;border-radius:4px;height:8px;overflow:hidden">
+                <div style="width:{{ [pct,100]|min }}%;background:{{ '#dc2626' if pct > 90 else '#16a34a' }};height:100%"></div>
+              </div>
+              <span style="font-size:.75rem;min-width:30px;text-align:right">{{ pct }}%</span>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="row-summary fw-bold">
+          <td>TOTAL</td>
+          <td></td>
+          <td class="text-end font-monospace">{{ '%.2f'|format(total_env.v) }}</td>
+          <td class="text-end font-monospace text-success">{{ '%.2f'|format(total_env.v - total_cons.v) }}</td>
+          <td class="text-end font-monospace consumo-alto">{{ '%.2f'|format(total_cons.v) }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+function calcConsumo(input) {
+  const env = parseFloat(input.dataset.enviado) || 0;
+  const ret = parseFloat(input.value) || 0;
+  const cons = Math.max(env - ret, 0);
+  const cell = input.closest('tr').querySelector('.consumo-cell');
+  cell.textContent = cons.toFixed(2);
+  cell.className = 'text-end font-monospace consumo-cell ' + (cons > env * 0.9 ? 'consumo-alto' : 'consumo-ok');
+}
+</script>
+{% endblock %}

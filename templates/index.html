@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-speedometer2 me-2"></i>Dashboard</h1>
+  <p>Visão geral da cozinha industrial</p>
+</div>
+
+<!-- Stat cards -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-4">
+    <div class="card stat-card shadow-sm" style="border-left:4px solid #2e75b6">
+      <div class="card-body">
+        <div class="text-muted small mb-1"><i class="bi bi-box-seam me-1"></i>Insumos cadastrados</div>
+        <div class="stat-num text-primary">{{ n_ins }}</div>
+        {% if s_prec > 0 %}
+        <div class="mt-2">
+          <span class="badge badge-sem-preco rounded-pill">
+            <i class="bi bi-exclamation-circle me-1"></i>{{ s_prec }} sem preço
+          </span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-4">
+    <div class="card stat-card shadow-sm" style="border-left:4px solid #198754">
+      <div class="card-body">
+        <div class="text-muted small mb-1"><i class="bi bi-journal-text me-1"></i>Fichas técnicas</div>
+        <div class="stat-num text-success">{{ n_prod }}</div>
+        <div class="mt-2 pt-2 border-top">
+          {% for row in cats_count %}
+          <div class="d-flex justify-content-between align-items-center py-0" style="font-size:.8rem">
+            <span class="text-muted">{{ row.cat }}</span>
+            <span class="badge {{ cat_map.get(row.cat, 'bg-secondary') }} ms-1">{{ row.n }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-4">
+    <div class="card stat-card shadow-sm" style="border-left:4px solid #fd7e14">
+      <div class="card-body">
+        <div class="text-muted small mb-1"><i class="bi bi-currency-dollar me-1"></i>Preços pendentes</div>
+        <div class="stat-num {{ 'text-warning' if s_prec > 0 else 'text-success' }}">{{ s_prec }}</div>
+        <div class="mt-2 small text-muted">
+          {% if s_prec == 0 %}Todos os preços preenchidos{% else %}Atualize em <a href="{{ url_for('insumos_lista') }}">Insumos</a>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Products -->
+<div class="card shadow-sm">
+  <div class="card-header d-flex justify-content-between align-items-center py-2" style="background:#1a3a5c">
+    <span class="text-white fw-semibold"><i class="bi bi-journal-text me-2"></i>Produtos e CMV</span>
+    <a href="{{ url_for('ficha_nova') }}" class="btn btn-sm btn-light">
+      <i class="bi bi-plus-lg me-1"></i>Novo Produto
+    </a>
+  </div>
+  <div class="card-body p-0">
+    {% if cards %}
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Produto</th>
+          <th>Descrição</th>
+          <th class="text-end">Custo Unit.</th>
+          <th class="text-center">Status</th>
+          <th class="text-center">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in cards %}
+        <tr>
+          <td class="fw-semibold">{{ c.nome }}</td>
+          <td class="text-muted small">{{ c.descricao or '—' }}</td>
+          <td class="text-end font-monospace">
+            {% if c.completo %}
+              <strong>{{ c.custo|brl(4) }}</strong>
+            {% else %}
+              <span class="text-warning small"><i class="bi bi-dash-circle me-1"></i>preços incompletos</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if c.completo %}
+              <span class="badge bg-success">Completo</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">Incompleto</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            <a href="{{ url_for('ficha_ver', id=c.id) }}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-eye"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-journal-plus" style="font-size:2.5rem"></i>
+      <p class="mt-2">Nenhum produto cadastrado ainda.</p>
+      <a href="{{ url_for('ficha_nova') }}" class="btn btn-primary">Criar primeiro produto</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if s_prec > 0 %}
+<div class="alert alert-warning mt-3 d-flex align-items-center">
+  <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+  <div>
+    <strong>{{ s_prec }} insumo(s) sem preço.</strong>
+    O custo dos produtos não estará completo.
+    <a href="{{ url_for('insumos_lista') }}" class="alert-link ms-1">Atualizar preços →</a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

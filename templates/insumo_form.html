@@ -1,0 +1,392 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if ins else 'Novo' }} Insumo{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-box-seam me-2"></i>{{ 'Editar Insumo' if ins else 'Novo Insumo' }}</h1>
+</div>
+
+<div class="card shadow-sm" style="max-width:640px">
+  <div class="card-body p-4">
+    <form method="post" id="frm" onsubmit="syncOutros()">
+
+      <!-- Nome -->
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Nome do Insumo</label>
+        <input type="text" name="nome" class="form-control" required
+               value="{{ ins.nome if ins else '' }}" placeholder="ex: Molho Tarê">
+      </div>
+
+      <!-- Fornecedor -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold">
+          <i class="bi bi-truck me-1 text-secondary"></i>Fornecedor
+          <span class="text-muted fw-normal small">(opcional)</span>
+        </label>
+        <input type="text" name="fornecedor" class="form-control"
+               value="{{ ins.fornecedor if ins and ins.fornecedor else '' }}"
+               placeholder="ex: Makro, Atacadão, Distribuidora X…" style="max-width:400px">
+      </div>
+
+      <hr class="my-3">
+      <p class="fw-semibold text-primary mb-3">
+        <i class="bi bi-arrow-down-up me-1"></i>Como você compra e como usa na receita
+      </p>
+
+      <!-- Unidade de compra + preço -->
+      <div class="row g-3 mb-3">
+        <div class="col-sm-5">
+          <label class="form-label fw-semibold">Unidade de compra</label>
+          <input type="text" name="unidade_compra" id="uc" class="form-control" required
+                 list="uc_list"
+                 value="{{ ins.unidade_compra if ins else '' }}"
+                 placeholder="balde, caixa, kg, L, un…">
+          <datalist id="uc_list">
+            <option value="un">
+            <option value="kg">
+            <option value="g">
+            <option value="L">
+            <option value="ml">
+            <option value="pct">
+            <option value="cx">
+            <option value="fd">
+            <option value="balde">
+            <option value="galão">
+            <option value="bisnaga">
+          </datalist>
+          <div class="form-text">O que você compra (ex: <em>balde</em>, <em>caixa</em>, <em>kg</em>)</div>
+        </div>
+        <div class="col-sm-4">
+          <label class="form-label fw-semibold">Preço de compra (R$)</label>
+          <input type="number" name="preco_compra" id="preco" class="form-control"
+                 step="0.0001" min="0"
+                 value="{{ '%.4f'|format(ins.preco_compra) if ins and ins.preco_compra else '' }}"
+                 placeholder="0,0000">
+          <div class="form-text">Por 1 unidade de compra</div>
+        </div>
+      </div>
+
+      <!-- Conversão de embalagem -->
+      <div class="card bg-light border-0 mb-3 p-3">
+        <div class="fw-semibold mb-3 small text-secondary">
+          <i class="bi bi-box2 me-1"></i>Conversão de embalagem
+          <span class="fw-normal text-muted">(preencha quando a unidade de compra ≠ unidade de uso)</span>
+        </div>
+        <div class="row g-3 align-items-start">
+
+          <!-- Conteúdo da embalagem -->
+          <div class="col-sm-5">
+            <label class="form-label small">
+              1 <span id="lbl_uc" class="text-primary fw-semibold">unidade de compra</span> contém
+            </label>
+            <div class="input-group">
+              <input type="number" id="qtd_emb" name="qtd_por_embalagem"
+                     class="form-control" step="any" min="0"
+                     value="{{ ins.qtd_por_embalagem if ins and ins.qtd_por_embalagem else '' }}"
+                     placeholder="ex: 5">
+              <!-- Seletor unidade embalagem -->
+              <select id="ue_sel" class="form-select" style="max-width:115px" onchange="onUeChange()">
+                <option value="">—</option>
+                <optgroup label="Massa">
+                  <option value="g">g</option>
+                  <option value="kg">kg</option>
+                  <option value="mg">mg</option>
+                </optgroup>
+                <optgroup label="Volume">
+                  <option value="ml">ml</option>
+                  <option value="L">L</option>
+                  <option value="cl">cl</option>
+                </optgroup>
+                <optgroup label="Outros">
+                  <option value="un">un</option>
+                  <option value="pct">pct</option>
+                </optgroup>
+                <option value="_outro">Outro…</option>
+              </select>
+              <input type="text" id="ue_txt" class="form-control" style="display:none; max-width:80px"
+                     placeholder="digitar">
+              <!-- campo que será enviado -->
+              <input type="hidden" name="unid_embalagem" id="ue_val"
+                     value="{{ ins.unid_embalagem if ins and ins.unid_embalagem else '' }}">
+            </div>
+            <div class="form-text">ex: 1 balde contém <strong>5 L</strong></div>
+          </div>
+
+          <!-- Unidade de uso -->
+          <div class="col-sm-4">
+            <label class="form-label small">Unidade de uso na receita</label>
+            <select id="uu_sel" name="unidade_uso" class="form-select" required onchange="onUuChange()">
+              <option value="">Selecione…</option>
+              <optgroup label="Massa">
+                <option value="g">g — grama</option>
+                <option value="kg">kg — quilograma</option>
+                <option value="mg">mg — miligrama</option>
+              </optgroup>
+              <optgroup label="Volume">
+                <option value="ml">ml — mililitro</option>
+                <option value="L">L — litro</option>
+                <option value="cl">cl — centilitro</option>
+              </optgroup>
+              <optgroup label="Outros">
+                <option value="un">un — unidade</option>
+                <option value="pct">pct — pacote</option>
+                <option value="cx">cx — caixa</option>
+                <option value="fd">fd — fardo</option>
+              </optgroup>
+              <option value="_outro">Outro…</option>
+            </select>
+            <input type="text" id="uu_txt" class="form-control mt-1" style="display:none"
+                   placeholder="digitar unidade…">
+            <div class="form-text">Unidade usada na ficha técnica</div>
+          </div>
+        </div>
+
+        <!-- Preview -->
+        <div id="preview_ok" class="mt-3 p-2 rounded border"
+             style="display:none; background:#e8f4e8; border-color:#198754!important">
+          <div class="small text-success fw-semibold">
+            <i class="bi bi-check-circle me-1"></i>Conversão calculada automaticamente:
+          </div>
+          <div class="small mt-1" id="preview_txt"></div>
+        </div>
+        <div id="preview_warn" class="mt-3 p-2 rounded border"
+             style="display:none; background:#fff8e1; border-color:#ffc107!important">
+          <div class="small text-warning fw-semibold">
+            <i class="bi bi-exclamation-circle me-1"></i>Conversão não reconhecida — informe o fator manualmente.
+          </div>
+        </div>
+      </div>
+
+      <!-- Vincular a ficha técnica -->
+      <hr class="my-3">
+      <div class="mb-4">
+        <label class="form-label fw-semibold">
+          <i class="bi bi-link-45deg me-1 text-success"></i>
+          Vincular a uma Ficha Técnica
+          <span class="text-muted fw-normal small">(opcional — para insumos que você mesmo produz)</span>
+        </label>
+        <select name="produto_vinculado_id" id="vinc_sel" class="form-select" style="max-width:380px"
+                onchange="onVincChange()">
+          <option value="">— Não vinculado (preço manual) —</option>
+          {% for p in produtos %}
+          <option value="{{ p.id }}"
+            {{ 'selected' if ins and ins.produto_vinculado_id == p.id }}>
+            {{ p.nome }}
+          </option>
+          {% endfor %}
+        </select>
+        <div id="vinc_info" class="mt-2" style="display:none">
+          <div class="alert alert-success py-2 mb-0 small">
+            <i class="bi bi-check-circle me-1"></i>
+            O custo deste insumo será calculado <strong>automaticamente</strong> pela ficha técnica vinculada,
+            sem precisar digitar o preço manualmente.
+          </div>
+        </div>
+        <div class="form-text">
+          Use quando este insumo é produzido na sua própria cozinha e tem uma ficha técnica cadastrada.
+        </div>
+      </div>
+
+      <!-- Fator de conversão -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold">
+          Fator de conversão total
+          <span class="text-muted fw-normal small">(unidades de uso por unidade de compra)</span>
+        </label>
+        <input type="number" name="fator_conversao" id="fator"
+               class="form-control" step="any" min="0.000001" required
+               value="{{ ins.fator_conversao if ins else 1 }}"
+               style="max-width:190px">
+        <div class="form-text">
+          Preenchido automaticamente se você informou a conversão acima.<br>
+          Exemplos: 1 kg → g = <strong>1000</strong> · 1 L → ml = <strong>1000</strong> · 1 un → un = <strong>1</strong>
+        </div>
+      </div>
+
+      <!-- Resultado: preço por uso -->
+      <div id="preco_uso_box" class="alert alert-primary py-2 mb-4" style="display:none">
+        <i class="bi bi-calculator me-1"></i>
+        Preço por <span id="puf_uu">—</span>:
+        <strong id="puf_val">R$ —</strong>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1"></i>
+          {{ 'Salvar Alterações' if ins else 'Cadastrar Insumo' }}
+        </button>
+        <a href="{{ url_for('insumos_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CONV = {
+  'kg|g':1000,'kg|mg':1000000,'kg|kg':1,
+  'g|g':1,'g|mg':1000,
+  'L|ml':1000,'L|cl':100,'L|L':1,
+  'ml|ml':1,'cl|ml':10,'cl|cl':1,
+  'un|un':1,'pct|pct':1
+};
+
+// ── Vincular a ficha técnica ─────────────────────────────────
+function onVincChange() {
+  const sel = document.getElementById('vinc_sel');
+  const info = document.getElementById('vinc_info');
+  const precoBox = document.getElementById('preco_uso_box');
+  info.style.display = sel.value ? '' : 'none';
+  if (sel.value) precoBox.style.display = 'none'; // custo vem da ficha
+}
+// init on load
+onVincChange();
+
+// ── Inicializar selects com valores existentes (modo edição) ─
+(function initSelects() {
+  const ueVal = document.getElementById('ue_val').value;
+  const uuSel = document.getElementById('uu_sel');
+  const ueSel = document.getElementById('ue_sel');
+  const stdOpts = [...ueSel.options].map(o => o.value).filter(v => v && v !== '_outro');
+
+  // unidade uso
+  const existsUu = [...uuSel.options].some(o => o.value === uuSel.getAttribute('data-init') ||
+    o.value === '{{ ins.unidade_uso if ins else "" }}');
+  const uuInit = '{{ ins.unidade_uso if ins else "" }}';
+  if (uuInit) {
+    uuSel.value = uuInit;
+    if (uuSel.value !== uuInit) {
+      // not in list → outro
+      uuSel.value = '_outro';
+      const txt = document.getElementById('uu_txt');
+      txt.style.display = '';
+      txt.value = uuInit;
+      txt.required = true;
+    }
+  }
+
+  // unidade embalagem
+  if (ueVal) {
+    ueSel.value = ueVal;
+    if (ueSel.value !== ueVal) {
+      ueSel.value = '_outro';
+      const txt = document.getElementById('ue_txt');
+      txt.style.display = '';
+      txt.value = ueVal;
+    }
+  }
+})();
+
+function getUe() {
+  const sel = document.getElementById('ue_sel');
+  if (sel.value === '_outro') return document.getElementById('ue_txt').value.trim();
+  return sel.value;
+}
+
+function getUu() {
+  const sel = document.getElementById('uu_sel');
+  if (sel.value === '_outro') return document.getElementById('uu_txt').value.trim();
+  return sel.value;
+}
+
+function onUeChange() {
+  const sel = document.getElementById('ue_sel');
+  const txt = document.getElementById('ue_txt');
+  txt.style.display = sel.value === '_outro' ? '' : 'none';
+  if (sel.value !== '_outro') txt.value = '';
+  document.getElementById('ue_val').value = getUe();
+  updatePreview();
+}
+
+function onUuChange() {
+  const sel = document.getElementById('uu_sel');
+  const txt = document.getElementById('uu_txt');
+  txt.style.display = sel.value === '_outro' ? '' : 'none';
+  if (sel.value !== '_outro') txt.value = '';
+  // unidade_uso name is on the select; when _outro, we switch name
+  updatePreview();
+}
+
+// Before submit: sync "Outro" text values into the proper fields
+function syncOutros() {
+  // unidade_uso: if _outro, copy txt to hidden then disable select, enable hidden
+  const uuSel = document.getElementById('uu_sel');
+  const uuTxt = document.getElementById('uu_txt');
+  if (uuSel.value === '_outro') {
+    uuSel.removeAttribute('name');
+    uuTxt.name = 'unidade_uso';
+    uuTxt.removeAttribute('style'); // ensure it's not hidden for submit
+  }
+  // unidade_embalagem already uses hidden field ue_val
+  document.getElementById('ue_val').value = getUe();
+}
+
+function updatePreview() {
+  const qtd   = parseFloat(document.getElementById('qtd_emb').value) || 0;
+  const ue    = getUe();
+  const uu    = getUu();
+  const preco = parseFloat(document.getElementById('preco').value) || 0;
+  const uc    = document.getElementById('uc').value.trim();
+  const lbl   = document.getElementById('lbl_uc');
+
+  if (uc) lbl.textContent = uc;
+
+  const boxOk   = document.getElementById('preview_ok');
+  const boxWarn = document.getElementById('preview_warn');
+  const pufBox  = document.getElementById('preco_uso_box');
+  const pufUu   = document.getElementById('puf_uu');
+  const pufVal  = document.getElementById('puf_val');
+  const fldFator = document.getElementById('fator');
+
+  if (!qtd || !ue || !uu) {
+    boxOk.style.display = boxWarn.style.display = 'none';
+    if (preco && uu && fldFator.value) {
+      const f = parseFloat(fldFator.value);
+      if (f > 0) {
+        pufBox.style.display = '';
+        pufUu.textContent = uu;
+        pufVal.textContent = 'R$ ' + (preco / f).toFixed(6);
+      }
+    } else {
+      pufBox.style.display = 'none';
+    }
+    return;
+  }
+
+  const key = ue + '|' + uu;
+  const cf  = ue === uu ? 1 : (CONV[key] ?? null);
+
+  if (cf !== null) {
+    const fator = qtd * cf;
+    fldFator.value = fator;
+    boxOk.style.display = '';
+    boxWarn.style.display = 'none';
+
+    let txt = `1 <strong>${uc || 'embalagem'}</strong> = ${qtd} ${ue}`;
+    if (cf !== 1) txt += ` = <strong>${fator.toLocaleString('pt-BR')} ${uu}</strong>`;
+    if (preco) {
+      const pu = preco / fator;
+      txt += `<br>Preço por ${uu}: <strong>R$ ${pu.toFixed(6)}</strong>`;
+      pufBox.style.display = '';
+      pufUu.textContent = uu;
+      pufVal.textContent = 'R$ ' + pu.toFixed(6);
+    } else {
+      pufBox.style.display = 'none';
+    }
+    document.getElementById('preview_txt').innerHTML = txt;
+  } else {
+    boxOk.style.display = 'none';
+    boxWarn.style.display = '';
+    pufBox.style.display = 'none';
+  }
+}
+
+// Attach listeners
+['qtd_emb','preco','fator','uc','ue_txt','uu_txt'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', updatePreview);
+});
+
+updatePreview();
+</script>
+{% endblock %}

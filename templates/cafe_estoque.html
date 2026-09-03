@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+{% block title %}Estoque de Café{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-box-seam me-2"></i>Estoque de Café</h1>
+</div>
+
+<ul class="nav nav-tabs mb-4">
+  <li class="nav-item"><a class="nav-link" href="{{ url_for('cafe_lista') }}"><i class="bi bi-grid me-1"></i>Visão Geral</a></li>
+  <li class="nav-item"><a class="nav-link" href="{{ url_for('cafe_consolidado') }}"><i class="bi bi-bar-chart-line me-1"></i>Consolidado por PDV</a></li>
+  <li class="nav-item"><a class="nav-link" href="{{ url_for('cafe_financeiro') }}"><i class="bi bi-currency-dollar me-1"></i>Financeiro</a></li>
+  <li class="nav-item"><a class="nav-link" href="{{ url_for('cafe_ficha') }}"><i class="bi bi-journal-text me-1"></i>Ficha Técnica</a></li>
+  <li class="nav-item"><a class="nav-link" href="{{ url_for('cafe_projecao') }}"><i class="bi bi-graph-up me-1"></i>Projeção de Consumo</a></li>
+  <li class="nav-item"><a class="nav-link active" href="{{ url_for('cafe_estoque') }}"><i class="bi bi-box-seam me-1"></i>Estoque</a></li>
+</ul>
+
+{# ── Alertas ── #}
+{% set n_alertas = status.values() | selectattr('alerta') | list | length %}
+{% if n_alertas > 0 %}
+<div class="alert alert-danger d-flex align-items-center mb-3 py-2">
+  <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+  <div>
+    <strong>Repor agora:</strong>
+    {% for nome, s in status.items() if s.alerta %}
+    <span class="badge bg-danger ms-1">{{ nome }} — {{ '%.2f'|format(s.estimado_pct) }} PCT</span>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% set n_atencao = status.values() | selectattr('atencao') | list | length %}
+{% if n_atencao > 0 %}
+<div class="alert alert-warning d-flex align-items-center mb-3 py-2">
+  <i class="bi bi-clock-fill me-2 fs-5"></i>
+  <div>
+    <strong>Atenção — estoque baixo:</strong>
+    {% for nome, s in status.items() if s.atencao %}
+    <span class="badge bg-warning text-dark ms-1">{{ nome }} — {{ '%.2f'|format(s.estimado_pct) }} PCT</span>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Tabela de Status ── #}
+<div class="card shadow-sm mb-4">
+  <div class="card-header py-2" style="background:#0f2540">
+    <span class="text-white fw-semibold"><i class="bi bi-table me-2"></i>Status do Estoque — por Insumo</span>
+    <small class="text-white-50 ms-2">(alerta &lt; {{ alerta_pct }} PCT · atenção &lt; {{ atencao_pct }} PCT)</small>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0" style="font-size:.85rem">
+      <thead style="background:#1a3a5c;color:#93c5fd">
+        <tr>
+          <th>Insumo</th>
+          <th class="text-center">Pct (kg)</th>
+          <th class="text-center">Âncora</th>
+          <th class="text-center text-success">+ Entradas</th>
+          <th class="text-center text-danger">− Consumo</th>
+          <th class="text-center" style="color:#fbbf24">= Estimado</th>
+          <th class="text-center" style="color:#fbbf24">PCT</th>
+          <th class="text-center">Variância</th>
+          <th class="text-center">Status</th>
+          <th>Últ. contagem por local</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for nome, s in status.items() %}
+        <tr class="{% if s.alerta %}table-danger{% elif s.atencao %}table-warning{% endif %}">
+          <td class="fw-semibold">{{ nome }}</td>
+          <td class="text-center text-muted">{{ s.tam_kg }}</td>
+          <td class="text-center">
+            <span class="font-monospace">{{ s.base_kg }} kg</span>
+            {% if s.local_ancora %}
+            <br><small class="text-muted">{{ s.desde[8:10] }}/{{ s.desde[5:7] }} · {{ s.local_ancora }}</small>
+            {% else %}
+            <br><small class="text-muted fst-italic">sem contagem</small>
+            {% endif %}
+          </td>
+          <td class="text-center text-success font-monospace">+{{ s.entradas_kg }} kg</td>
+          <td class="text-center text-danger font-monospace">−{{ s.consumo_kg }} kg</td>
+          <td class="text-center fw-bold font-monospace">{{ s.estimado_kg }} kg</td>
+          <td class="text-center">
+            <span class="fw-bold fs-6
+              {% if s.alerta %}text-danger
+              {% elif s.atencao %}text-warning
+              {% else %}text-success{% endif %}">
+              {{ '%.2f'|format(s.estimado_pct) }}
+            </span>
+          </td>
+          <td class="text-center">
+            {% if s.variancia_pct is not none %}
+              {% if s.variancia_pct | abs > 10 %}
+                <span class="badge bg-danger">{{ '%+.1f'|format(s.variancia_pct) }}%</span>
+              {% elif s.variancia_pct | abs > 5 %}
+                <span class="badge bg-warning text-dark">{{ '%+.1f'|format(s.variancia_pct) }}%</span>
+              {% else %}
+                <span class="badge bg-success">{{ '%+.1f'|format(s.variancia_pct) }}%</span>
+              {% endif %}
+            {% else %}
+              <small class="text-muted">—</small>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if s.alerta %}
+              <span class="badge bg-danger"><i class="bi bi-exclamation-triangle"></i> Repor</span>
+            {% elif s.atencao %}
+              <span class="badge bg-warning text-dark"><i class="bi bi-clock"></i> Atenção</span>
+            {% else %}
+              <span class="badge bg-success"><i class="bi bi-check-circle"></i> OK</span>
+            {% endif %}
+          </td>
+          <td>
+            {% for local, c in s.conts_local.items() %}
+            <span class="badge me-1"
+              style="background:{% if local=='Amaro' %}#1a3a5c{% elif local=='Portugues' %}#1d4e2a{% elif local=='Izabel' %}#5a1a3a{% else %}#444{% endif %}">
+              {{ local }}: {{ c.qtd_kg }}kg <small>({{ c.data[8:10] }}/{{ c.data[5:7] }})</small>
+            </span>
+            {% else %}
+            <small class="text-muted">—</small>
+            {% endfor %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Estoque por Local ── #}
+<div class="card shadow-sm mb-4">
+  <div class="card-header py-2" style="background:#0f2540">
+    <span class="text-white fw-semibold"><i class="bi bi-geo-alt me-2"></i>Estoque por Local (PDV + Central)</span>
+    <small class="text-white-50 ms-2">requer contagem física em cada local</small>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0 text-center" style="font-size:.85rem">
+      <thead style="background:#1a3a5c;color:#93c5fd">
+        <tr>
+          <th class="text-start">Insumo</th>
+          {% set local_cores = {'Central': '#444', 'Amaro': '#1a3a5c', 'Portugues': '#1d4e2a', 'Izabel': '#5a1a3a'} %}
+          {% set local_labels = {'Central': 'Central', 'Amaro': 'Amaro', 'Portugues': 'Português', 'Izabel': 'Izabel'} %}
+          {% for local in locais %}
+          <th style="color:{% if local=='Central' %}#94a3b8{% elif local=='Amaro' %}#93c5fd{% elif local=='Portugues' %}#86efac{% else %}#f0abfc{% endif %}">
+            {{ local_labels.get(local, local) }}
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for ins in insumos %}
+        <tr>
+          <td class="text-start fw-semibold">{{ ins.nome }}</td>
+          {% for local in locais %}
+          {% set s = estoque_por_local[local][ins.nome] %}
+          <td>
+            {% if s is none %}
+              <span class="text-muted fst-italic" style="font-size:.75rem">—</span>
+            {% else %}
+              <span class="fw-bold
+                {% if s.alerta %}text-danger
+                {% elif s.atencao %}text-warning
+                {% else %}text-success{% endif %}">
+                {{ '%.2f'|format(s.estimado_pct) }}
+              </span>
+              <span class="text-muted" style="font-size:.72rem"> PCT</span>
+              {% if s.alerta %}<i class="bi bi-exclamation-triangle-fill text-danger ms-1" style="font-size:.7rem"></i>{% endif %}
+              {% if not s.tem_contagem %}<br><small class="text-muted" style="font-size:.68rem">estimado</small>{% endif %}
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Formulários ── #}
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header py-2" style="background:#1a3a5c">
+        <span class="text-white fw-semibold"><i class="bi bi-box-arrow-in-down me-1"></i>Registrar Entrada / Compra</span>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('cafe_estoque_entrada') }}">
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label small mb-1">Data</label>
+              <input type="date" name="data" class="form-control form-control-sm" value="{{ hoje }}" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">Origem</label>
+              <select name="origem" class="form-select form-select-sm">
+                <option value="Fornecedor">Fornecedor (compra)</option>
+                {% for l in locais %}<option value="{{ l }}">{{ l }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">Destino</label>
+              <select name="local" class="form-select form-select-sm">
+                {% for l in locais %}<option value="{{ l }}">{{ l }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">Insumo</label>
+              <select name="insumo" class="form-select form-select-sm">
+                {% for ins in insumos %}<option value="{{ ins.nome }}">{{ ins.nome }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">Qtd (pacotes)</label>
+              <input type="number" name="qtd_pct" class="form-control form-control-sm"
+                     step="0.01" min="0.01" placeholder="ex: 1.00" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label small mb-1">Observação (NF, fornecedor…)</label>
+              <input type="text" name="obs" class="form-control form-control-sm">
+            </div>
+            <div class="col-12 mt-1">
+              <button type="submit" class="btn btn-primary btn-sm w-100">
+                <i class="bi bi-plus-circle me-1"></i>Registrar Entrada
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header py-2" style="background:#1d4e2a">
+        <span class="text-white fw-semibold"><i class="bi bi-clipboard-check me-1"></i>Registrar Contagem Física</span>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('cafe_estoque_contagem') }}">
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label small mb-1">Data</label>
+              <input type="date" name="data" class="form-control form-control-sm" value="{{ hoje }}" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">Local contado</label>
+              <select name="local" class="form-select form-select-sm">
+                {% for l in locais %}<option value="{{ l }}">{{ l }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">Insumo</label>
+              <select name="insumo" class="form-select form-select-sm">
+                {% for ins in insumos %}<option value="{{ ins.nome }}">{{ ins.nome }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">Qtd contada (pacotes)</label>
+              <input type="number" name="qtd_pct" class="form-control form-control-sm"
+                     step="0.01" min="0" placeholder="ex: 0.75" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label small mb-1">Observação (responsável…)</label>
+              <input type="text" name="obs" class="form-control form-control-sm">
+            </div>
+            <div class="col-12 mt-1">
+              <button type="submit" class="btn btn-sm w-100 text-white" style="background:#1d4e2a">
+                <i class="bi bi-clipboard-check me-1"></i>Registrar Contagem
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Histórico ── #}
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-header py-2" style="background:#1a3a5c">
+        <span class="text-white fw-semibold small"><i class="bi bi-clock-history me-1"></i>Histórico de Entradas</span>
+      </div>
+      <div class="card-body p-0" style="max-height:300px;overflow-y:auto">
+        <table class="table table-sm mb-0" style="font-size:.8rem">
+          <thead style="position:sticky;top:0;background:#e8edf3">
+            <tr><th>Data</th><th>Origem → Destino</th><th>Insumo</th><th class="text-end">PCT</th><th>Obs</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for e in entradas %}
+            {% set ins_info = insumos | selectattr('nome','equalto',e.insumo) | first | default(none) %}
+            {% set tam = ins_info.tam_kg if ins_info else 1.0 %}
+            <tr>
+              <td class="text-nowrap">{{ e.data[8:10] }}/{{ e.data[5:7] }}/{{ e.data[0:4] }}</td>
+              <td class="text-nowrap">
+                <span class="text-muted">{{ e.origem or 'Fornecedor' }}</span>
+                <i class="bi bi-arrow-right mx-1" style="font-size:.7rem"></i>
+                {{ e.local }}
+              </td>
+              <td>{{ e.insumo }}</td>
+              <td class="text-end font-monospace">{{ '%.2f'|format(e.qtd_kg / tam) }}</td>
+              <td class="text-muted" style="font-size:.75rem">{{ e.obs or '' }}</td>
+              <td>
+                <form method="POST" action="{{ url_for('cafe_del_entrada', eid=e.id) }}">
+                  <button class="btn btn-link btn-sm text-danger p-0 lh-1"
+                          onclick="return confirm('Excluir esta entrada?')" title="Excluir">×</button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-muted text-center py-3 fst-italic">Nenhuma entrada registrada</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-header py-2" style="background:#1d4e2a">
+        <span class="text-white fw-semibold small"><i class="bi bi-clock-history me-1"></i>Histórico de Contagens</span>
+      </div>
+      <div class="card-body p-0" style="max-height:300px;overflow-y:auto">
+        <table class="table table-sm mb-0" style="font-size:.8rem">
+          <thead style="position:sticky;top:0;background:#e8edf3">
+            <tr><th>Data</th><th>Local</th><th>Insumo</th><th class="text-end">PCT</th><th>Obs</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for c in contagens %}
+            {% set ins_info = insumos | selectattr('nome','equalto',c.insumo) | first | default(none) %}
+            {% set tam = ins_info.tam_kg if ins_info else 1.0 %}
+            <tr>
+              <td class="text-nowrap">{{ c.data[8:10] }}/{{ c.data[5:7] }}/{{ c.data[0:4] }}</td>
+              <td>{{ c.local }}</td>
+              <td>{{ c.insumo }}</td>
+              <td class="text-end font-monospace">{{ '%.2f'|format(c.qtd_kg / tam) }}</td>
+              <td class="text-muted" style="font-size:.75rem">{{ c.obs or '' }}</td>
+              <td>
+                <form method="POST" action="{{ url_for('cafe_del_contagem', cid=c.id) }}">
+                  <button class="btn btn-link btn-sm text-danger p-0 lh-1"
+                          onclick="return confirm('Excluir esta contagem?')" title="Excluir">×</button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-muted text-center py-3 fst-italic">Nenhuma contagem registrada</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

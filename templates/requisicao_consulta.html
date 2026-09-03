@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+{% block title %}Consulta de Insumo{% endblock %}
+{% block content %}
+<style>
+  #barra-busca { max-width: 520px; }
+  #spinner { display:none; }
+  .insumo-card { border-left: 4px solid #2e75b6; margin-bottom: 1.2rem; }
+  .est-pill { font-size:.8rem; padding:3px 10px; border-radius:20px; }
+  .req-sub { font-size:.83rem; }
+  .inline-form { display:flex; gap:.4rem; align-items:flex-end; flex-wrap:wrap; }
+</style>
+
+<div class="page-header">
+  <h1><i class="bi bi-search me-2"></i>Consulta de Saldo por Insumo</h1>
+  <p class="text-muted small">Digite o nome do insumo para ver o estoque total e o saldo em requisições abertas.</p>
+</div>
+
+<div id="barra-busca" class="d-flex gap-2 align-items-center mb-3">
+  <div class="flex-grow-1 position-relative">
+    <input type="text" id="busca" class="form-control form-control-lg"
+           placeholder="Ex: requeijão, filezinho, mel…" autocomplete="off">
+    <div id="spinner" class="position-absolute top-50 end-0 translate-middle-y me-3">
+      <span class="spinner-border spinner-border-sm text-secondary"></span>
+    </div>
+  </div>
+  <a href="{{ url_for('requisicoes_lista') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Voltar
+  </a>
+</div>
+
+<div id="resultado-wrap"></div>
+
+<script>
+const hoje = new Date().toISOString().slice(0,10);
+let debounceTimer = null, ultimaBusca = '';
+
+document.getElementById('busca').addEventListener('input', function() {
+  const q = this.value.trim();
+  clearTimeout(debounceTimer);
+  if (q.length < 2) { document.getElementById('resultado-wrap').innerHTML = ''; return; }
+  debounceTimer = setTimeout(() => buscar(q), 280);
+});
+
+async function buscar(q) {
+  if (q === ultimaBusca) return;
+  ultimaBusca = q;
+  document.getElementById('spinner').style.display = 'block';
+  try {
+    const res = await fetch(`/requisicoes/consulta/buscar?q=${encodeURIComponent(q)}`);
+    const lista = await res.json();
+    renderizar(lista, q);
+  } catch(e) {
+    document.getElementById('resultado-wrap').innerHTML =
+      '<div class="alert alert-danger mt-3">Erro ao buscar.</div>';
+  } finally {
+    document.getElementById('spinner').style.display = 'none';
+  }
+}
+
+function fmtData(s) {
+  if (!s) return '—';
+  const [y,m,d] = s.split('-');
+  return `${d}/${m}`;
+}
+
+function fmtN(n, digits=1) {
+  if (Number.isInteger(n) || n === Math.round(n)) return Math.round(n);
+  return parseFloat(n.toFixed(digits));
+}
+
+function renderizar(lista, q) {
+  const wrap = document.getElementById('resultado-wrap');
+  if (!lista.length) {
+    wrap.innerHTML = `<div class="alert alert-warning mt-2">
+      Nenhum insumo encontrado com estoque para <strong>${q}</strong>.
+    </div>`;
+    return;
+  }
+
+  let html = '';
+  const _insData = {};
+  for (const ins of lista) {
+    const fator = ins.fator || 1;
+    const uu = ins.unidade_uso, uc = ins.unidade_compra;
+    const estTotalUC = ins.est_total / fator;
+    const cozUC = ins.estoque_atual / fator;
+    const cenUC = ins.estoque_central / fator;
+
+    html += `
+    <div class="card shadow-sm insumo-card" id="card-ins-${ins.insumo_id}">
+      <div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2"
+           style="background:#1a3a5c;color:#fff">
+        <span class="fw-semibold fs-6">${ins.insumo_nome}</span>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+          <span class="est-pill bg-success">
+            Total: <strong>${fmtN(ins.est_total)} ${uu}</strong>
+            ${uc !== uu ? `<span class="opacity-75">(${fmtN(estTotalUC)} ${uc})</span>` : ''}
+          </span>
+          <span class="est-pill" style="background:#374151">
+            Coz: ${fmtN(ins.estoque_atual)} ${uu}
+          </span>
+          <span class="est-pill" style="background:#1e4d78">
+            Cen: ${fmtN(ins.estoque_central)} ${uu}
+          </span>
+        </div>
+      </div>
+      <div class="card-body p-0">`;
+
+    if (ins.requisicoes.length === 0) {
+      _insData[ins.insumo_id] = { uc: ins.unidade_compra, fator: ins.fator || 1 };
+      const cozVal    = fmtN(ins.estoque_atual);
+      const cenVal    = fmtN(ins.estoque_central);
+      const cozValUC  = fmtN(ins.estoque_atual   / fator);
+      const cenValUC  = fmtN(ins.estoque_central / fator);
+      const diffUnits = uc !== uu;
+      html += `
+        <div class="px-3 py-2 d-flex align-items-center gap-3 flex-wrap">
+          <span class="text-muted small fst-italic">Nenhuma requisição aberta — ajuste o estoque diretamente:</span>
+          <form class="form-ajuste d-flex gap-2 align-items-end flex-wrap"
+                data-ins="${ins.insumo_id}" data-uu="${uu}">
+
+            <div>
+              <label class="form-label mb-0" style="font-size:.7rem">Cozinha (${uu})</label>
+              <input type="number" name="estoque_atual" class="inp-coz-uu form-control form-control-sm"
+                     value="${cozVal}" step="0.01" min="0" style="width:95px">
+            </div>
+            ${diffUnits ? `
+            <div>
+              <label class="form-label mb-0" style="font-size:.7rem">Cozinha (${uc})</label>
+              <input type="number" class="inp-coz-uc form-control form-control-sm"
+                     value="${cozValUC}" step="any" min="0" style="width:95px">
+            </div>` : ''}
+
+            <div>
+              <label class="form-label mb-0" style="font-size:.7rem">Central (${uu})</label>
+              <input type="number" name="estoque_central" class="inp-cen-uu form-control form-control-sm"
+                     value="${cenVal}" step="0.01" min="0" style="width:95px">
+            </div>
+            ${diffUnits ? `
+            <div>
+              <label class="form-label mb-0" style="font-size:.7rem">Central (${uc})</label>
+              <input type="number" class="inp-cen-uc form-control form-control-sm"
+                     value="${cenValUC}" step="any" min="0" style="width:95px">
+            </div>` : ''}
+
+            <button type="submit" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-floppy me-1"></i>Salvar
+            </button>
+            <span class="msg-ajuste-${ins.insumo_id} text-success small" style="display:none"></span>
+          </form>
+        </div>`;
+    } else {
+      html += `
+        <table class="table table-sm mb-0 req-sub">
+          <thead style="background:#f1f5f9;font-size:.78rem">
+            <tr>
+              <th style="width:80px">Req</th>
+              <th>Data / Obs</th>
+              <th class="text-center">Enviado</th>
+              <th class="text-center">Consumido</th>
+              <th class="text-center text-success fw-bold">Saldo em prod.</th>
+              <th style="min-width:300px">Registrar sobra</th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+      // estoque fora das reqs = estoque_atual - saldo de TODAS as reqs abertas
+      const estForaReqs = Math.max(0, ins.estoque_atual - ins.req_saldo_total);
+
+      for (const req of ins.requisicoes) {
+        const saldoUC = req.saldo / fator;
+        // estoque fora desta req específica = estoque_atual - saldo desta req
+        const estForaEstaReq = Math.max(0, ins.estoque_atual - req.saldo);
+        const maxTotal = ins.estoque_atual; // máximo que pode sobrar = total na cozinha
+
+        html += `
+            <tr id="row-${req.item_id}">
+              <td class="fw-semibold">
+                <a href="/requisicoes/${req.req_id}" target="_blank" class="text-decoration-none">#${req.req_id}</a>
+              </td>
+              <td class="text-muted">${fmtData(req.req_data)}${req.req_obs ? ' · ' + req.req_obs : ''}</td>
+              <td class="text-center font-monospace">${fmtN(req.qtd_enviada)} ${uu}</td>
+              <td class="text-center font-monospace text-danger">${fmtN(req.total_consumido)} ${uu}</td>
+              <td class="text-center font-monospace fw-bold text-success">${fmtN(req.saldo)} ${uu}
+                ${uc !== uu ? `<div style="font-size:.7rem;color:#9ca3af">${fmtN(saldoUC)} ${uc}</div>` : ''}
+              </td>
+              <td>
+                <form class="inline-form form-sobra"
+                      data-item="${req.item_id}" data-req="${req.req_id}"
+                      data-saldo="${req.saldo}" data-uu="${uu}" data-ins="${ins.insumo_id}"
+                      data-est-fora="${estForaEstaReq}" data-est-atual="${ins.estoque_atual}"
+                      data-est-max="${ins.estoque_atual}">
+                  <div>
+                    <label class="form-label mb-0" style="font-size:.7rem">Data</label>
+                    <input type="date" name="data" class="form-control form-control-sm" value="${hoje}" style="width:125px">
+                  </div>
+                  <div>
+                    <label class="form-label mb-0" style="font-size:.7rem">
+                      Total na cozinha agora (${uu})
+                      <span style="color:#6b7280;font-size:.65rem">máx: ${fmtN(maxTotal)}</span>
+                    </label>
+                    <input type="number" class="form-control form-control-sm inp-total"
+                           min="0" step="0.1" placeholder="0"
+                           max="${fmtN(maxTotal)}" style="width:110px">
+                  </div>
+                  <div>
+                    <label class="form-label mb-0" style="font-size:.7rem">Obs</label>
+                    <input type="text" name="obs" class="form-control form-control-sm" style="width:100px" placeholder="opcional">
+                  </div>
+                  <div class="d-flex align-items-end">
+                    <button type="submit" class="btn btn-sm btn-primary">
+                      <i class="bi bi-check-lg"></i> OK
+                    </button>
+                  </div>
+                </form>
+                <div class="msg-${req.item_id} text-success small mt-1" style="display:none"></div>
+              </td>
+            </tr>`;
+      }
+
+      html += `</tbody></table>`;
+    }
+
+    // Histórico de movimentações
+    if (ins.movimentacoes && ins.movimentacoes.length > 0) {
+      html += `<div style="border-top:1px solid #e2e8f0;padding:8px 12px;">
+        <div class="text-muted" style="font-size:.72rem;font-weight:600;letter-spacing:.04em;margin-bottom:4px">
+          MOVIMENTAÇÕES RECENTES
+        </div>
+        <table style="width:100%;font-size:.78rem;border-collapse:collapse">`;
+      for (const mv of ins.movimentacoes) {
+        const [y,m,d] = mv.data.split('-');
+        const dataFmt = `${d}/${m}`;
+        let desfazBtn = '';
+        if (mv.tipo === 'consumo' && mv.row_id) {
+          desfazBtn = `<button class="btn-desfazer btn btn-outline-danger btn-sm py-0 px-1 ms-2"
+            style="font-size:.7rem;line-height:1.4"
+            data-tipo="consumo" data-id="${mv.row_id}" data-req="${mv.req_id}">↩ Desfazer</button>`;
+        } else if (mv.tipo === 'ajuste' && mv.row_id) {
+          desfazBtn = `<button class="btn-desfazer btn btn-outline-danger btn-sm py-0 px-1 ms-2"
+            style="font-size:.7rem;line-height:1.4"
+            data-tipo="ajuste" data-id="${mv.row_id}">↩ Desfazer</button>`;
+        }
+
+        if (mv.tipo === 'transferencia') {
+          html += `<tr>
+            <td style="padding:2px 6px;color:#6b7280;width:52px">${dataFmt}</td>
+            <td style="padding:2px 6px">
+              <span style="color:#1e4d78;font-weight:600">↓ Entrada</span>
+              <span class="text-muted"> — Req <a href="/requisicoes/${mv.req_id}" target="_blank">#${mv.req_id}</a></span>
+            </td>
+            <td style="padding:2px 6px;text-align:right;font-family:monospace;color:#1e4d78">
+              +${fmtN(mv.qtd)} ${uu}
+            </td>
+          </tr>`;
+        } else if (mv.tipo === 'consumo') {
+          html += `<tr>
+            <td style="padding:2px 6px;color:#6b7280;width:52px">${dataFmt}</td>
+            <td style="padding:2px 6px">
+              <span style="color:#dc2626;font-weight:600">↑ Consumo</span>
+              <span class="text-muted"> — Req <a href="/requisicoes/${mv.req_id}" target="_blank">#${mv.req_id}</a>${mv.obs ? ' · ' + mv.obs : ''}</span>
+              ${desfazBtn}
+            </td>
+            <td style="padding:2px 6px;text-align:right;font-family:monospace;color:#dc2626">
+              -${fmtN(mv.qtd)} ${uu}
+            </td>
+          </tr>`;
+        } else {
+          const antes  = mv.coz_antes  != null ? fmtN(mv.coz_antes)  + ' ' + uu : '?';
+          const depois = mv.coz_depois != null ? fmtN(mv.coz_depois) + ' ' + uu : '?';
+          html += `<tr>
+            <td style="padding:2px 6px;color:#6b7280;width:52px">${dataFmt}</td>
+            <td style="padding:2px 6px" colspan="2">
+              <span style="color:#7c3aed;font-weight:600">✏ Ajuste direto</span>
+              <span class="text-muted"> — cozinha: ${antes} → ${depois}</span>
+              ${desfazBtn}
+            </td>
+          </tr>`;
+        }
+      }
+      html += `</table></div>`;
+    }
+
+    html += `</div></div>`;
+  }
+
+  wrap.innerHTML = html;
+
+  document.querySelectorAll('.btn-desfazer').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      if (!confirm('Desfazer este lançamento?')) return;
+      this.disabled = true;
+      this.textContent = '…';
+      const tipo = this.dataset.tipo;
+      const id   = this.dataset.id;
+      let url, method = 'POST';
+      if (tipo === 'ajuste') {
+        url = `/insumo_ajuste_log/${id}/desfazer`;
+      } else {
+        url = `/requisicoes/consumo/${id}/excluir`;
+      }
+      try {
+        await fetch(url, { method, redirect: 'manual' });
+        ultimaBusca = '';
+        buscar(document.getElementById('busca').value.trim());
+      } catch(e) {
+        alert('Erro ao desfazer.');
+        this.disabled = false;
+        this.textContent = '↩ Desfazer';
+      }
+    });
+  });
+
+  document.querySelectorAll('.form-ajuste').forEach(form => {
+    const insId  = form.dataset.ins;
+    const uu     = form.dataset.uu;
+    const meta   = _insData[insId] || {};
+    const fatorF = meta.fator || 1;
+
+    const cozUU = form.querySelector('.inp-coz-uu');
+    const cozUC = form.querySelector('.inp-coz-uc');
+    const cenUU = form.querySelector('.inp-cen-uu');
+    const cenUC = form.querySelector('.inp-cen-uc');
+
+    if (cozUC) {
+      cozUU.addEventListener('input', () => { cozUC.value = Math.round((parseFloat(cozUU.value)||0) / fatorF * 10000) / 10000; });
+      cozUC.addEventListener('input', () => { cozUU.value = Math.round((parseFloat(cozUC.value)||0) * fatorF * 100) / 100; });
+    }
+    if (cenUC) {
+      cenUU.addEventListener('input', () => { cenUC.value = Math.round((parseFloat(cenUU.value)||0) / fatorF * 10000) / 10000; });
+      cenUC.addEventListener('input', () => { cenUU.value = Math.round((parseFloat(cenUC.value)||0) * fatorF * 100) / 100; });
+    }
+
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const coz   = this.querySelector('[name=estoque_atual]').value;
+      const cen   = this.querySelector('[name=estoque_central]').value;
+      const btn   = this.querySelector('button[type=submit]');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+      try {
+        const fd = new FormData();
+        fd.append('estoque_atual', coz);
+        fd.append('estoque_central', cen);
+        const res = await fetch(`/insumos/${insId}/ajustar_estoque`, { method:'POST', body:fd });
+        const data = await res.json();
+        if (data.ok) {
+          const msgEl = document.querySelector(`.msg-ajuste-${insId}`);
+          msgEl.textContent = `✓ Salvo — Coz: ${fmtN(data.estoque_atual)} ${uu}, Cen: ${fmtN(data.estoque_central)} ${uu}`;
+          msgEl.style.display = 'inline';
+          setTimeout(() => { ultimaBusca=''; buscar(document.getElementById('busca').value.trim()); }, 1500);
+        } else {
+          alert('Erro: ' + data.erro);
+        }
+      } catch(err) {
+        alert('Erro ao salvar.');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Salvar';
+      }
+    });
+  });
+
+  document.querySelectorAll('.form-sobra').forEach(form => {
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const itemId      = this.dataset.item;
+      const reqId       = this.dataset.req;
+      const saldo       = parseFloat(this.dataset.saldo);      // saldo desta req
+      const uu          = this.dataset.uu;
+      const estFora     = parseFloat(this.dataset.estFora);    // estoque fora desta req
+      const estMax      = parseFloat(this.dataset.estMax);     // estoque_atual total
+      const totalCozinha = parseFloat(this.querySelector('.inp-total').value || '0');
+      const data        = this.querySelector('[name=data]').value;
+      const obs         = this.querySelector('[name=obs]').value;
+
+      // sobra_from_req = total na cozinha - o que já estava lá fora desta req
+      // Se totalCozinha < estFora, consumiu tudo desta req E parte do resto → sobra=0
+      const sobraReq = Math.max(0, Math.min(saldo, Math.round((totalCozinha - estFora) * 10000) / 10000));
+
+      if (totalCozinha < 0 || totalCozinha > estMax + 0.001) {
+        alert(`O total na cozinha deve ser entre 0 e ${fmtN(estMax)} ${uu}.`);
+        return;
+      }
+
+      const btn = this.querySelector('button[type=submit]');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+      try {
+        const fd = new FormData();
+        fd.append('item_id', itemId);
+        fd.append('data', data);
+        fd.append('qtd_sobra', Math.max(0, sobraReq));
+        fd.append('total_cozinha', totalCozinha);
+        fd.append('obs', obs);
+        await fetch(`/requisicoes/${reqId}/consumo`, { method:'POST', body:fd, redirect:'manual' });
+
+        const consumido = saldo - Math.max(0, sobraReq);
+        const msgEl = document.querySelector(`.msg-${itemId}`);
+        msgEl.textContent = `✓ ${consumido.toFixed(0)} ${uu} consumidos registrados.`;
+        msgEl.style.display = 'block';
+        setTimeout(() => { ultimaBusca=''; buscar(document.getElementById('busca').value.trim()); }, 1200);
+      } catch(err) {
+        alert('Erro ao registrar.');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-lg"></i> OK';
+      }
+    });
+  });
+}
+</script>
+{% endblock %}

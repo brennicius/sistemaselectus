@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% block title %}Revisar NF — Estoque{% endblock %}
+{% block content %}
+<style>
+  .row-nf td { vertical-align: middle; font-size: .85rem; }
+  .nf-nome { font-size: .75rem; color: #6b7280; max-width: 200px; }
+  .score-badge { font-size: .65rem; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+  .score-hi  { background: #dcfce7; color: #15803d; }
+  .score-mid { background: #fef9c3; color: #854d0e; }
+  .score-lo  { background: #fee2e2; color: #b91c1c; }
+  .dd-lista-rev { top: calc(100% + 2px); }
+  .busca-rev:focus { box-shadow: 0 0 0 .15rem rgba(13,110,253,.25); }
+  tr.excluido { opacity: .4; }
+</style>
+
+<!-- dados dos insumos para JS -->
+<script id="insumos-data" type="application/json">
+[{% for ins in insumos %}{"id":{{ ins.id }},"nome":{{ ins.nome|tojson }},"fator":{{ ins.fator_conversao or 1 }},"uc":{{ ins.unidade_compra|tojson }},"uu":{{ ins.unidade_uso|tojson }}}{% if not loop.last %},{% endif %}{% endfor %}]
+</script>
+
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <h1><i class="bi bi-check2-square me-2"></i>Revisar Itens da NF</h1>
+    <p>Verifique o cruzamento automático, ajuste o que precisar e confirme os itens a lançar.</p>
+  </div>
+  <a href="{{ url_for('estoque_importar_nf') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Nova NF
+  </a>
+</div>
+
+<form method="POST" action="{{ url_for('estoque_importar_nf_confirmar') }}" id="formReview">
+  <input type="hidden" name="data_nf" value="{{ data_nf }}">
+  <input type="hidden" name="origem"  value="{{ origem }}">
+  <input type="hidden" name="obs"     value="{{ obs }}">
+  <input type="hidden" name="n_items" value="{{ matched|length }}">
+
+  <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+    <div class="d-flex gap-2">
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-sel-todos">Marcar todos</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-desel-todos">Desmarcar todos</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-sel-conf">Só alta confiança (≥70%)</button>
+    </div>
+    <div class="text-muted small">
+      Data: <strong>{{ data_nf }}</strong> · Origem: <strong>{{ origem }}</strong>
+      {% if obs %} · Obs: {{ obs }}{% endif %}
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-3">
+    <div class="card-body p-0">
+      <table class="table table-sm table-hover mb-0" id="tabela-review">
+        <thead>
+          <tr>
+            <th style="width:36px"><input type="checkbox" id="chk-all" checked title="Marcar/desmarcar todos"></th>
+            <th>Item na NF</th>
+            <th class="text-end">Qtd NF</th>
+            <th>Un</th>
+            <th style="min-width:220px">Insumo no Sistema</th>
+            <th style="min-width:140px" class="text-end">Qtd a Lançar</th>
+            <th>Un</th>
+            <th style="width:60px">Match</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in matched %}
+          {% set i = loop.index0 %}
+          {% set score = item.score %}
+          <tr class="row-nf" data-idx="{{ i }}">
+            <td>
+              <input type="checkbox" name="incluir_{{ i }}" class="chk-incluir" value="1"
+                     {% if score >= 40 and item.insumo_id %}checked{% endif %}>
+            </td>
+            <td>
+              <div class="fw-semibold">{{ item.nf_nome }}</div>
+              <div class="text-muted" style="font-size:.68rem">R$ {{ '%.2f'|format(item.nf_vunit) }}/un · total R$ {{ '%.2f'|format(item.nf_vtotal) }}</div>
+            </td>
+            <td class="text-end font-monospace">{{ '%.3f'|format(item.nf_qtd) }}</td>
+            <td><span class="badge bg-secondary">{{ item.nf_un }}</span></td>
+            <td>
+              <!-- Combobox -->
+              <input type="hidden" name="insumo_id_{{ i }}" class="hid-insumo" value="{{ item.insumo_id }}">
+              <div class="position-relative">
+                <input type="text" class="form-control form-control-sm busca-rev"
+                       value="{{ item.insumo_nome }}"
+                       placeholder="Buscar insumo…" autocomplete="off"
+                       data-idx="{{ i }}">
+                <div class="dd-lista-rev list-group position-absolute w-100 shadow"
+                     style="z-index:1060;max-height:180px;overflow-y:auto;display:none"></div>
+              </div>
+            </td>
+            <td class="text-end">
+              <div class="input-group input-group-sm justify-content-end">
+                <input type="number" step="0.001" min="0"
+                       name="qtd_uu_{{ i }}" class="form-control text-end qtd-inp"
+                       style="max-width:90px"
+                       value="{{ '%.4f'|format(item.nf_qtd * item.fator) if item.fator else item.nf_qtd }}"
+                       data-qtd-nf="{{ item.nf_qtd }}"
+                       data-fator="{{ item.fator or 1 }}"
+                       data-uc="{{ item.insumo_uc }}"
+                       data-uu="{{ item.insumo_uu }}"
+                       data-modo="uu">
+                <button type="button" class="btn btn-outline-secondary btn-sm toggle-unid"
+                        data-uc="{{ item.insumo_uc }}" data-uu="{{ item.insumo_uu }}"
+                        data-modo="uu" style="min-width:48px;font-size:.72rem">
+                  {{ item.insumo_uu or '—' }}
+                </button>
+              </div>
+            </td>
+            <td class="small text-muted unid-label">{{ item.insumo_uu or '—' }}</td>
+            <td>
+              {% if score >= 70 %}
+                <span class="score-badge score-hi">{{ score }}%</span>
+              {% elif score >= 40 %}
+                <span class="score-badge score-mid">{{ score }}%</span>
+              {% else %}
+                <span class="score-badge score-lo">{{ score }}%</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 align-items-center">
+    <button type="submit" class="btn btn-success">
+      <i class="bi bi-check2-all me-1"></i>Confirmar e Lançar Entradas
+    </button>
+    <a href="{{ url_for('estoque_importar_nf') }}" class="btn btn-outline-secondary">Cancelar</a>
+    <span class="text-muted small ms-2" id="resumo-selecionados"></span>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const INSUMOS = JSON.parse(document.getElementById('insumos-data').textContent);
+const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/hf\.|rf\.|fr\.|ac\./g,'');
+
+// ── Combobox por linha ──
+document.querySelectorAll('.busca-rev').forEach(input => {
+  const idx     = input.dataset.idx;
+  const tr      = input.closest('tr');
+  const hidId   = tr.querySelector('.hid-insumo');
+  const dd      = input.nextElementSibling;
+  const qtdInp  = tr.querySelector('.qtd-inp');
+  const togBtn  = tr.querySelector('.toggle-unid');
+  const unidLbl = tr.querySelector('.unid-label');
+
+  function renderDD(q) {
+    const hits = INSUMOS.filter(i => norm(i.nome).includes(norm(q))).slice(0, 15);
+    if (!hits.length) { dd.style.display = 'none'; return; }
+    dd.innerHTML = hits.map(i =>
+      `<button type="button" class="list-group-item list-group-item-action py-1 px-2 small" data-id="${i.id}">${i.nome}</button>`
+    ).join('');
+    dd.style.display = '';
+    dd.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+      const ins = INSUMOS.find(i => i.id == b.dataset.id);
+      if (!ins) return;
+      hidId.value     = ins.id;
+      input.value     = ins.nome;
+      dd.style.display = 'none';
+      // Atualizar qtd, toggle e label
+      const fator = ins.fator || 1;
+      qtdInp.dataset.fator = fator;
+      qtdInp.dataset.uc    = ins.uc;
+      qtdInp.dataset.uu    = ins.uu;
+      const modoAtual = qtdInp.dataset.modo || 'uu';
+      if (modoAtual === 'uc') {
+        qtdInp.value = parseFloat(qtdInp.dataset.qtdNf || 0);
+      } else {
+        qtdInp.value = (parseFloat(qtdInp.dataset.qtdNf || 0) * fator).toFixed(4);
+      }
+      togBtn.textContent  = modoAtual === 'uc' ? ins.uc : ins.uu;
+      togBtn.dataset.uc   = ins.uc;
+      togBtn.dataset.uu   = ins.uu;
+      unidLbl.textContent = ins.uu || '—';
+    }));
+  }
+
+  input.addEventListener('input', function() {
+    hidId.value = '';
+    const q = this.value.trim();
+    if (q.length >= 1) renderDD(q); else dd.style.display = 'none';
+  });
+  input.addEventListener('focus', function() {
+    if (this.value.trim() && !hidId.value) renderDD(this.value.trim());
+  });
+  document.addEventListener('click', e => {
+    if (!input.closest('td').contains(e.target)) dd.style.display = 'none';
+  });
+});
+
+// ── Toggle UC/UU por linha ──
+document.querySelectorAll('.toggle-unid').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const tr     = this.closest('tr');
+    const qtdInp = tr.querySelector('.qtd-inp');
+    const fator  = parseFloat(qtdInp.dataset.fator) || 1;
+    const qtdNf  = parseFloat(qtdInp.dataset.qtdNf || qtdInp.value) || 0;
+    const modoAtual = qtdInp.dataset.modo || 'uu';
+    const novoModo  = modoAtual === 'uu' ? 'uc' : 'uu';
+    qtdInp.dataset.modo = novoModo;
+    if (novoModo === 'uc') {
+      qtdInp.value       = qtdNf.toFixed(4);
+      this.textContent   = this.dataset.uc || '—';
+    } else {
+      qtdInp.value       = (qtdNf * fator).toFixed(4);
+      this.textContent   = this.dataset.uu || '—';
+    }
+  });
+});
+
+// ── Converter UU no submit ──
+document.getElementById('formReview').addEventListener('submit', function() {
+  document.querySelectorAll('.qtd-inp').forEach(inp => {
+    const modo  = inp.dataset.modo || 'uu';
+    const fator = parseFloat(inp.dataset.fator) || 1;
+    const val   = parseFloat(inp.value) || 0;
+    if (modo === 'uc') {
+      inp.value = (val * fator).toFixed(6);
+    }
+  });
+});
+
+// ── Dim/bright row ao marcar ──
+document.querySelectorAll('.chk-incluir').forEach(chk => {
+  function atualizar() {
+    chk.closest('tr').classList.toggle('excluido', !chk.checked);
+  }
+  chk.addEventListener('change', atualizar);
+  atualizar();
+});
+
+// ── Marcar / desmarcar ──
+document.getElementById('btn-sel-todos').addEventListener('click', () => {
+  document.querySelectorAll('.chk-incluir').forEach(c => { c.checked = true; c.dispatchEvent(new Event('change')); });
+});
+document.getElementById('btn-desel-todos').addEventListener('click', () => {
+  document.querySelectorAll('.chk-incluir').forEach(c => { c.checked = false; c.dispatchEvent(new Event('change')); });
+});
+document.getElementById('btn-sel-conf').addEventListener('click', () => {
+  document.querySelectorAll('#tabela-review tbody tr').forEach(tr => {
+    const badge = tr.querySelector('.score-badge');
+    const score = badge ? parseInt(badge.textContent) : 0;
+    const chk   = tr.querySelector('.chk-incluir');
+    if (!chk) return;
+    chk.checked = score >= 70;
+    chk.dispatchEvent(new Event('change'));
+  });
+});
+document.getElementById('chk-all').addEventListener('change', function() {
+  document.querySelectorAll('.chk-incluir').forEach(c => { c.checked = this.checked; c.dispatchEvent(new Event('change')); });
+});
+
+// ── Resumo ──
+function atualizarResumo() {
+  const total   = document.querySelectorAll('.chk-incluir').length;
+  const marcados = [...document.querySelectorAll('.chk-incluir')].filter(c => c.checked).length;
+  document.getElementById('resumo-selecionados').textContent = `${marcados} de ${total} itens selecionados`;
+}
+document.querySelectorAll('.chk-incluir').forEach(c => c.addEventListener('change', atualizarResumo));
+atualizarResumo();
+</script>
+{% endblock %}

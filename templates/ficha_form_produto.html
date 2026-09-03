@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if prod else 'Novo' }} Produto{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-journal-plus me-2"></i>{{ 'Editar Produto' if prod else 'Novo Produto' }}</h1>
+</div>
+
+<div class="card shadow-sm" style="max-width:520px">
+  <div class="card-body p-4">
+    <form method="post">
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Nome do Produto</label>
+        <input type="text" name="nome" class="form-control" required
+               value="{{ prod.nome if prod else '' }}" placeholder="ex: Salada Teriaky +P">
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Descrição <span class="text-muted fw-normal">(opcional)</span></label>
+        <input type="text" name="descricao" class="form-control"
+               value="{{ prod.descricao if prod else '' }}" placeholder="ex: 240 g">
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-6">
+          <label class="form-label fw-semibold">Rendimento</label>
+          <input type="number" name="rendimento" class="form-control" step="any" min="0.001"
+                 value="{{ prod.rendimento if prod else 1 }}">
+        </div>
+        <div class="col-6">
+          <label class="form-label fw-semibold">Unidade</label>
+          <input type="text" name="unidade_rendimento" class="form-control"
+                 value="{{ prod.unidade_rendimento if prod else 'un' }}" placeholder="un, kg, pct…">
+        </div>
+      </div>
+      <div class="mb-4">
+        <label class="form-label fw-semibold">Categoria <span class="text-muted fw-normal">(opcional)</span></label>
+        <select name="categoria" class="form-select">
+          <option value="">— Sem categoria —</option>
+          {% for nome, cls in categorias %}
+          <option value="{{ nome }}" {% if prod and prod.categoria == nome %}selected{% endif %}>{{ nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-arrow-right me-1"></i>{{ 'Salvar' if prod else 'Continuar — Adicionar Ingredientes' }}
+        </button>
+        <a href="{{ url_for('fichas_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

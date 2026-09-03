@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+{% block title %}Previsão de Produção{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1><i class="bi bi-clipboard2-data me-2"></i>Registro de Produção</h1>
+</div>
+
+<ul class="nav nav-tabs mb-4">
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('registro_lista') }}">
+      <i class="bi bi-clipboard2-data me-1"></i>Histórico
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link active" href="{{ url_for('previsao') }}">
+      <i class="bi bi-calendar2-week me-1"></i>Previsão Futura
+    </a>
+  </li>
+</ul>
+
+<!-- Legenda datas de referência -->
+<div class="d-flex flex-wrap gap-3 mb-3 align-items-center">
+  <span class="text-muted small"><i class="bi bi-info-circle me-1"></i>Fonte: Consolidado por PDV — Plano Prod. Sem Feriado{% if base_info %} | {{ base_info }}{% endif %}</span>
+  <span class="ms-auto text-muted small">Semana prevista: 10, 12 e 14/08/2026</span>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover table-sm align-middle mb-0" id="tabela-prev">
+        <thead>
+          <!-- Grupos de colunas -->
+          <tr>
+            <th rowspan="2" class="align-middle" style="background:#2c2c2c;color:#fff;min-width:120px">Categoria</th>
+            <th rowspan="2" class="align-middle" style="background:#2c2c2c;color:#fff;min-width:160px">Produto</th>
+            <!-- Segunda -->
+            <th colspan="3" class="text-center" style="background:#1a3a5c;color:#fff">
+              <i class="bi bi-1-circle me-1"></i>Segunda — 10/08
+            </th>
+            <!-- Quarta -->
+            <th colspan="3" class="text-center" style="background:#375623;color:#fff">
+              <i class="bi bi-2-circle me-1"></i>Quarta — 12/08
+            </th>
+            <!-- Sexta -->
+            <th colspan="3" class="text-center" style="background:#5c3317;color:#fff">
+              <i class="bi bi-3-circle me-1"></i>Sexta — 14/08
+            </th>
+            <!-- Total -->
+            <th colspan="3" class="text-center" style="background:#4a235a;color:#fff">
+              <i class="bi bi-sigma me-1"></i>Total Semana
+            </th>
+          </tr>
+          <tr>
+            {% for label, bg in [('Prev.','#1a3a5c'),('Real','#1a3a5c'),('Match','#1a3a5c'),
+                                  ('Prev.','#375623'),('Real','#375623'),('Match','#375623'),
+                                  ('Prev.','#5c3317'),('Real','#5c3317'),('Match','#5c3317'),
+                                  ('Prev.','#4a235a'),('Real','#4a235a'),('Match','#4a235a')] %}
+            <th class="text-center small" style="background:{{ bg }};color:#fff;min-width:64px">{{ label }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% macro subtotal_row(cat_name, slug) %}
+          <tr class="subtotal-row" style="background:#dbeafe;border-top:2px solid #1a3a5c;border-bottom:2px solid #1a3a5c">
+            <td colspan="2" class="fw-bold py-2 ps-3" style="color:#1a3a5c;font-size:.85rem;letter-spacing:.03em;white-space:nowrap">
+              ∑ {{ cat_name }}
+            </td>
+            <td class="text-center fw-bold py-2" style="color:#1a3a5c;font-size:.9rem"  id="sub-{{ slug }}-ps">—</td>
+            <td class="text-center py-2"         style="color:#374151;font-size:.9rem"  id="sub-{{ slug }}-rs">—</td>
+            <td class="text-center fw-bold py-2" style="font-size:.85rem"               id="sub-{{ slug }}-ms">—</td>
+            <td class="text-center fw-bold py-2" style="color:#1a3a5c;font-size:.9rem"  id="sub-{{ slug }}-pq">—</td>
+            <td class="text-center py-2"         style="color:#374151;font-size:.9rem"  id="sub-{{ slug }}-rq">—</td>
+            <td class="text-center fw-bold py-2" style="font-size:.85rem"               id="sub-{{ slug }}-mq">—</td>
+            <td class="text-center fw-bold py-2" style="color:#1a3a5c;font-size:.9rem"  id="sub-{{ slug }}-px">—</td>
+            <td class="text-center py-2"         style="color:#374151;font-size:.9rem"  id="sub-{{ slug }}-rx">—</td>
+            <td class="text-center fw-bold py-2" style="font-size:.85rem"               id="sub-{{ slug }}-mx">—</td>
+            <td class="text-center fw-bold py-2" style="color:#1a3a5c;font-size:1rem"   id="sub-{{ slug }}-pt">—</td>
+            <td class="text-center py-2"         style="color:#374151;font-size:.9rem"  id="sub-{{ slug }}-rt">—</td>
+            <td class="text-center fw-bold py-2" style="font-size:.85rem"               id="sub-{{ slug }}-mt">—</td>
+          </tr>
+          {% endmacro %}
+
+          {% set ns = namespace(prev_cat='', cat_slug='') %}
+          {% for p in produtos %}
+
+          {% if p.cat != ns.prev_cat and ns.prev_cat != '' %}
+            {{ subtotal_row(ns.prev_cat, ns.cat_slug) }}
+          {% endif %}
+
+          {% if p.cat != ns.prev_cat %}
+            {% set ns.prev_cat = p.cat %}
+            {% set ns.cat_slug = p.cat|lower|replace(' ','_')|replace('ô','o')|replace('é','e')|replace('ã','a')|replace('â','a')|replace('ê','e')|replace('í','i')|replace('ú','u') %}
+          {% endif %}
+
+          <tr data-slug="{{ p.slug }}" data-cat="{{ ns.cat_slug }}">
+            <td class="small text-muted">{{ p.cat if loop.changed(p.cat) else '' }}</td>
+            <td class="fw-semibold small">{{ p.nome }}</td>
+
+            {# Segunda #}
+            <td class="text-center font-monospace small prev-seg">{{ p.seg if p.seg else '—' }}</td>
+            <td class="text-center p-0">
+              <input type="number" class="form-control form-control-sm text-center real-input real-seg p-0"
+                     min="0" step="1" placeholder="0"
+                     data-prev-seg="{{ p.seg }}"
+                     data-prev-qua="{{ p.qua }}"
+                     data-prev-sex="{{ p.sex }}"
+                     data-slug="{{ p.slug }}"
+                     style="border:0;border-radius:0;width:64px">
+            </td>
+            <td class="text-center small font-monospace match-seg" data-slug="{{ p.slug }}">—</td>
+
+            {# Quarta #}
+            <td class="text-center font-monospace small prev-qua">{{ p.qua if p.qua else '—' }}</td>
+            <td class="text-center p-0">
+              <input type="number" class="form-control form-control-sm text-center real-input real-qua p-0"
+                     min="0" step="1" placeholder="0"
+                     data-slug="{{ p.slug }}"
+                     style="border:0;border-radius:0;width:64px">
+            </td>
+            <td class="text-center small font-monospace match-qua" data-slug="{{ p.slug }}">—</td>
+
+            {# Sexta #}
+            <td class="text-center font-monospace small prev-sex">{{ p.sex if p.sex else '—' }}</td>
+            <td class="text-center p-0">
+              <input type="number" class="form-control form-control-sm text-center real-input real-sex p-0"
+                     min="0" step="1" placeholder="0"
+                     data-slug="{{ p.slug }}"
+                     style="border:0;border-radius:0;width:64px">
+            </td>
+            <td class="text-center small font-monospace match-sex" data-slug="{{ p.slug }}">—</td>
+
+            {# Total #}
+            <td class="text-center font-monospace small fw-semibold prev-total-{{ p.slug }}">
+              {{ p.prev_total if p.prev_total else '—' }}
+            </td>
+            <td class="text-center font-monospace small fw-semibold real-total-{{ p.slug }}">—</td>
+            <td class="text-center small fw-bold match-total-{{ p.slug }}">—</td>
+          </tr>
+
+          {% if loop.last %}
+            {{ subtotal_row(ns.prev_cat, ns.cat_slug) }}
+          {% endif %}
+
+          {% endfor %}
+        </tbody>
+        {% set tot_seg = namespace(v=0) %}
+        {% set tot_qua = namespace(v=0) %}
+        {% set tot_sex = namespace(v=0) %}
+        {% for p in produtos %}
+          {% set tot_seg.v = tot_seg.v + p.seg %}
+          {% set tot_qua.v = tot_qua.v + p.qua %}
+          {% set tot_sex.v = tot_sex.v + p.sex %}
+        {% endfor %}
+        {% set tot_all = tot_seg.v + tot_qua.v + tot_sex.v %}
+        {% set bg = "background:#1a3a5c" %}
+        <tfoot>
+          <tr style="border-top:3px solid #f59e0b">
+            <td colspan="2" class="text-end fw-bold py-2 pe-3" style="{{ bg }};color:#f59e0b;font-size:.95rem;letter-spacing:.04em;white-space:nowrap">TOTAL GERAL</td>
+            <td class="text-center fw-bold py-2 font-monospace" style="{{ bg }};color:#e2e8f0;font-size:1rem">{{ tot_seg.v }}</td>
+            <td class="text-center fw-bold py-2 font-monospace" style="{{ bg }};color:#93c5fd;font-size:1rem" id="ft-real-seg">—</td>
+            <td class="text-center fw-bold py-2 font-monospace" style="{{ bg }};font-size:.9rem" id="ft-match-seg">—</td>
+            <td class="text-center fw-bold py-2 font-monospace" style="{{ bg }};color:#e2e8f0;font-size:1rem">{{ tot_qua.v }}</td>
+            <td class="text-center fw-bold py-2 font-monospace" style="{{ bg }};color:#93c5fd;font-size:1rem" id="ft-real-qua">—</td>
+            <td class="text-center fw-bold py-2 font-monospace" style="{{ bg }};font-size:.9rem" id="ft-match-qua">—</td>
+            <td class="text-center fw-bold py-2 font-monospace" style="{{ bg }};color:#e2e8f0;font-size:1rem">{{ tot_sex.v }}</td>
+            <td class="text-center fw-bold py-2 font-monospace" style="{{ bg }};color:#93c5fd;font-size:1rem" id="ft-real-sex">—</td>
+            <td class="text-center fw-bold py-2 font-monospace" style="{{ bg }};font-size:.9rem" id="ft-match-sex">—</td>
+            <td class="text-center fw-bold py-2 font-monospace" style="{{ bg }};color:#f59e0b;font-size:1.05rem">{{ tot_all }}</td>
+            <td class="text-center fw-bold py-2 font-monospace" style="{{ bg }};color:#fcd34d;font-size:1.05rem" id="ft-real-total">—</td>
+            <td class="text-center fw-bold py-2 font-monospace" style="{{ bg }};font-size:.9rem" id="ft-match-total">—</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="text-muted small mt-2 mb-4">
+  <i class="bi bi-info-circle me-1"></i>
+  <strong>Match %</strong> = Real ÷ Previsão × 100. Verde ≥ 90 %, amarelo ≥ 70 %, vermelho &lt; 70 %.
+  Coluna <strong>Real</strong> pode ser preenchida conforme a semana avança.
+</div>
+
+<!-- Formulário oculto para calcular lista de compras -->
+<form method="post" action="{{ url_for('previsao_lista') }}" id="form-lista-compras">
+  {% for p in produtos %}
+  <input type="hidden" name="nom_{{ p.slug }}" value="{{ p.nome }}">
+  <input type="hidden" name="qty_{{ p.slug }}" id="fhidden-{{ p.slug }}" value="{{ p.prev_total }}">
+  {% endfor %}
+  <div class="d-flex justify-content-end">
+    <button type="submit" class="btn btn-success btn-lg px-5">
+      <i class="bi bi-cart3 me-2"></i>Calcular Lista de Compras da Previsão
+    </button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function matchColor(pct) {
+  if (pct === null) return '';
+  if (pct >= 90) return 'color:#198754;';
+  if (pct >= 70) return 'color:#fd7e14;';
+  return 'color:#dc3545;';
+}
+
+function fmtMatch(pct) {
+  if (pct === null) return '—';
+  return pct.toFixed(0) + '%';
+}
+
+function recalc() {
+  let totPrevSeg = 0, totRealSeg = 0;
+  let totPrevQua = 0, totRealQua = 0;
+  let totPrevSex = 0, totRealSex = 0;
+
+  // Acumuladores por categoria
+  const catAcc = {};
+
+  function calcMatch(prev, real) {
+    if (prev === 0) return null;
+    return (real / prev) * 100;
+  }
+
+  document.querySelectorAll('#tabela-prev tbody tr[data-slug]').forEach(row => {
+    const slug = row.dataset.slug;
+    const cat  = row.dataset.cat || '';
+    const inp  = row.querySelector('.real-seg');
+    if (!inp) return;
+
+    const prevSeg = parseFloat(inp.dataset.prevSeg) || 0;
+    const prevQua = parseFloat(inp.dataset.prevQua) || 0;
+    const prevSex = parseFloat(inp.dataset.prevSex) || 0;
+    const realSeg = parseFloat(row.querySelector('.real-seg').value) || 0;
+    const realQua = parseFloat(row.querySelector('.real-qua').value) || 0;
+    const realSex = parseFloat(row.querySelector('.real-sex').value) || 0;
+
+    const mSeg = calcMatch(prevSeg, realSeg);
+    const mQua = calcMatch(prevQua, realQua);
+    const mSex = calcMatch(prevSex, realSex);
+
+    const elMSeg = row.querySelector('.match-seg');
+    const elMQua = row.querySelector('.match-qua');
+    const elMSex = row.querySelector('.match-sex');
+    elMSeg.textContent = fmtMatch(mSeg); elMSeg.style = matchColor(mSeg);
+    elMQua.textContent = fmtMatch(mQua); elMQua.style = matchColor(mQua);
+    elMSex.textContent = fmtMatch(mSex); elMSex.style = matchColor(mSex);
+
+    const prevTotal = prevSeg + prevQua + prevSex;
+    const realTotal = realSeg + realQua + realSex;
+    const mTotal = calcMatch(prevTotal, realTotal);
+    row.querySelector('.real-total-' + slug).textContent = realTotal || '—';
+    const elMT = row.querySelector('.match-total-' + slug);
+    elMT.textContent = fmtMatch(mTotal); elMT.style = matchColor(mTotal);
+
+    totPrevSeg += prevSeg; totRealSeg += realSeg;
+    totPrevQua += prevQua; totRealQua += realQua;
+    totPrevSex += prevSex; totRealSex += realSex;
+
+    // Acumula por categoria
+    if (!catAcc[cat]) catAcc[cat] = {ps:0,rs:0,pq:0,rq:0,px:0,rx:0};
+    catAcc[cat].ps += prevSeg; catAcc[cat].rs += realSeg;
+    catAcc[cat].pq += prevQua; catAcc[cat].rq += realQua;
+    catAcc[cat].px += prevSex; catAcc[cat].rx += realSex;
+  });
+
+  // Atualiza subtotais por categoria usando IDs únicos
+  Object.entries(catAcc).forEach(([cat, a]) => {
+    const ps = a.ps, rs = a.rs, pq = a.pq, rq = a.rq, px = a.px, rx = a.rx;
+    const pt = ps+pq+px, rt = rs+rq+rx;
+    function setEl(id, val, isMatch) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (isMatch) { el.textContent = fmtMatch(val); el.style = matchColor(val); }
+      else { el.textContent = val || '—'; }
+    }
+    const pfx = 'sub-' + cat + '-';
+    setEl(pfx+'ps', ps, false); setEl(pfx+'rs', rs, false); setEl(pfx+'ms', calcMatch(ps,rs), true);
+    setEl(pfx+'pq', pq, false); setEl(pfx+'rq', rq, false); setEl(pfx+'mq', calcMatch(pq,rq), true);
+    setEl(pfx+'px', px, false); setEl(pfx+'rx', rx, false); setEl(pfx+'mx', calcMatch(px,rx), true);
+    setEl(pfx+'pt', pt, false); setEl(pfx+'rt', rt, false); setEl(pfx+'mt', calcMatch(pt,rt), true);
+  });
+
+  // Rodapé geral
+  function setFoot(idPrev, idReal, idMatch, p, r) {
+    document.getElementById(idPrev).textContent = p || '—';
+    document.getElementById(idReal).textContent = r || '—';
+    const pct = p > 0 ? (r / p * 100) : null;
+    const el = document.getElementById(idMatch);
+    el.textContent = fmtMatch(pct); el.style = matchColor(pct);
+  }
+  setFoot('ft-prev-seg','ft-real-seg','ft-match-seg', totPrevSeg, totRealSeg);
+  setFoot('ft-prev-qua','ft-real-qua','ft-match-qua', totPrevQua, totRealQua);
+  setFoot('ft-prev-sex','ft-real-sex','ft-match-sex', totPrevSex, totRealSex);
+
+  const tPrev = totPrevSeg + totPrevQua + totPrevSex;
+  const tReal = totRealSeg + totRealQua + totRealSex;
+  setFoot('ft-prev-total','ft-real-total','ft-match-total', tPrev, tReal);
+}
+
+document.querySelectorAll('.real-input').forEach(inp => {
+  inp.addEventListener('input', recalc);
+});
+
+recalc();
+</script>
+{% endblock %}

@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+{% block title %}Controle de Café{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-cup-hot me-2"></i>Controle de Café</h1>
+</div>
+
+<ul class="nav nav-tabs mb-4">
+  <li class="nav-item">
+    <a class="nav-link active" href="{{ url_for('cafe_lista') }}">
+      <i class="bi bi-grid me-1"></i>Visão Geral
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_consolidado') }}">
+      <i class="bi bi-bar-chart-line me-1"></i>Consolidado por PDV
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_financeiro') }}">
+      <i class="bi bi-currency-dollar me-1"></i>Financeiro
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_ficha') }}">
+      <i class="bi bi-journal-text me-1"></i>Ficha Técnica
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_projecao') }}"><i class="bi bi-graph-up me-1"></i>Projeção de Consumo</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('cafe_estoque') }}"><i class="bi bi-box-seam me-1"></i>Estoque</a>
+  </li>
+</ul>
+
+<!-- Card consolidado -->
+{% if ultima_data %}
+<div class="card shadow-sm mb-4" style="border-left:5px solid #0f2540">
+  <div class="card-header py-2" style="background:#0f2540">
+    <span class="text-white fw-semibold"><i class="bi bi-sigma me-2"></i>Consolidado Geral — Todos os PDVs</span>
+    {% if ultima_data %}
+    <span class="badge bg-light text-dark ms-2" style="font-size:.7rem">
+      Última leitura: {{ ultima_data[8:10] }}/{{ ultima_data[5:7] }}/{{ ultima_data[0:4] }}
+    </span>
+    {% endif %}
+  </div>
+  <div class="card-body py-3">
+    <div class="row text-center g-3">
+      <div class="col-6 col-md-3">
+        <div class="fw-bold fs-3 text-success">{{ total_periodo|int }}</div>
+        <small class="text-muted">doses totais (período)</small>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="fw-bold fs-3" style="color:#f59e0b">{{ doses_hoje|int }}</div>
+        <small class="text-muted">doses em {{ ultima_data[8:10] }}/{{ ultima_data[5:7] if ultima_data else '' }}</small>
+      </div>
+      {% set pdv_cores = {'Amaro': '#1a3a5c', 'Portugues': '#375623', 'Izabel': '#5a1a3a'} %}
+      {% set pdv_labels = {'Amaro': 'Amaro', 'Portugues': 'Português', 'Izabel': 'Izabel'} %}
+      {% for pdv, vals in pdv_resumo.items() %}
+      <div class="col-4 col-md-2">
+        <div class="fw-bold fs-5" style="color:{{ pdv_cores.get(pdv, '#555') }}">{{ vals.hoje|int }}</div>
+        <small class="text-muted">{{ pdv_labels.get(pdv, pdv) }} / dia</small>
+      </div>
+      {% endfor %}
+    </div>
+    {% if pacotes_por_pdv %}
+    <hr class="my-2" style="border-color:#dee2e6">
+    <div class="px-1">
+      <small class="text-muted fw-semibold d-block mb-2" style="font-size:.75rem">PACOTES CONSUMIDOS EM {{ ultima_data[8:10] }}/{{ ultima_data[5:7] }} — TODOS OS PDVs</small>
+      {# Totalizador por insumo (soma de todos os PDVs) #}
+      {% set ns_tot = namespace(totais={}) %}
+      {% for pdv, pcts in pacotes_por_pdv.items() %}
+        {% for p in pcts %}
+          {% if p.nome in ns_tot.totais %}
+            {% set _ = ns_tot.totais.update({p.nome: {'pct': ns_tot.totais[p.nome].pct + p.pct, 'g': ns_tot.totais[p.nome].g + p.g}}) %}
+          {% else %}
+            {% set _ = ns_tot.totais.update({p.nome: {'pct': p.pct, 'g': p.g}}) %}
+          {% endif %}
+        {% endfor %}
+      {% endfor %}
+      <div class="d-flex flex-wrap gap-1 mb-2">
+        {% for nome, vals in ns_tot.totais.items() %}
+        <div class="px-2 py-1 rounded" style="background:#0f2540;border:1px solid #1a4070">
+          <span class="fw-semibold text-white" style="font-size:.8rem">{{ nome }}</span>
+          <span class="ms-1 font-monospace fw-bold" style="color:#4ade80;font-size:.9rem">{{ '%.2f'|format(vals.pct) }} PCT</span>
+          <span class="ms-1 text-white-50" style="font-size:.7rem">{{ vals.g }}g</span>
+        </div>
+        {% endfor %}
+      </div>
+      {# Custo do dia #}
+      {% if custo_dia_total > 0 %}
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-3 px-1 py-2 rounded" style="background:#0a1f0a;border:1px solid #1d4a1d">
+        <span class="text-white-50 fw-semibold" style="font-size:.75rem"><i class="bi bi-currency-dollar me-1"></i>CUSTO ESTIMADO DO DIA:</span>
+        <span class="fw-bold font-monospace" style="color:#4ade80;font-size:1.05rem">R$ {{ '%.2f'|format(custo_dia_total)|replace('.', ',') }}</span>
+        <span class="text-white-50" style="font-size:.72rem">
+          {% for nome, custo in custo_dia_por_insumo.items() %}{{ nome }} R${{ '%.2f'|format(custo)|replace('.', ',') }}{% if not loop.last %} · {% endif %}{% endfor %}
+        </span>
+      </div>
+      {% endif %}
+      {# Detalhamento por PDV (recolhível) #}
+      <div class="d-flex gap-3 flex-wrap">
+      <a class="text-muted small" data-bs-toggle="collapse" href="#detalhe-pdv-pacotes" role="button">
+        <i class="bi bi-chevron-down me-1"></i>Ver por PDV
+      </a>
+      {% if pacotes_historico and pacotes_historico|length > 1 %}
+      <a class="text-muted small" data-bs-toggle="collapse" href="#historico-pacotes" role="button">
+        <i class="bi bi-calendar3 me-1"></i>Histórico por dia
+      </a>
+      {% endif %}
+      {% if tendencia_semanas and tendencia_semanas|length > 1 %}
+      <a class="text-muted small" data-bs-toggle="collapse" href="#tendencia-semanal" role="button">
+        <i class="bi bi-graph-up-arrow me-1"></i>Tendência semanal
+      </a>
+      {% endif %}
+      </div>
+      {% if pacotes_historico and pacotes_historico|length > 1 %}
+      <div class="collapse mt-2" id="historico-pacotes">
+        <div style="overflow-x:auto">
+        <table class="table table-sm table-hover mb-2 align-middle" style="font-size:.78rem;min-width:500px">
+          <thead style="background:#0f2540;position:sticky;top:0">
+            <tr>
+              <th style="color:#94a3b8">Data</th>
+              {% for nome in all_insumos_hist %}
+              <th class="text-end" style="color:#93c5fd">{{ nome }}</th>
+              {% endfor %}
+              <th class="text-end" style="color:#4ade80">Total PCT</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for linha in pacotes_historico %}
+            <tr {% if loop.first %}style="background:#1a2a1a"{% endif %}>
+              <td class="fw-semibold text-nowrap {% if loop.first %}text-success{% endif %}">
+                {{ linha.data[8:10] }}/{{ linha.data[5:7] }}/{{ linha.data[0:4] }}
+                {% if loop.first %}<span class="badge bg-success ms-1" style="font-size:.6rem">hoje</span>{% endif %}
+              </td>
+              {% set ns_tot = namespace(total=0) %}
+              {% for nome in all_insumos_hist %}
+              {% set vals = linha.itens.get(nome) %}
+              {% if vals %}
+                {% set ns_tot.total = ns_tot.total + vals.pct %}
+                <td class="text-end font-monospace" style="color:#fbbf24">{{ '%.2f'|format(vals.pct) }}</td>
+              {% else %}
+                <td class="text-end text-muted">—</td>
+              {% endif %}
+              {% endfor %}
+              <td class="text-end fw-bold font-monospace" style="color:#4ade80">{{ '%.2f'|format(ns_tot.total) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr style="background:#1a3a5c">
+              <td class="fw-bold" style="color:#94a3b8;font-size:.72rem">TOTAL PERÍODO</td>
+              {% set ns_g = namespace() %}
+              {% for nome in all_insumos_hist %}
+                {% set ns_g.s = 0 %}
+                {% for linha in pacotes_historico %}{% set ns_g.s = ns_g.s + (linha.itens.get(nome, {}).get('pct', 0) or 0) %}{% endfor %}
+                <td class="text-end fw-bold font-monospace py-2" style="color:#93c5fd">{{ '%.2f'|format(ns_g.s) }}</td>
+              {% endfor %}
+              {% set ns_gt = namespace(t=0) %}
+              {% for linha in pacotes_historico %}
+                {% for nome, vals in linha.itens.items() %}{% set ns_gt.t = ns_gt.t + vals.pct %}{% endfor %}
+              {% endfor %}
+              <td class="text-end fw-bold font-monospace py-2" style="color:#4ade80">{{ '%.2f'|format(ns_gt.t) }}</td>
+            </tr>
+          </tfoot>
+        </table>
+        </div>
+      </div>
+      {% endif %}
+      {# Tendência semanal #}
+      {% if tendencia_semanas and tendencia_semanas|length > 1 %}
+      <div class="collapse mt-2" id="tendencia-semanal">
+        <div style="overflow-x:auto">
+        <table class="table table-sm table-hover mb-2 align-middle" style="font-size:.78rem;min-width:500px">
+          <thead style="background:#0f2540;position:sticky;top:0">
+            <tr>
+              <th style="color:#94a3b8">Semana</th>
+              {% for nome in all_insumos_hist %}
+              <th class="text-end" style="color:#93c5fd">{{ nome }}</th>
+              {% endfor %}
+              <th class="text-end" style="color:#4ade80">Total PCT</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sem in tendencia_semanas %}
+            <tr {% if loop.first %}style="background:#1a2a1a"{% endif %}>
+              <td class="fw-semibold text-nowrap {% if loop.first %}text-success{% endif %}">
+                {{ sem.label }}{% if loop.first %} <span class="badge bg-success ms-1" style="font-size:.6rem">atual</span>{% endif %}
+              </td>
+              {% set ns_st = namespace(tot=0) %}
+              {% for nome in all_insumos_hist %}
+                {% set iv = sem.insumos.get(nome) %}
+                {% if iv and iv.pct > 0 %}
+                  {% set ns_st.tot = ns_st.tot + iv.pct %}
+                  <td class="text-end font-monospace">
+                    <span style="color:#fbbf24">{{ '%.2f'|format(iv.pct) }}</span>
+                    {% if iv.delta_pct is not none %}
+                      {% if iv.trend == 'up' %}
+                        <span style="color:#f87171;font-size:.7rem" title="{{ '%.0f'|format(iv.delta_pct) }}%">▲{{ '%.0f'|format(iv.delta_pct) }}%</span>
+                      {% elif iv.trend == 'down' %}
+                        <span style="color:#4ade80;font-size:.7rem" title="{{ '%.0f'|format(iv.delta_pct) }}%">▼{{ '%.0f'|format(iv.delta_pct|abs) }}%</span>
+                      {% else %}
+                        <span style="color:#94a3b8;font-size:.7rem">→</span>
+                      {% endif %}
+                    {% endif %}
+                  </td>
+                {% else %}
+                  <td class="text-end text-muted">—</td>
+                {% endif %}
+              {% endfor %}
+              <td class="text-end fw-bold font-monospace" style="color:#4ade80">{{ '%.2f'|format(ns_st.tot) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+        <small class="text-muted px-1" style="font-size:.72rem">
+          <span style="color:#f87171">▲</span> aumento &gt;5% vs semana anterior &nbsp;|&nbsp;
+          <span style="color:#4ade80">▼</span> queda &gt;5% &nbsp;|&nbsp;
+          <span style="color:#94a3b8">→</span> estável (±5%)
+        </small>
+      </div>
+      {% endif %}
+      <div class="collapse mt-2" id="detalhe-pdv-pacotes">
+        {% set pdv_cores = {'Amaro': '#1a3a5c', 'Portugues': '#1d4e2a', 'Izabel': '#5a1a3a'} %}
+        {% set pdv_labels = {'Amaro': 'Amaro', 'Portugues': 'Português', 'Izabel': 'Izabel'} %}
+        {% for pdv, pcts in pacotes_por_pdv.items() %}
+        <div class="mb-2">
+          <span class="badge mb-1" style="background:{{ pdv_cores.get(pdv, '#555') }};font-size:.75rem">{{ pdv_labels.get(pdv, pdv) }}</span>
+          <div class="d-flex flex-wrap gap-1">
+            {% for p in pcts %}
+            <div class="px-2 py-1 rounded" style="background:#1e2a3a;border:1px solid #2a4060">
+              <span class="fw-semibold text-white" style="font-size:.8rem">{{ p.nome }}</span>
+              <span class="ms-1 font-monospace" style="color:#fbbf24;font-size:.85rem">{{ '%.2f'|format(p.pct) }} PCT</span>
+              <span class="ms-1 text-white-50" style="font-size:.7rem">{{ p.g }}g</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="row g-3">
+  {% for r in resumo %}
+  {% set m = r.maquina %}
+  {% set pdv_colors = {'Amaro': '#1a3a5c', 'Portugues': '#375623', 'Izabel': '#5a1a3a'} %}
+  {% set cor = pdv_colors.get(m.pdv, '#333') %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header py-2 d-flex justify-content-between align-items-center" style="background:{{ cor }}">
+        <span class="text-white fw-semibold">
+          <i class="bi bi-cup-hot me-1"></i>{{ m.nome }}
+        </span>
+        <span class="badge bg-light text-dark" style="font-size:.7rem">
+          {{ 'Nestlé' if m.tipo == 'nestle' else 'BBC' }}
+        </span>
+      </div>
+      <div class="card-body">
+        {% if r.n_dias == 0 %}
+          <p class="text-muted text-center py-3"><i class="bi bi-inbox me-1"></i>Sem dados registrados</p>
+        {% else %}
+          <div class="row text-center mb-3">
+            <div class="col">
+              <div class="fw-bold fs-4" style="color:{{ cor }}">{{ r.n_dias }}</div>
+              <small class="text-muted">dias registrados</small>
+            </div>
+            <div class="col">
+              <div class="fw-bold fs-4 text-success">
+                {% if r.total_acum %}{{ r.total_acum|int }}{% else %}—{% endif %}
+              </div>
+              <small class="text-muted">doses acumuladas</small>
+            </div>
+            <div class="col">
+              <div class="fw-bold fs-4" style="color:#f59e0b">
+                {% if r.consumo_ultimo_dia is not none %}{{ r.consumo_ultimo_dia }}{% else %}—{% endif %}
+              </div>
+              <small class="text-muted">doses no dia</small>
+            </div>
+          </div>
+          <div class="text-muted small mb-1">
+            <i class="bi bi-calendar3 me-1"></i>
+            De {{ r.primeira_data[8:10] }}/{{ r.primeira_data[5:7] }}/{{ r.primeira_data[0:4] }}
+            até {{ r.ultima.data[8:10] }}/{{ r.ultima.data[5:7] }}/{{ r.ultima.data[0:4] }}
+          </div>
+          {% if r.ultima and r.ultima.total_dia %}
+          <div class="text-muted small">
+            <i class="bi bi-arrow-right-circle me-1"></i>Último total/dia: <strong>{{ r.ultima.total_dia }}</strong> doses
+          </div>
+          {% endif %}
+        {% endif %}
+      </div>
+      <div class="card-footer bg-transparent border-top-0 pb-3 pt-0">
+        <a href="{{ url_for('cafe_maquina', mid=m.id) }}" class="btn btn-sm w-100" style="background:{{ cor }};color:#fff">
+          <i class="bi bi-table me-1"></i>Ver histórico completo
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Histórico diário consolidado -->
+{% if historico %}
+<div class="card shadow-sm mt-4">
+  <div class="card-header py-2" style="background:#0f2540">
+    <span class="text-white fw-semibold"><i class="bi bi-table me-2"></i>Histórico Diário Consolidado — Todos os PDVs</span>
+  </div>
+  <div class="card-body p-0">
+    <div style="overflow-x:auto">
+    <table class="table table-sm table-hover mb-0 align-middle" style="font-size:.8rem;min-width:900px">
+      <thead style="background:#1a3a5c;position:sticky;top:0">
+        <tr>
+          <th style="color:#fff">Data</th>
+          {% for col, label in bebidas %}
+          <th class="text-end" style="color:#93c5fd">{{ label }}</th>
+          {% endfor %}
+          <th class="text-end" style="color:#4ade80">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in historico %}
+        <tr>
+          <td class="fw-semibold text-nowrap">{{ h.data[8:10] }}/{{ h.data[5:7] }}/{{ h.data[0:4] }}</td>
+          {% for col, label in bebidas %}
+          <td class="text-end font-monospace {% if h[col] == 0 %}text-muted{% endif %}">
+            {{ h[col] if h[col] > 0 else '—' }}
+          </td>
+          {% endfor %}
+          <td class="text-end fw-bold font-monospace text-success">{{ h.total }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="background:#1a3a5c">
+          <td class="fw-bold py-2" style="color:#94a3b8;font-size:.75rem">TOTAL PERÍODO</td>
+          {% for col, label in bebidas %}
+          {% set ns = namespace(s=0) %}{% for h in historico %}{% set ns.s = ns.s + h[col] %}{% endfor %}
+          <td class="text-end fw-bold font-monospace py-2" style="color:#93c5fd">{{ ns.s }}</td>
+          {% endfor %}
+          {% set ns2 = namespace(t=0) %}{% for h in historico %}{% set ns2.t = ns2.t + h.total %}{% endfor %}
+          <td class="text-end fw-bold font-monospace py-2" style="color:#4ade80">{{ ns2.t }}</td>
+        </tr>
+      </tfoot>
+    </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

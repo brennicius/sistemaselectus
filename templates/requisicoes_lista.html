@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Requisições{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+  <div>
+    <h1><i class="bi bi-arrow-left-right me-2"></i>Requisições de Produção</h1>
+    <p>Controle de envio e retorno de insumos à produção</p>
+  </div>
+  <a href="{{ url_for('requisicao_nova') }}" class="btn btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>Nova Requisição
+  </a>
+</div>
+
+{% if not reqs %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-inbox" style="font-size:3rem"></i>
+  <p class="mt-2">Nenhuma requisição ainda.</p>
+</div>
+{% else %}
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover table-sm mb-0 align-middle">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Data</th>
+          <th class="text-center">Itens</th>
+          <th class="text-center">Status</th>
+          <th>Observação</th>
+          <th>Fechamento</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in reqs %}
+        <tr>
+          <td class="fw-bold text-muted">{{ r.id }}</td>
+          <td>{{ r.data | replace('-', '/') if r.data else '—' }}</td>
+          <td class="text-center">
+            <span class="badge bg-secondary">{{ r.n_itens }} insumo{{ 's' if r.n_itens != 1 }}</span>
+          </td>
+          <td class="text-center">
+            {% if r.status == 'aberto' %}
+              <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Aberto</span>
+            {% elif r.status == 'fechado' %}
+              <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Fechado</span>
+            {% else %}
+              <span class="badge bg-secondary">Cancelado</span>
+            {% endif %}
+          </td>
+          <td class="text-muted small">{{ r.observacao or '—' }}</td>
+          <td class="small text-muted">{{ r.fechado_em[:16] if r.fechado_em else '—' }}</td>
+          <td class="text-end d-flex gap-1 justify-content-end">
+            <a href="{{ url_for('requisicao_ver', id=r.id) }}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-eye"></i>
+            </a>
+            <form method="post" action="{{ url_for('requisicao_excluir', id=r.id) }}"
+                  onsubmit="return confirm('Excluir requisição #{{ r.id }}? O estoque será restaurado.')">
+              <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

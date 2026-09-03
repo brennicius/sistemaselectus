@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}{{ maquina.nome }}{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+  <div>
+    <h1><i class="bi bi-cup-hot me-2"></i>{{ maquina.nome }}</h1>
+    <p class="mb-0">Histórico de leituras acumuladas e consumo diário</p>
+  </div>
+  <a href="{{ url_for('cafe_lista') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Voltar
+  </a>
+</div>
+
+<!-- Filtro de período -->
+<form method="get" class="card shadow-sm mb-4 mt-3">
+  <div class="card-body py-2 d-flex align-items-center gap-3 flex-wrap">
+    <span class="fw-semibold text-muted small"><i class="bi bi-funnel me-1"></i>Período:</span>
+    <div class="d-flex align-items-center gap-2">
+      <label class="small text-muted mb-0">De</label>
+      <input type="date" name="de" class="form-control form-control-sm" style="width:150px"
+             value="{{ filtro_de }}" min="{{ data_min }}" max="{{ data_max }}">
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <label class="small text-muted mb-0">Até</label>
+      <input type="date" name="ate" class="form-control form-control-sm" style="width:150px"
+             value="{{ filtro_ate }}" min="{{ data_min }}" max="{{ data_max }}">
+    </div>
+    <button type="submit" class="btn btn-sm btn-primary">
+      <i class="bi bi-search me-1"></i>Filtrar
+    </button>
+    {% if filtro_de or filtro_ate %}
+    <a href="{{ url_for('cafe_maquina', mid=maquina.id) }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-x me-1"></i>Limpar
+    </a>
+    {% endif %}
+    {% if dias %}
+    <span class="ms-auto text-muted small">{{ dias|length }} dia(s) exibido(s)</span>
+    {% endif %}
+  </div>
+</form>
+
+{% if not dias %}
+<div class="alert alert-info">Nenhuma leitura no período selecionado.</div>
+{% else %}
+
+{% set pdv_colors = {'Amaro': '#1a3a5c', 'Portugues': '#375623', 'Izabel': '#5a1a3a'} %}
+{% set cor = pdv_colors.get(maquina.pdv, '#333') %}
+
+<!-- Resumo por bebida -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header py-2" style="background:{{ cor }}">
+    <span class="text-white fw-semibold"><i class="bi bi-bar-chart-line me-2"></i>Consumo total acumulado por bebida</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="d-flex flex-wrap gap-3 p-3">
+      {% set ultima = dias[-1].row %}
+      {% for col, label in bebidas %}
+        {% set v = ultima[col] %}
+        {% if v %}
+        <div class="text-center px-3 py-2 rounded" style="background:#f8f9fa;min-width:90px">
+          <div class="fw-bold fs-5" style="color:{{ cor }}">{{ v|int }}</div>
+          <small class="text-muted" style="font-size:.72rem">{{ label }}</small>
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Tabela de leituras -->
+<div class="card shadow-sm">
+  <div class="card-header py-2 d-flex justify-content-between align-items-center" style="background:{{ cor }}">
+    <span class="text-white fw-semibold"><i class="bi bi-table me-2"></i>Leituras diárias — {{ dias|length }} dias</span>
+    <div class="d-flex gap-2">
+      <span class="badge bg-light text-dark" style="font-size:.7rem"><i class="bi bi-speedometer2 me-1"></i>Leitura = contador acumulado</span>
+      <span class="badge bg-warning text-dark" style="font-size:.7rem"><i class="bi bi-lightning me-1"></i>Δ = consumo do dia</span>
+    </div>
+  </div>
+  <div class="card-body p-0" style="overflow-x:auto">
+    <table class="table table-sm table-hover mb-0 align-middle" style="font-size:.82rem;min-width:900px">
+      <thead style="background:{{ cor }};position:sticky;top:0">
+        <tr>
+          <th style="color:#fff;min-width:80px">Data</th>
+          {% for col, label in bebidas %}
+          <th class="text-center" style="color:#fff;min-width:90px">{{ label }}</th>
+          {% endfor %}
+          <th class="text-center" style="color:#f59e0b;min-width:70px">Total/dia</th>
+        </tr>
+        <tr style="background:rgba(0,0,0,.25)">
+          <th style="color:#aaa;font-size:.7rem">—</th>
+          {% for col, label in bebidas %}
+          <th class="text-center" style="color:#90cdf4;font-size:.7rem">leitura / Δ</th>
+          {% endfor %}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in dias|reverse %}
+        {% set r = d.row %}
+        {% set dt = r.data %}
+        <tr>
+          <td class="fw-semibold font-monospace" style="white-space:nowrap">
+            {{ dt[8:10] }}/{{ dt[5:7] }}/{{ dt[0:4] }}
+          </td>
+          {% for col, label in bebidas %}
+          {% set leitura = r[col] %}
+          {% set delta = d.deltas[col] %}
+          <td class="text-center">
+            {% if leitura is not none %}
+              <span class="font-monospace text-dark">{{ leitura|int }}</span>
+              {% if delta is not none %}
+                <br><span class="badge bg-warning text-dark" style="font-size:.68rem">+{{ delta|int }}</span>
+              {% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          {% endfor %}
+          {% set ns = namespace(total=0) %}
+          {% for col, label in bebidas %}
+            {% if d.deltas[col] %}{% set ns.total = ns.total + d.deltas[col] %}{% endif %}
+          {% endfor %}
+          <td class="text-center fw-bold">
+            {% if ns.total > 0 %}
+              <span class="badge bg-success" style="font-size:.8rem">{{ ns.total }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td class="fw-bold py-2 pe-2" style="background:#243b55;color:#94a3b8;font-size:.78rem">CONSUMO PERÍODO</td>
+          {% for col, label in bebidas %}
+          {% set soma = namespace(v=0) %}
+          {% for d in dias %}{% if d.deltas[col] %}{% set soma.v = soma.v + d.deltas[col] %}{% endif %}{% endfor %}
+          <td class="text-center fw-bold font-monospace py-2" style="background:#243b55;color:#fbbf24">
+            {{ soma.v if soma.v > 0 else '—' }}
+          </td>
+          {% endfor %}
+          {% set soma_total = namespace(v=0) %}
+          {% for d in dias %}
+            {% set ns2 = namespace(t=0) %}
+            {% for col, label in bebidas %}{% if d.deltas[col] %}{% set ns2.t = ns2.t + d.deltas[col] %}{% endif %}{% endfor %}
+            {% set soma_total.v = soma_total.v + ns2.t %}
+          {% endfor %}
+          <td class="text-center fw-bold font-monospace py-2" style="background:#243b55;color:#4ade80;font-size:.95rem">
+            {{ soma_total.v }}
+          </td>
+        </tr>
+        <tr>
+          <td class="fw-bold py-2 pe-2" style="background:#1a3a5c;color:#e2e8f0;font-size:.78rem">LEITURA ATUAL</td>
+          {% set ultima = dias[-1].row %}
+          {% for col, label in bebidas %}
+          <td class="text-center font-monospace py-2 text-muted small" style="background:#1a3a5c">
+            {% if ultima[col] %}{{ ultima[col]|int }}{% else %}—{% endif %}
+          </td>
+          {% endfor %}
+          <td class="text-center py-2" style="background:#1a3a5c;color:#64748b">—</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Evolução de Preços — Insumos{% endblock %}
+{% block content %}
+<style>
+  .tbl-evolucao th, .tbl-evolucao td { white-space: nowrap; font-size: .82rem; }
+  .tbl-evolucao thead th { background: #1a3a5c; color: #fff; border-color: #2e5080; }
+  .tbl-evolucao thead th.th-date { background: #264f7a; text-align: center; }
+  .tbl-evolucao td.num { text-align: right; font-family: monospace; }
+  .cell-subiu { background: #fdecea !important; color: #c0392b; font-weight: 600; }
+  .cell-caiu  { background: #e9f7ef !important; color: #1e8449; font-weight: 600; }
+  .cell-igual { color: #555; }
+  .col-var-pos { color: #c0392b; font-weight: 700; }
+  .col-var-neg { color: #1e8449; font-weight: 700; }
+  .sparkline   { display: inline-block; vertical-align: middle; }
+</style>
+
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <h1><i class="bi bi-tags me-2"></i>Evolução de Preços — Insumos</h1>
+    <p>Variação do preço de cada insumo ao longo do tempo</p>
+  </div>
+  <a href="{{ url_for('insumos_lista') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Insumos
+  </a>
+</div>
+
+{% if not insumos %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-clock-history" style="font-size:2.5rem"></i>
+  <p class="mt-2">Nenhuma alteração de preço registrada ainda.</p>
+  <p class="small">Os registros aparecerão automaticamente conforme os preços dos insumos forem atualizados.</p>
+</div>
+{% else %}
+
+{% set n_subiu = namespace(v=0) %}
+{% set n_caiu  = namespace(v=0) %}
+{% for p in insumos %}
+  {% if p.var_abs > 0 %}{% set n_subiu.v = n_subiu.v + 1 %}{% endif %}
+  {% if p.var_abs < 0 %}{% set n_caiu.v  = n_caiu.v  + 1 %}{% endif %}
+{% endfor %}
+
+<div class="row g-3 mb-4">
+  <div class="col-auto">
+    <div class="card border-0 shadow-sm" style="border-left:4px solid #1a3a5c !important">
+      <div class="card-body py-2 px-3">
+        <div class="text-muted small">Insumos monitorados</div>
+        <div class="fw-bold fs-4">{{ insumos|length }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-auto">
+    <div class="card border-0 shadow-sm" style="border-left:4px solid #c0392b !important">
+      <div class="card-body py-2 px-3">
+        <div class="text-muted small">Preço subiu</div>
+        <div class="fw-bold fs-4 col-var-pos">{{ n_subiu.v }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-auto">
+    <div class="card border-0 shadow-sm" style="border-left:4px solid #1e8449 !important">
+      <div class="card-body py-2 px-3">
+        <div class="text-muted small">Preço caiu</div>
+        <div class="fw-bold fs-4 col-var-neg">{{ n_caiu.v }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-auto">
+    <div class="card border-0 shadow-sm" style="border-left:4px solid #888 !important">
+      <div class="card-body py-2 px-3">
+        <div class="text-muted small">Datas registradas</div>
+        <div class="fw-bold fs-4">{{ dates|length }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0" style="overflow-x:auto">
+    <table class="table table-bordered mb-0 tbl-evolucao">
+      <thead>
+        <tr>
+          <th style="min-width:200px">Insumo</th>
+          <th style="min-width:65px">Un.</th>
+          <th class="text-end" style="min-width:95px">Preço Inicial</th>
+          {% for dt in dates %}
+          <th class="th-date" style="min-width:115px">
+            {{ dt[8:10] }}/{{ dt[5:7] }}/{{ dt[0:4] }}
+          </th>
+          {% endfor %}
+          <th class="text-end" style="min-width:95px">Atual</th>
+          <th class="text-end" style="min-width:90px">Variação R$</th>
+          <th class="text-center" style="min-width:60px">%</th>
+          <th class="text-center" style="min-width:70px">Tend.</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in insumos %}
+        {% set prev = namespace(v=p.inicial) %}
+        <tr>
+          <td class="fw-semibold">{{ p.nome }}</td>
+          <td class="text-muted small">{{ p.unidade }}</td>
+          <td class="num cell-igual">{{ p.inicial|brl(4) }}</td>
+          {% for dt in dates %}
+            {% set cv = p.por_data[dt] %}
+            {% if cv > prev.v %}
+              <td class="num cell-subiu">
+                <i class="bi bi-arrow-up-circle-fill" style="font-size:.65rem"></i> {{ cv|brl(4) }}
+              </td>
+            {% elif cv < prev.v %}
+              <td class="num cell-caiu">
+                <i class="bi bi-arrow-down-circle-fill" style="font-size:.65rem"></i> {{ cv|brl(4) }}
+              </td>
+            {% else %}
+              <td class="num cell-igual">{{ cv|brl(4) }}</td>
+            {% endif %}
+            {% set prev.v = cv %}
+          {% endfor %}
+          <td class="num fw-bold">{{ p.atual|brl(4) }}</td>
+          <td class="num {% if p.var_abs > 0 %}col-var-pos{% elif p.var_abs < 0 %}col-var-neg{% endif %}">
+            {% if p.var_abs > 0 %}+{% endif %}{{ p.var_abs|brl(4) }}
+          </td>
+          <td class="text-center fw-bold {% if p.var_pct > 0 %}col-var-pos{% elif p.var_pct < 0 %}col-var-neg{% endif %}">
+            {% if p.var_pct > 0 %}+{% endif %}{{ '%.1f'|format(p.var_pct) }}%
+          </td>
+          <td class="text-center">
+            <canvas class="sparkline" width="60" height="22" data-valores="{{ p.spark_vals }}"></canvas>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="mt-3 text-muted small">
+  <i class="bi bi-info-circle me-1"></i>
+  <span class="cell-subiu px-1 rounded">vermelho</span> = preço subiu em relação ao período anterior &nbsp;·&nbsp;
+  <span class="cell-caiu px-1 rounded">verde</span> = preço caiu &nbsp;·&nbsp;
+  Ordenado por maior variação percentual absoluta.
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.sparkline').forEach(canvas => {
+  const vals = canvas.dataset.valores.split(',').map(Number).filter(v => !isNaN(v));
+  if (vals.length < 2) return;
+  const ctx = canvas.getContext('2d');
+  const W = 60, H = 22, pad = 2;
+  const mn = Math.min(...vals), mx = Math.max(...vals);
+  const range = mx - mn || 0.0001;
+  const xOf = i => pad + i / (vals.length - 1) * (W - 2*pad);
+  const yOf = v => H - pad - ((v - mn) / range) * (H - 2*pad);
+  const cor = vals[vals.length-1] > vals[0] ? '#c0392b' : vals[vals.length-1] < vals[0] ? '#1e8449' : '#888';
+
+  ctx.strokeStyle = cor; ctx.lineWidth = 1.5; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  vals.forEach((v, i) => i === 0 ? ctx.moveTo(xOf(i), yOf(v)) : ctx.lineTo(xOf(i), yOf(v)));
+  ctx.stroke();
+
+  const lx = xOf(vals.length-1), ly = yOf(vals[vals.length-1]);
+  ctx.beginPath(); ctx.arc(lx, ly, 2.5, 0, Math.PI*2);
+  ctx.fillStyle = cor; ctx.fill();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Registro de Produção{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-clipboard2-data me-2"></i>Registro de Produção</h1>
+</div>
+
+<ul class="nav nav-tabs mb-4">
+  <li class="nav-item">
+    <a class="nav-link active" href="{{ url_for('registro_lista') }}">
+      <i class="bi bi-clipboard2-data me-1"></i>Histórico
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('previsao') }}">
+      <i class="bi bi-calendar2-week me-1"></i>Previsão Futura
+    </a>
+  </li>
+</ul>
+
+{% if not registros %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-clipboard2-x" style="font-size:2.5rem"></i>
+  <p class="mt-2">Nenhum registro de produção ainda.</p>
+</div>
+{% else %}
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Rodada</th>
+          <th class="text-center">Status</th>
+          <th class="text-center">Produtos</th>
+          <th class="text-center">Progresso</th>
+          <th class="text-center">Total Planejado</th>
+          <th style="width:130px">Lote</th>
+          <th class="text-center">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in registros %}
+        {% set pct = ((r.n_concluidos / r.n_itens * 100)|int) if r.n_itens > 0 else 0 %}
+        <tr>
+          <td class="fw-semibold">
+            {{ r.data[8:10] }}/{{ r.data[5:7] }}/{{ r.data[0:4] }}
+          </td>
+          <td>
+            <span class="badge
+              {% if r.rodada == 'Segunda' %}bg-primary
+              {% elif r.rodada == 'Quarta' %}bg-success
+              {% else %}bg-warning text-dark{% endif %}">
+              Prod. {{ r.rodada }}
+            </span>
+          </td>
+          <td class="text-center">
+            {% if r.status == 'concluido' %}
+              <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Concluído</span>
+            {% elif r.status == 'em_producao' %}
+              <span class="badge bg-warning text-dark"><i class="bi bi-play-circle me-1"></i>Em Produção</span>
+            {% else %}
+              <span class="badge bg-secondary"><i class="bi bi-clock me-1"></i>Planejado</span>
+            {% endif %}
+          </td>
+          <td class="text-center">{{ r.n_itens }}</td>
+          <td class="text-center" style="min-width:140px">
+            <div class="progress" style="height:8px">
+              <div class="progress-bar bg-success" style="width:{{ pct }}%"></div>
+            </div>
+            <small class="text-muted">{{ r.n_concluidos }}/{{ r.n_itens }}</small>
+          </td>
+          <td class="text-center font-monospace">{{ r.total_planejado }}</td>
+          <td>
+            <div class="d-flex align-items-center gap-1">
+              <input type="text" class="form-control form-control-sm font-monospace lote-reg"
+                     data-id="{{ r.id }}"
+                     value="{{ r.lote or '' }}"
+                     placeholder="ex: 26A03"
+                     style="font-size:.8rem;letter-spacing:.04em"
+                     onkeydown="if(event.key==='Enter') salvarLote(this)">
+              <button type="button" class="btn btn-sm btn-outline-success"
+                      onclick="salvarLote(this.previousElementSibling)"
+                      title="Salvar lote">
+                <i class="bi bi-floppy"></i>
+              </button>
+            </div>
+          </td>
+          <td class="text-center">
+            <a href="{{ url_for('registro_ver', id=r.id) }}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-eye me-1"></i>Abrir
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function salvarLote(input) {
+  const id = input.dataset.id;
+  const btn = input.nextElementSibling;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+  fetch(`/registros/${id}/lote`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({lote: input.value})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+      btn.classList.replace('btn-outline-success', 'btn-success');
+      setTimeout(() => {
+        btn.innerHTML = '<i class="bi bi-floppy"></i>';
+        btn.classList.replace('btn-success', 'btn-outline-success');
+        btn.disabled = false;
+      }, 1500);
+    }
+  });
+}
+</script>
+{% endblock %}

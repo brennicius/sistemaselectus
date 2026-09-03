@@ -1,0 +1,808 @@
+{% extends "base.html" %}
+{% block title %}Registro {{ reg.data[8:10] }}/{{ reg.data[5:7] }}{% endblock %}
+{% block content %}
+<style>
+  tr.item-concluido td { background: #f1f8e9 !important; opacity: .75; }
+  tr.item-concluido td:first-child { border-left: 4px solid #4caf50 !important; }
+  .qtd-input { width: 72px; text-align: center; }
+  .btn-salvar { min-width: 34px; }
+  .btn-salvar.saved { animation: flash-green .4s ease; }
+  @keyframes flash-green { 0%,100% { } 50% { background:#198754;border-color:#198754;color:#fff; } }
+  .cat-header td { background: #f4f6f9 !important; font-weight: 600; font-size: .8rem;
+                   color: #1a3a5c; text-transform: uppercase; letter-spacing: .05em; padding: 6px 12px !important; }
+  .cat-subtotal td { background: #e8f0fb !important; font-size: .85rem; }
+  .cat-subtotal td.num { font-weight: 700; color: #1a3a5c; font-size: .95rem; }
+  tfoot tr td { padding: 10px 12px; }
+</style>
+
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <a href="{{ url_for('registro_lista') }}" class="text-muted small mb-1 d-block">
+      <i class="bi bi-arrow-left me-1"></i>Registros
+    </a>
+    <h1><i class="bi bi-clipboard2-check me-2"></i>Produção de
+      {{ reg.data[8:10] }}/{{ reg.data[5:7] }}/{{ reg.data[0:4] }}
+      <small class="fs-6 fw-normal ms-2 text-muted">Rodada: {{ reg.rodada }}</small>
+    </h1>
+    <p>
+      {% if reg.status == 'concluido' %}
+        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Concluído</span>
+      {% elif reg.status == 'em_producao' %}
+        <span class="badge bg-warning text-dark"><i class="bi bi-play-circle me-1"></i>Em Produção</span>
+      {% else %}
+        <span class="badge bg-secondary"><i class="bi bi-clock me-1"></i>Planejado</span>
+      {% endif %}
+      <span class="ms-3 text-muted small">
+        <span id="lbl-concluidos">{{ n_concluidos }}</span>/{{ total_itens }} itens concluídos
+      </span>
+    </p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <form method="post" action="{{ url_for('registro_status', id=reg.id) }}">
+      <input type="hidden" name="status" value="em_producao">
+      <input type="hidden" name="observacoes" value="{{ reg.observacoes or '' }}">
+      {% if reg.status == 'planejado' %}
+      <button type="submit" class="btn btn-warning fw-semibold">
+        <i class="bi bi-play-circle me-1"></i>Iniciar Produção
+      </button>
+      {% endif %}
+    </form>
+    <form method="post" action="{{ url_for('registro_status', id=reg.id) }}">
+      <input type="hidden" name="status" value="concluido">
+      <input type="hidden" name="observacoes" value="{{ reg.observacoes or '' }}">
+      {% if reg.status != 'concluido' %}
+      <button type="submit" class="btn btn-success fw-semibold">
+        <i class="bi bi-check-all me-1"></i>Marcar Concluído
+      </button>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<!-- Barra de progresso -->
+{% set pct = ((n_concluidos / total_itens * 100)|int) if total_itens > 0 else 0 %}
+<div class="mb-4">
+  <div class="d-flex justify-content-between mb-1">
+    <small class="text-muted fw-semibold">Progresso geral</small>
+    <small class="text-muted" id="lbl-pct">{{ pct }}%</small>
+  </div>
+  <div class="progress" style="height:12px;border-radius:6px">
+    <div class="progress-bar bg-success" id="barra-progresso" style="width:{{ pct }}%;transition:width .4s"></div>
+  </div>
+</div>
+
+<!-- Tabela de itens -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header py-2 d-flex justify-content-between align-items-center" style="background:#1a3a5c">
+    <span class="text-white fw-semibold"><i class="bi bi-list-check me-2"></i>Itens a Produzir</span>
+    <small class="text-white opacity-75">Clique em ✓ ao produzir cada item</small>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle" id="tabela-itens">
+      <thead>
+        <tr>
+          <th style="width:36px">#</th>
+          <th>Produto</th>
+          <th class="text-center">Planejado</th>
+          <th class="text-center" style="min-width:220px">Produzido por PDV</th>
+          <th class="text-center" style="width:70px">Total Prod.</th>
+          <th class="text-center" style="min-width:220px">Enviado por PDV</th>
+          <th class="text-center" style="width:70px">Total Env.</th>
+          <th class="text-center" style="width:80px">Δ Prod/Plan</th>
+          <th class="text-center" style="width:80px">Δ Env/Prod</th>
+          {% if vendas_datas %}
+          <th class="text-center" style="min-width:180px">Vendas</th>
+          {% endif %}
+          <th class="text-center" style="width:100px">Status</th>
+          <th class="text-center" style="width:90px">Descarte</th>
+          <th style="width:110px">Lote</th>
+          <th>Obs.</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set ns = namespace(ordem=0, cat_idx=0, grand_plan=0, grand_desc=0) %}
+        {% for cat, grupo in cats.items() %}
+        {% set ns.cat_idx = ns.cat_idx + 1 %}
+        {% set cur_idx = ns.cat_idx %}
+        <tr class="cat-header">
+          <td colspan="10">
+            <i class="bi bi-tag me-1"></i>{{ cat }}
+            <span class="text-muted fw-normal ms-2">({{ grupo|length }} itens)</span>
+          </td>
+        </tr>
+        {% set cat_ns = namespace(plan=0) %}
+        {% for it in grupo %}
+        {% set ns.ordem = ns.ordem + 1 %}
+        {% if it.qtd_planejada %}{% set cat_ns.plan = cat_ns.plan + it.qtd_planejada %}{% set ns.grand_plan = ns.grand_plan + it.qtd_planejada %}{% endif %}
+        {% if it.total_descarte %}{% set ns.grand_desc = ns.grand_desc + it.total_descarte %}{% endif %}
+        <tr class="{{ 'item-concluido' if it.concluido else '' }}" id="row-{{ it.id }}" data-catidx="{{ cur_idx }}">
+          <td class="text-muted small">{{ ns.ordem }}</td>
+          <td class="fw-semibold">{{ it.produto }}</td>
+          <td class="text-center fw-semibold plan-val" style="font-size:1.05rem">{{ it.qtd_planejada or '—' }}</td>
+          <td class="text-center">
+            <div class="d-flex justify-content-center gap-1">
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#0891b2;font-weight:600">
+                <span>Port.</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="port-{{ it.id }}" value="{{ it.qtd_portugues or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarPDV({{ it.id }})">
+              </div>
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#2563eb;font-weight:600">
+                <span>Amaro</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="amaro-{{ it.id }}" value="{{ it.qtd_amaro or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarPDV({{ it.id }})">
+              </div>
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#16a34a;font-weight:600">
+                <span>Izabel</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="izabel-{{ it.id }}" value="{{ it.qtd_izabel or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarPDV({{ it.id }})">
+              </div>
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#d97706;font-weight:600">
+                <span>Agnus</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="agnus-{{ it.id }}" value="{{ it.qtd_agnus or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarPDV({{ it.id }})">
+              </div>
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#7c3aed;font-weight:600">
+                <span>Cris</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="cris-{{ it.id }}" value="{{ it.qtd_cris or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarPDV({{ it.id }})">
+              </div>
+            </div>
+          </td>
+          <td class="text-center">
+            <div class="d-flex align-items-center justify-content-center gap-1">
+              <input type="number" min="0" step="1"
+                     class="form-control form-control-sm qtd-input d-inline-block"
+                     id="qtd-{{ it.id }}"
+                     value="{{ it.qtd_produzida if it.qtd_produzida is not none else '' }}"
+                     placeholder="{{ it.qtd_planejada or '' }}"
+                     oninput="marcarDirty({{ it.id }})"
+                     onkeydown="if(event.key==='Enter'){salvarItem({{ it.id }})}">
+              <button type="button" class="btn btn-sm btn-salvar btn-outline-secondary"
+                      id="save-{{ it.id }}"
+                      onclick="salvarItem({{ it.id }})"
+                      title="Salvar quantidade">
+                <i class="bi bi-floppy"></i>
+              </button>
+            </div>
+          </td>
+          <td class="text-center">
+            <div class="d-flex justify-content-center gap-1">
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#0891b2;font-weight:600">
+                <span>Port.</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="env-port-{{ it.id }}" value="{{ it.env_portugues or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarEnviado({{ it.id }})">
+              </div>
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#2563eb;font-weight:600">
+                <span>Amaro</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="env-amaro-{{ it.id }}" value="{{ it.env_amaro or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarEnviado({{ it.id }})">
+              </div>
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#16a34a;font-weight:600">
+                <span>Izabel</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="env-izabel-{{ it.id }}" value="{{ it.env_izabel or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarEnviado({{ it.id }})">
+              </div>
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#d97706;font-weight:600">
+                <span>Agnus</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="env-agnus-{{ it.id }}" value="{{ it.env_agnus or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarEnviado({{ it.id }})">
+              </div>
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#7c3aed;font-weight:600">
+                <span>Cris</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="env-cris-{{ it.id }}" value="{{ it.env_cris or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarEnviado({{ it.id }})">
+              </div>
+            </div>
+          </td>
+          {% set tot_env = (it.env_portugues or 0)+(it.env_amaro or 0)+(it.env_izabel or 0)+(it.env_agnus or 0)+(it.env_cris or 0) %}
+          <td class="text-center">
+            <div class="d-flex align-items-center justify-content-center gap-1">
+              <span id="tot-env-{{ it.id }}" style="font-size:1.05rem;font-weight:600;color:#1a3a5c">
+                {% if tot_env > 0 %}{{ tot_env }}{% else %}—{% endif %}
+              </span>
+              <button type="button" class="btn btn-sm btn-outline-secondary"
+                      id="save-env-{{ it.id }}"
+                      onclick="salvarItem({{ it.id }})"
+                      title="Salvar enviado">
+                <i class="bi bi-floppy"></i>
+              </button>
+            </div>
+          </td>
+          <td class="text-center" id="dif-prod-{{ it.id }}">
+            {% if it.qtd_produzida is not none and it.qtd_planejada %}
+              {% set dif = it.qtd_produzida - it.qtd_planejada %}
+              <span class="{{ 'text-success fw-semibold' if dif >= 0 else 'text-danger fw-semibold' }}">
+                {{ '+' if dif > 0 else '' }}{{ dif }}
+              </span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-center" id="dif-env-{{ it.id }}">
+            {% set tot_prod = it.qtd_produzida if it.qtd_produzida is not none else 0 %}
+            {% if tot_env > 0 or tot_prod > 0 %}
+              {% set dif_ep = tot_env - tot_prod %}
+              <span class="{{ 'text-success fw-semibold' if dif_ep >= 0 else 'text-danger fw-semibold' }}">
+                {{ '+' if dif_ep > 0 else '' }}{{ dif_ep }}
+              </span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          {% if vendas_datas %}
+          {% set vlist = vendas_map.get(it.produto, []) %}
+          {% set total_vendido = vlist | sum(attribute='total') %}
+          {% set total_enviado = ((it.env_portugues or 0) + (it.env_amaro or 0) + (it.env_izabel or 0) + (it.env_agnus or 0) + (it.env_cris or 0)) %}
+          {% set delta = total_enviado - total_vendido %}
+          {% set vend_ptg    = vlist | sum(attribute='ptg') %}
+          {% set vend_amaro  = vlist | sum(attribute='amaro') %}
+          {% set vend_izabel = vlist | sum(attribute='izabel') %}
+          {% set vend_agnus  = vlist | sum(attribute='agnus') %}
+          {% set d_ptg    = (it.env_portugues or 0) - vend_ptg %}
+          {% set d_amaro  = (it.env_amaro     or 0) - vend_amaro %}
+          {% set d_izabel = (it.env_izabel    or 0) - vend_izabel %}
+          {% set d_agnus  = (it.env_agnus     or 0) - vend_agnus %}
+          <td style="font-size:.75rem;padding:6px 8px">
+            {% if vlist %}
+              {% if vendas_datas|length > 1 %}
+                {% for v in vlist %}
+                <div style="font-size:.65rem;color:#6b7280;font-weight:600">{{ v.data[8:10] }}/{{ v.data[5:7] }}</div>
+                {% endfor %}
+              {% endif %}
+              <table style="width:100%;border-collapse:collapse;font-size:.73rem">
+                <thead>
+                  <tr style="color:#9ca3af;font-size:.65rem">
+                    <td style="padding:1px 4px">PDV</td>
+                    <td style="text-align:right;padding:1px 4px">Venda</td>
+                    <td style="text-align:right;padding:1px 6px;border-left:1px solid #e5e7eb">Sobra</td>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% if it.env_portugues or vend_ptg %}
+                  <tr>
+                    <td style="color:#0891b2;font-weight:600;padding:1px 4px">Port.</td>
+                    <td style="text-align:right;padding:1px 4px;font-weight:600">{{ vend_ptg }}</td>
+                    <td style="text-align:right;padding:1px 6px;border-left:1px solid #e5e7eb;font-weight:700;color:{% if d_ptg > 0 %}#854d0e{% elif d_ptg == 0 %}#166534{% else %}#991b1b{% endif %}">{% if d_ptg > 0 %}+{% endif %}{{ d_ptg }}</td>
+                  </tr>{% endif %}
+                  {% if it.env_amaro or vend_amaro %}
+                  <tr>
+                    <td style="color:#2563eb;font-weight:600;padding:1px 4px">Amaro</td>
+                    <td style="text-align:right;padding:1px 4px;font-weight:600">{{ vend_amaro }}</td>
+                    <td style="text-align:right;padding:1px 6px;border-left:1px solid #e5e7eb;font-weight:700;color:{% if d_amaro > 0 %}#854d0e{% elif d_amaro == 0 %}#166534{% else %}#991b1b{% endif %}">{% if d_amaro > 0 %}+{% endif %}{{ d_amaro }}</td>
+                  </tr>{% endif %}
+                  {% if it.env_izabel or vend_izabel %}
+                  <tr>
+                    <td style="color:#16a34a;font-weight:600;padding:1px 4px">Izabel</td>
+                    <td style="text-align:right;padding:1px 4px;font-weight:600">{{ vend_izabel }}</td>
+                    <td style="text-align:right;padding:1px 6px;border-left:1px solid #e5e7eb;font-weight:700;color:{% if d_izabel > 0 %}#854d0e{% elif d_izabel == 0 %}#166534{% else %}#991b1b{% endif %}">{% if d_izabel > 0 %}+{% endif %}{{ d_izabel }}</td>
+                  </tr>{% endif %}
+                  {% if it.env_agnus or vend_agnus %}
+                  <tr>
+                    <td style="color:#d97706;font-weight:600;padding:1px 4px">Agnus</td>
+                    <td style="text-align:right;padding:1px 4px;font-weight:600">{{ vend_agnus }}</td>
+                    <td style="text-align:right;padding:1px 6px;border-left:1px solid #e5e7eb;font-weight:700;color:{% if d_agnus > 0 %}#854d0e{% elif d_agnus == 0 %}#166534{% else %}#991b1b{% endif %}">{% if d_agnus > 0 %}+{% endif %}{{ d_agnus }}</td>
+                  </tr>{% endif %}
+                  <tr style="border-top:2px solid #e5e7eb">
+                    <td style="color:#1a3a5c;font-weight:700;padding:2px 4px">Total</td>
+                    <td style="text-align:right;padding:2px 4px;font-weight:700;color:#1a3a5c">{{ total_vendido }}</td>
+                    <td style="text-align:right;padding:2px 6px;border-left:1px solid #e5e7eb;font-weight:700;color:{% if delta > 0 %}#854d0e{% elif delta == 0 %}#166534{% else %}#991b1b{% endif %}">{% if delta > 0 %}+{% endif %}{{ delta }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          {% endif %}
+          <td class="text-center">
+            <button class="btn btn-sm {{ 'btn-success' if it.concluido else 'btn-outline-secondary' }}"
+                    id="btn-{{ it.id }}"
+                    onclick="toggleConcluido({{ it.id }}, {{ it.concluido }})"
+                    title="{{ 'Desmarcar' if it.concluido else 'Marcar como produzido' }}">
+              <i class="bi {{ 'bi-check-circle-fill' if it.concluido else 'bi-circle' }}"></i>
+            </button>
+          </td>
+          <td style="font-size:.75rem;padding:6px 8px">
+            {% set pdv_desc = desc_map.get(it.id, {}) %}
+            {% if pdv_desc %}
+              <table style="width:100%;border-collapse:collapse;font-size:.72rem">
+                <thead>
+                  <tr style="color:#9ca3af;font-size:.63rem">
+                    <td style="padding:1px 4px">PDV</td>
+                    <td style="text-align:right;padding:1px 4px">Desc</td>
+                    <td style="text-align:right;padding:1px 6px;border-left:1px solid #e5e7eb">%</td>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for pdv, qtd in pdv_desc.items() %}
+                  {% if 'amaro' in pdv|lower %}{% set env_pdv = it.env_amaro or 0 %}
+                  {% elif 'izabel' in pdv|lower %}{% set env_pdv = it.env_izabel or 0 %}
+                  {% elif 'agnus' in pdv|lower %}{% set env_pdv = it.env_agnus or 0 %}
+                  {% elif 'cris' in pdv|lower %}{% set env_pdv = it.env_cris or 0 %}
+                  {% else %}{% set env_pdv = it.env_portugues or 0 %}{% endif %}
+                  {% set pct = ((qtd / env_pdv * 100) | round(0) | int) if env_pdv > 0 else none %}
+                  {% if pct is not none %}
+                    {% if pct >= 20 %}{% set pct_color = '#dc2626' %}
+                    {% elif pct >= 10 %}{% set pct_color = '#f97316' %}
+                    {% else %}{% set pct_color = '#16a34a' %}{% endif %}
+                  {% endif %}
+                  <tr>
+                    <td style="padding:1px 4px;color:#6b7280">{{ pdv }}</td>
+                    <td style="text-align:right;padding:1px 4px;color:#ef4444;font-weight:600">{{ qtd }}</td>
+                    <td style="text-align:right;padding:1px 6px;border-left:1px solid #f3f4f6;font-weight:700;color:{{ pct_color if pct is not none else '#9ca3af' }}">
+                      {% if pct is not none %}{{ pct }}%{% else %}—{% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+                <tfoot>
+                  {% set env_total = (it.env_portugues or 0)+(it.env_amaro or 0)+(it.env_izabel or 0)+(it.env_agnus or 0)+(it.env_cris or 0) %}
+                  {% set pct_total = ((it.total_descarte / env_total * 100) | round(0) | int) if env_total > 0 else none %}
+                  <tr style="border-top:2px solid #e5e7eb">
+                    <td style="padding:2px 4px;font-weight:600;color:#374151">Total</td>
+                    <td style="text-align:right;padding:2px 4px;font-weight:700;color:#dc2626">{{ it.total_descarte }}</td>
+                    <td style="text-align:right;padding:2px 6px;border-left:1px solid #f3f4f6;font-weight:700;color:#dc2626">
+                      {% if pct_total is not none %}{{ pct_total }}%{% else %}—{% endif %}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <input type="text" class="form-control form-control-sm font-monospace"
+                   id="lote-{{ it.id }}"
+                   value="{{ it.lote or '' }}"
+                   placeholder="ex: 26A03"
+                   onchange="salvarItem({{ it.id }})"
+                   style="font-size:.8rem;letter-spacing:.04em">
+          </td>
+          <td>
+            <input type="text" class="form-control form-control-sm"
+                   id="obs-{{ it.id }}"
+                   value="{{ it.observacao or '' }}"
+                   placeholder="observação..."
+                   onchange="salvarItem({{ it.id }})">
+          </td>
+        </tr>
+        {% endfor %}
+        <!-- Subtotal da categoria -->
+        <tr class="cat-subtotal">
+          <td colspan="2" class="text-end text-muted pe-3">Total {{ cat }}:</td>
+          <td class="text-center num" id="cat-plan-{{ cur_idx }}">{{ cat_ns.plan }}</td>
+          <td></td>
+          <td class="text-center num text-success" id="cat-prod-{{ cur_idx }}">—</td>
+          <td></td>
+          <td class="text-center num" id="cat-env-{{ cur_idx }}" style="color:#1a3a5c;font-weight:600">—</td>
+          <td></td>
+          <td></td>
+          {% if vendas_datas %}<td></td>{% endif %}
+          <td colspan="4"></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2" class="text-end fw-bold fs-6" style="background:#1a3a5c !important;color:#fff">TOTAL GERAL</td>
+          <td class="text-center fw-bold fs-5" id="grand-plan" style="background:#1a3a5c !important;color:#fff">{{ ns.grand_plan }}</td>
+          <td style="background:#1a3a5c !important"></td>
+          <td class="text-center fw-bold fs-5" id="grand-prod" style="background:#1a3a5c !important;color:#fff">—</td>
+          <td style="background:#1a3a5c !important"></td>
+          <td class="text-center fw-bold fs-5" id="grand-env" style="background:#1a3a5c !important;color:#93c5fd">—</td>
+          <td style="background:#1a3a5c !important"></td>
+          <td style="background:#1a3a5c !important"></td>
+          {% if vendas_datas %}<td style="background:#1a3a5c !important"></td>{% endif %}
+          <td style="background:#1a3a5c !important"></td>
+          <td class="text-center fw-bold fs-5" style="background:#1a3a5c !important;color:{% if ns.grand_desc > 0 %}#f87171{% else %}#fff{% endif %}">
+            {% if ns.grand_desc > 0 %}{{ ns.grand_desc }}{% else %}—{% endif %}
+          </td>
+          <td colspan="2" style="background:#1a3a5c !important"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+<!-- Resultado: Lista de Compras -->
+{% if resultado %}
+<div class="card shadow-sm">
+  <div class="card-header py-2 d-flex justify-content-between align-items-center" style="background:#375623">
+    <span class="text-white fw-semibold"><i class="bi bi-cart3 me-2"></i>Lista de Compras — Insumos Necessários</span>
+    <a href="{{ url_for('registro_exportar', id=reg.id) }}" class="btn btn-sm btn-light fw-semibold">
+      <i class="bi bi-file-earmark-excel me-1 text-success"></i>Exportar Excel
+    </a>
+  </div>
+  <div class="card-body p-0">
+    {% if unmatched %}
+    <div class="alert alert-warning rounded-0 mb-0 py-2 px-3 border-0">
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      <strong>{{ unmatched|length }} produto(s) sem ficha técnica</strong> — não incluídos no cálculo:
+      {{ unmatched | join(', ') }}
+    </div>
+    {% endif %}
+    {% if resultado.falta_preco %}
+    <div class="alert alert-warning rounded-0 mb-0 py-2 px-3 border-0">
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      Alguns insumos estão sem preço — valores marcados com <strong>—</strong>.
+      <a href="{{ url_for('insumos_lista') }}" class="alert-link">Atualizar preços</a>
+    </div>
+    {% endif %}
+    {% if resultado.lista %}
+    <table class="table table-hover mb-0">
+      <thead style="background:#375623">
+        <tr>
+          <th style="color:#fff">#</th>
+          <th style="color:#fff">Insumo</th>
+          <th style="color:#fff" class="text-end">Qtd. Necessária</th>
+          <th style="color:#fff" class="text-end">Em Estoque</th>
+          <th style="color:#fff" class="text-center">Unid. Uso</th>
+          <th style="color:#fff" class="text-end">Qtd. a Comprar</th>
+          <th style="color:#fff" class="text-center">Unid. Compra</th>
+          <th style="color:#fff" class="text-end">Preço / Unid.</th>
+          <th style="color:#fff" class="text-end">Valor Previsto</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in resultado.lista %}
+        <tr class="{{ 'table-success' if item.qtd_compra == 0 else '' }}">
+          <td class="text-muted small">{{ loop.index }}</td>
+          <td class="fw-semibold">{{ item.nome }}</td>
+          <td class="text-end font-monospace">{{ item.qtd_necessaria|num_br(2) }}</td>
+          <td class="text-end font-monospace">
+            {% if item.estoque_disponivel > 0 %}
+              <span class="text-success fw-semibold">{{ item.estoque_disponivel|num_br(2) }}</span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-center"><span class="badge bg-info text-dark">{{ item.unidade_uso }}</span></td>
+          <td class="text-end font-monospace">
+            {% if item.qtd_compra == 0 %}
+              <span class="text-success fw-semibold">Coberto</span>
+            {% else %}{{ item.qtd_compra|num_br(4) }}{% endif %}
+          </td>
+          <td class="text-center"><span class="badge bg-secondary">{{ item.unidade_compra }}</span></td>
+          <td class="text-end font-monospace small text-muted">
+            {% if item.preco_compra %}{{ item.preco_compra|brl(4) }}{% else %}—{% endif %}
+          </td>
+          <td class="text-end font-monospace fw-semibold">
+            {% if item.qtd_compra == 0 %}
+              <span class="text-success small">—</span>
+            {% elif item.preco_compra %}{{ item.valor|brl(2) }}
+            {% else %}<span class="text-warning">—</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="8" class="text-end fw-bold font-monospace" style="background:#375623 !important;color:#fff">VALOR TOTAL PREVISTO DE COMPRAS</td>
+          <td class="text-end fw-bold font-monospace fs-6" style="background:#375623 !important;color:#fff">
+            {% if not resultado.falta_preco %}{{ resultado.custo_total|brl(2) }}
+            {% else %}<span class="text-warning">parcial</span>{% endif %}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+    <div class="p-3 text-end">
+      <a href="{{ url_for('registro_exportar', id=reg.id) }}" class="btn btn-success fw-semibold">
+        <i class="bi bi-file-earmark-excel me-1"></i>Exportar Lista de Compras (Excel)
+      </a>
+    </div>
+    {% else %}
+    <div class="text-center py-4 text-muted">
+      <i class="bi bi-info-circle me-1"></i>Nenhum produto com ficha técnica encontrado neste registro.
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if reg.observacoes %}
+<div class="alert alert-info mt-3">
+  <i class="bi bi-chat-text me-1"></i><strong>Observações:</strong> {{ reg.observacoes }}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<style>
+#toast-undo {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: #1e293b; color: #f1f5f9; padding: 10px 20px;
+  border-radius: 8px; font-size: .88rem; display: flex; align-items: center; gap: 14px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.35); z-index: 9999;
+  opacity: 0; pointer-events: none; transition: opacity .2s;
+}
+#toast-undo.show { opacity: 1; pointer-events: all; }
+#toast-undo button { background: #f59e0b; border: none; color: #1e293b;
+  font-weight: 700; border-radius: 5px; padding: 3px 12px; cursor: pointer; }
+</style>
+<div id="toast-undo">
+  <span>Salvo</span>
+  <button onclick="desfazerSave()">Desfazer</button>
+</div>
+<script>
+const totalItens = {{ total_itens }};
+let nConcluidos = {{ n_concluidos }};
+let _lastSave = null; // snapshot para desfazer
+let _toastTimer = null;
+
+function marcarDirty(id) {
+  ['save-' + id, 'save-env-' + id].forEach(bid => {
+    const btn = document.getElementById(bid);
+    if (!btn) return;
+    btn.classList.remove('btn-success', 'btn-outline-success');
+    btn.classList.add('btn-outline-secondary');
+    btn.innerHTML = '<i class="bi bi-floppy"></i>';
+    btn.title = bid.startsWith('save-env') ? 'Salvar enviado' : 'Salvar quantidade';
+    btn.disabled = false;
+  });
+}
+
+function somarPDV(id) {
+  const port   = parseInt(document.getElementById('port-'  + id).value) || 0;
+  const amaro  = parseInt(document.getElementById('amaro-' + id).value) || 0;
+  const izabel = parseInt(document.getElementById('izabel-'+ id).value) || 0;
+  const agnus  = parseInt(document.getElementById('agnus-' + id).value) || 0;
+  const cris   = parseInt(document.getElementById('cris-'  + id)?.value) || 0;
+  const total  = port + amaro + izabel + agnus + cris;
+  const qtdInput = document.getElementById('qtd-' + id);
+  if (total > 0) qtdInput.value = total;
+  marcarDirty(id);
+  recalcularTotais();
+}
+
+function somarEnviado(id) {
+  const port   = parseInt(document.getElementById('env-port-'  + id).value) || 0;
+  const amaro  = parseInt(document.getElementById('env-amaro-' + id).value) || 0;
+  const izabel = parseInt(document.getElementById('env-izabel-'+ id).value) || 0;
+  const agnus  = parseInt(document.getElementById('env-agnus-' + id).value) || 0;
+  const cris   = parseInt(document.getElementById('env-cris-'  + id)?.value) || 0;
+  const totEnv = port + amaro + izabel + agnus + cris;
+  const totEnvEl = document.getElementById('tot-env-' + id);
+  if (totEnvEl) totEnvEl.textContent = totEnv > 0 ? totEnv : '—';
+  const qtdVal = parseInt(document.getElementById('qtd-' + id).value) || 0;
+  const difEnvEl = document.getElementById('dif-env-' + id);
+  if (difEnvEl) {
+    if (totEnv > 0 || qtdVal > 0) {
+      const dif = totEnv - qtdVal;
+      difEnvEl.innerHTML = `<span class="${dif >= 0 ? 'text-success fw-semibold' : 'text-danger fw-semibold'}">${dif > 0 ? '+' : ''}${dif}</span>`;
+    } else { difEnvEl.innerHTML = '<span class="text-muted">—</span>'; }
+  }
+  marcarDirty(id);
+  recalcularTotais();
+}
+
+function atualizarProgresso() {
+  const pct = totalItens > 0 ? Math.round(nConcluidos / totalItens * 100) : 0;
+  document.getElementById('barra-progresso').style.width = pct + '%';
+  document.getElementById('lbl-pct').textContent = pct + '%';
+  document.getElementById('lbl-concluidos').textContent = nConcluidos;
+}
+
+function recalcularTotais() {
+  const catTotals = {};
+  let grandProd = 0, grandEnv = 0, temAlgum = false, temEnv = false;
+
+  document.querySelectorAll('tr[data-catidx]').forEach(row => {
+    const id = row.id.replace('row-', '');
+    const idx = row.dataset.catidx;
+    const qtdInput = row.querySelector('.qtd-input');
+    const prod = qtdInput && qtdInput.value !== '' ? (parseInt(qtdInput.value) || 0) : 0;
+    const temProd = qtdInput && qtdInput.value !== '';
+    const ep = parseInt(document.getElementById('env-port-'  + id)?.value) || 0;
+    const ea = parseInt(document.getElementById('env-amaro-' + id)?.value) || 0;
+    const ei = parseInt(document.getElementById('env-izabel-'+ id)?.value) || 0;
+    const eg = parseInt(document.getElementById('env-agnus-' + id)?.value) || 0;
+    const ec = parseInt(document.getElementById('env-cris-'  + id)?.value) || 0;
+    const env = ep + ea + ei + eg + ec;
+    if (!catTotals[idx]) catTotals[idx] = { prod: 0, env: 0, temAlgum: false, temEnv: false };
+    catTotals[idx].prod += prod;
+    catTotals[idx].env += env;
+    if (temProd) { catTotals[idx].temAlgum = true; temAlgum = true; }
+    if (env > 0) { catTotals[idx].temEnv = true; temEnv = true; }
+    grandProd += prod;
+    grandEnv += env;
+  });
+
+  Object.entries(catTotals).forEach(([idx, t]) => {
+    const el = document.getElementById('cat-prod-' + idx);
+    if (el) el.textContent = t.temAlgum ? t.prod : '—';
+    const elEnv = document.getElementById('cat-env-' + idx);
+    if (elEnv) elEnv.textContent = t.temEnv ? t.env : '—';
+  });
+
+  const grandEl = document.getElementById('grand-prod');
+  if (grandEl) grandEl.textContent = temAlgum ? grandProd : '—';
+  const grandEnvEl = document.getElementById('grand-env');
+  if (grandEnvEl) grandEnvEl.textContent = temEnv ? grandEnv : '—';
+}
+
+function cancelarSave(id) {
+  _pendingSave = null;
+  ['save-' + id, 'save-env-' + id].forEach(bid => {
+    const b = document.getElementById(bid);
+    if (!b) return;
+    b.classList.remove('btn-warning', 'btn-success', 'btn-outline-success');
+    b.classList.add('btn-outline-secondary');
+    b.innerHTML = '<i class="bi bi-floppy"></i>';
+    b.title = bid.startsWith('save-env') ? 'Salvar enviado' : 'Salvar quantidade';
+    b.disabled = false;
+  });
+}
+
+function mostrarToastDesfazer() {
+  const t = document.getElementById('toast-undo');
+  t.classList.add('show');
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove('show'), 5000);
+}
+
+function desfazerSave() {
+  if (!_lastSave) return;
+  document.getElementById('toast-undo').classList.remove('show');
+  const s = _lastSave;
+  const set = (sid, val) => { const el = document.getElementById(sid); if (el) el.value = val ?? ''; };
+  set('qtd-' + s.id, s.qtd); set('obs-' + s.id, s.obs); set('lote-' + s.id, s.lote);
+  set('port-' + s.id, s.port); set('amaro-' + s.id, s.amaro);
+  set('izabel-' + s.id, s.izabel); set('agnus-' + s.id, s.agnus); set('cris-' + s.id, s.cris);
+  set('env-port-' + s.id, s.ep); set('env-amaro-' + s.id, s.ea);
+  set('env-izabel-' + s.id, s.ei); set('env-agnus-' + s.id, s.eg); set('env-cris-' + s.id, s.ec);
+  _lastSave = null;
+  salvarItem(s.id);
+}
+
+let _pendingSave = null;
+
+function salvarItem(id) {
+  // Se já está pendente para outro id, cancela aquele primeiro
+  if (_pendingSave && _pendingSave !== id) cancelarSave(_pendingSave);
+
+  // Primeiro clique: pede confirmação
+  if (_pendingSave !== id) {
+    _pendingSave = id;
+    ['save-' + id, 'save-env-' + id].forEach(bid => {
+      const b = document.getElementById(bid);
+      if (!b) return;
+      b.classList.remove('btn-outline-secondary', 'btn-success');
+      b.classList.add('btn-warning');
+      b.innerHTML = '<i class="bi bi-check-lg"></i> <i class="bi bi-x-lg ms-1" onclick="event.stopPropagation();cancelarSave(' + id + ')" style="opacity:.7"></i>';
+      b.title = 'Clique para confirmar — X para cancelar';
+    });
+    return;
+  }
+
+  // Segundo clique: confirma e salva
+  _pendingSave = null;
+  const qtd = document.getElementById('qtd-' + id).value;
+  const concluido = document.getElementById('btn-' + id).classList.contains('btn-success') ? 1 : 0;
+  const obs = document.getElementById('obs-' + id).value;
+  const lote = document.getElementById('lote-' + id).value;
+  const saveBtn = document.getElementById('save-' + id);
+  // snapshot para desfazer
+  _lastSave = {
+    id, qtd, obs, lote,
+    port:  document.getElementById('port-'   + id)?.value ?? '',
+    amaro: document.getElementById('amaro-'  + id)?.value ?? '',
+    izabel:document.getElementById('izabel-' + id)?.value ?? '',
+    agnus: document.getElementById('agnus-'  + id)?.value ?? '',
+    cris:  document.getElementById('cris-'   + id)?.value ?? '',
+    ep:    document.getElementById('env-port-'  + id)?.value ?? '',
+    ea:    document.getElementById('env-amaro-' + id)?.value ?? '',
+    ei:    document.getElementById('env-izabel-'+ id)?.value ?? '',
+    eg:    document.getElementById('env-agnus-' + id)?.value ?? '',
+    ec:    document.getElementById('env-cris-'  + id)?.value ?? '',
+  };
+
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+  }
+
+  fetch(`/registros/{{ reg.id }}/item/${id}/salvar`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      qtd_produzida: qtd || null, concluido, observacao: obs, lote,
+      qtd_portugues: document.getElementById('port-'  + id).value || null,
+      qtd_amaro:     document.getElementById('amaro-' + id).value || null,
+      qtd_izabel:    document.getElementById('izabel-'+ id).value || null,
+      qtd_agnus:     document.getElementById('agnus-' + id).value || null,
+      qtd_cris:      document.getElementById('cris-'  + id)?.value || null,
+      env_portugues: document.getElementById('env-port-'  + id).value || null,
+      env_amaro:     document.getElementById('env-amaro-' + id).value || null,
+      env_izabel:    document.getElementById('env-izabel-'+ id).value || null,
+      env_agnus:     document.getElementById('env-agnus-' + id).value || null,
+      env_cris:      document.getElementById('env-cris-'  + id)?.value || null,
+    })
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      nConcluidos = d.n_concluidos;
+      atualizarProgresso();
+      const row = document.getElementById('row-' + id);
+      const plan = parseInt(row.querySelector('.plan-val').textContent.trim()) || 0;
+      const difProdEl = document.getElementById('dif-prod-' + id);
+      const qtdVal = parseFloat(qtd);
+      if (!isNaN(qtdVal) && plan) {
+        const dif = qtdVal - plan;
+        difProdEl.innerHTML = `<span class="${dif >= 0 ? 'text-success fw-semibold' : 'text-danger fw-semibold'}">${dif > 0 ? '+' : ''}${dif}</span>`;
+      } else {
+        difProdEl.innerHTML = '<span class="text-muted">—</span>';
+      }
+      const ep = parseInt(document.getElementById('env-port-'  + id)?.value) || 0;
+      const ea = parseInt(document.getElementById('env-amaro-' + id)?.value) || 0;
+      const ei = parseInt(document.getElementById('env-izabel-'+ id)?.value) || 0;
+      const eg = parseInt(document.getElementById('env-agnus-' + id)?.value) || 0;
+      const ec = parseInt(document.getElementById('env-cris-'  + id)?.value) || 0;
+      const totEnv = ep + ea + ei + eg + ec;
+      const difEnvEl = document.getElementById('dif-env-' + id);
+      if (difEnvEl) {
+        const qtdProd = isNaN(qtdVal) ? 0 : qtdVal;
+        if (totEnv > 0 || qtdProd > 0) {
+          const dif = totEnv - qtdProd;
+          difEnvEl.innerHTML = `<span class="${dif >= 0 ? 'text-success fw-semibold' : 'text-danger fw-semibold'}">${dif > 0 ? '+' : ''}${dif}</span>`;
+        } else { difEnvEl.innerHTML = '<span class="text-muted">—</span>'; }
+      }
+      recalcularTotais();
+      ['save-' + id, 'save-env-' + id].forEach(bid => {
+        const b = document.getElementById(bid);
+        if (!b) return;
+        b.innerHTML = '<i class="bi bi-floppy-fill"></i>';
+        b.classList.remove('btn-outline-secondary', 'btn-outline-success');
+        b.classList.add('btn-success');
+        b.title = 'Salvo';
+        b.disabled = false;
+      });
+      mostrarToastDesfazer();
+    }
+  });
+}
+
+function toggleConcluido(id, atual) {
+  const novoVal = atual ? 0 : 1;
+  const btn = document.getElementById('btn-' + id);
+  const row = document.getElementById('row-' + id);
+  const qtdInput = document.getElementById('qtd-' + id);
+  const obs = document.getElementById('obs-' + id).value;
+
+  if (novoVal === 1 && !qtdInput.value) {
+    const plan = parseInt(row.querySelector('.plan-val').textContent.trim());
+    if (!isNaN(plan)) qtdInput.value = plan;
+  }
+
+  fetch(`/registros/{{ reg.id }}/item/${id}/salvar`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({qtd_produzida: qtdInput.value || null, concluido: novoVal, observacao: obs, lote: document.getElementById('lote-' + id).value})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      nConcluidos = d.n_concluidos;
+      atualizarProgresso();
+      if (novoVal) {
+        btn.classList.replace('btn-outline-secondary', 'btn-success');
+        btn.querySelector('i').classList.replace('bi-circle', 'bi-check-circle-fill');
+        btn.title = 'Desmarcar';
+        btn.setAttribute('onclick', `toggleConcluido(${id}, 1)`);
+        row.classList.add('item-concluido');
+      } else {
+        btn.classList.replace('btn-success', 'btn-outline-secondary');
+        btn.querySelector('i').classList.replace('bi-check-circle-fill', 'bi-circle');
+        btn.title = 'Marcar como produzido';
+        btn.setAttribute('onclick', `toggleConcluido(${id}, 0)`);
+        row.classList.remove('item-concluido');
+      }
+      recalcularTotais();
+    }
+  });
+}
+
+recalcularTotais();
+</script>
+{% endblock %}
