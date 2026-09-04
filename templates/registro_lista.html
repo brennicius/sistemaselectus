@@ -5,30 +5,58 @@
   <h1><i class="bi bi-clipboard2-data me-2"></i>Registro de Produção</h1>
 </div>
 
+{# reg_hist e reg_futura já vêm filtrados do Python #}
+
 <ul class="nav nav-tabs mb-4">
   <li class="nav-item">
-    <a class="nav-link active" href="{{ url_for('registro_lista') }}">
+    <a class="nav-link {{ 'active' if tab == 'historico' }}"
+       href="{{ url_for('registro_lista', tab='historico') }}">
       <i class="bi bi-clipboard2-data me-1"></i>Histórico
+      {% if reg_hist %}<span class="badge bg-secondary ms-1">{{ reg_hist|length }}</span>{% endif %}
     </a>
   </li>
   <li class="nav-item">
-    <a class="nav-link" href="{{ url_for('previsao') }}">
+    <a class="nav-link {{ 'active' if tab == 'futura' }}"
+       href="{{ url_for('registro_lista', tab='futura') }}">
       <i class="bi bi-calendar2-week me-1"></i>Previsão Futura
+      {% if reg_futura %}<span class="badge bg-primary ms-1">{{ reg_futura|length }}</span>{% endif %}
     </a>
   </li>
 </ul>
 
-{% if not registros %}
+{% set lista_ativa = reg_futura if tab == 'futura' else reg_hist %}
+
+{% if not lista_ativa %}
 <div class="text-center py-5 text-muted">
   <i class="bi bi-clipboard2-x" style="font-size:2.5rem"></i>
-  <p class="mt-2">Nenhum registro de produção ainda.</p>
+  <p class="mt-2">Nenhum registro {{ 'futuro' if tab == 'futura' else 'no histórico' }}.</p>
 </div>
 {% else %}
+
+{% if tab == 'futura' %}
+<form method="POST" action="{{ url_for('registros_lista_compras') }}" id="form-compras">
+{% endif %}
+
+{% if tab == 'futura' %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <div class="form-check mb-0">
+    <input class="form-check-input" type="checkbox" id="sel-todos" title="Selecionar todos">
+    <label class="form-check-label small text-muted" for="sel-todos">Selecionar todos</label>
+  </div>
+  <button type="submit" form="form-compras"
+          class="btn btn-primary ms-2"
+          style="font-size:.88rem">
+    <i class="bi bi-cart3 me-1"></i>Gerar Lista de Compras
+  </button>
+</div>
+{% endif %}
+
 <div class="card shadow-sm">
   <div class="card-body p-0">
     <table class="table table-hover mb-0 align-middle">
       <thead>
         <tr>
+          {% if tab == 'futura' %}<th style="width:36px"></th>{% endif %}
           <th>Data</th>
           <th>Rodada</th>
           <th class="text-center">Status</th>
@@ -40,17 +68,24 @@
         </tr>
       </thead>
       <tbody>
-        {% for r in registros %}
+        {% for r in lista_ativa %}
         {% set pct = ((r.n_concluidos / r.n_itens * 100)|int) if r.n_itens > 0 else 0 %}
         <tr>
+          {% if tab == 'futura' %}
+          <td class="text-center">
+            <input class="form-check-input reg-check" type="checkbox"
+                   name="reg_ids" value="{{ r.id }}" checked>
+          </td>
+          {% endif %}
           <td class="fw-semibold">
             {{ r.data[8:10] }}/{{ r.data[5:7] }}/{{ r.data[0:4] }}
           </td>
           <td>
             <span class="badge
-              {% if r.rodada == 'Segunda' %}bg-primary
-              {% elif r.rodada == 'Quarta' %}bg-success
-              {% else %}bg-warning text-dark{% endif %}">
+              {% if 'Segunda' in r.rodada %}bg-primary
+              {% elif 'Quarta' in r.rodada %}bg-success
+              {% elif 'Sexta' in r.rodada %}bg-warning text-dark
+              {% else %}bg-secondary{% endif %}">
               Prod. {{ r.rodada }}
             </span>
           </td>
@@ -87,9 +122,17 @@
             </div>
           </td>
           <td class="text-center">
-            <a href="{{ url_for('registro_ver', id=r.id) }}" class="btn btn-sm btn-outline-primary">
-              <i class="bi bi-eye me-1"></i>Abrir
-            </a>
+            <div class="d-flex align-items-center gap-1 justify-content-center">
+              <a href="{{ url_for('registro_ver', id=r.id) }}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-eye me-1"></i>Abrir
+              </a>
+              {% if tab == 'futura' %}
+              <button type="button" class="btn btn-sm btn-outline-secondary btn-arquivar"
+                      data-id="{{ r.id }}" title="Mover para Histórico">
+                <i class="bi bi-archive me-1"></i>→ Histórico
+              </button>
+              {% endif %}
+            </div>
           </td>
         </tr>
         {% endfor %}
@@ -97,11 +140,35 @@
     </table>
   </div>
 </div>
+
+{% if tab == 'futura' %}
+</form>
+{% endif %}
+
 {% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
+// Selecionar todos
+const selTodos = document.getElementById('sel-todos');
+if (selTodos) {
+  selTodos.addEventListener('change', function() {
+    document.querySelectorAll('.reg-check').forEach(c => c.checked = this.checked);
+  });
+}
+
+// Arquivar
+document.querySelectorAll('.btn-arquivar').forEach(btn => {
+  btn.addEventListener('click', function() {
+    if (!confirm('Mover este registro para o Histórico?')) return;
+    fetch(`/registros/${this.dataset.id}/arquivar`, {method:'POST'})
+      .then(r => r.json()).then(d => {
+        if (d.ok) { this.closest('tr').remove(); }
+      });
+  });
+});
+
 function salvarLote(input) {
   const id = input.dataset.id;
   const btn = input.nextElementSibling;

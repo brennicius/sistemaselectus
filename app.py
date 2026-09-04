@@ -1041,6 +1041,8 @@ def _calcular_lista(prods, form, estoque_override=None):
         _qtd = qtd_nec / d['fator_conversao']
         if (d['unidade_compra'] or '').lower() in _inteiras:
             _qtd = math.ceil(_qtd)
+        else:
+            _qtd = round(_qtd, 2)
         valor_compra = (_qtd * d['preco_compra']) if d['preco_compra'] is not None else None
         sobra = _qtd * d['fator_conversao'] - qtd_nec
         sobra_valor = (sobra / d['fator_conversao'] * d['preco_compra']) if (sobra > 0 and d['preco_compra'] is not None) else None
@@ -1825,7 +1827,13 @@ def registro_lista():
         GROUP BY r.id ORDER BY r.data DESC, r.rodada
     ''').fetchall()
     db.close()
-    return render_template('registro_lista.html', registros=regs)
+    from datetime import date as _date
+    hoje = _date.today().isoformat()
+    tab = request.args.get('tab', 'historico')
+    reg_hist   = [r for r in regs if r['data'] <= hoje or r['no_historico']]
+    reg_futura = [r for r in regs if r['data'] > hoje and not r['no_historico']]
+    return render_template('registro_lista.html', registros=regs,
+                           reg_hist=reg_hist, reg_futura=reg_futura, hoje=hoje, tab=tab)
 
 @app.route('/registros/<int:id>', methods=['GET', 'POST'])
 def registro_ver(id):
@@ -2072,6 +2080,392 @@ def registro_item_salvar(id, item_id):
     db.commit(); db.close()
     return jsonify(ok=True, n_concluidos=feitos, total=total)
 
+
+@app.route('/registros/lista-compras', methods=['POST'])
+def registros_lista_compras():
+    ids = request.form.getlist('reg_ids')
+    if not ids:
+        flash('Selecione ao menos um registro.', 'warning')
+        return redirect(url_for('registro_lista', tab='futura'))
+
+    ALIASES = {
+        'CUSCUZ':                                16,
+        'CUSCUZ CARNE SOL':                      16,
+        'MIX DE FRUTAS UVA E MANGA':             12,
+        'SALADA TERIYAKI COM PROTEINA':           4,
+        'SANDUICHE DE PEITO DE PERU':            11,
+        'GELATINA DE MORANGO':                   17,
+        'GELATINA DE UVA':                       18,
+        'OVERNIGHT 180G':                        31,
+        'OVERNIGHT 180g':                        31,
+        'SALADA PEITO DE FRANGO + PROTEINA':     24,
+        'MANDIOQUINHA ROSBIFE':                   7,
+    }
+
+    db = get_db()
+    prods_all = db.execute('SELECT * FROM produtos ORDER BY nome').fetchall()
+    prod_map = {_norm_reg_name(p['nome']): p['id'] for p in prods_all}
+    for alias_key, pid in ALIASES.items():
+        prod_map[_norm_reg_name(alias_key)] = pid
+
+    # Busca itens dos registros selecionados
+    placeholders = ','.join('?' * len(ids))
+    itens = db.execute(
+        f'''SELECT ri.produto, SUM(ri.qtd_planejada) as total,
+                   GROUP_CONCAT(DISTINCT rp.rodada) as rodadas
+            FROM registro_itens ri
+            JOIN registros_producao rp ON rp.id = ri.registro_id
+            WHERE ri.registro_id IN ({placeholders})
+            GROUP BY ri.produto''',
+        ids
+    ).fetchall()
+
+    registros_sel = db.execute(
+        f'SELECT rodada, data FROM registros_producao WHERE id IN ({placeholders}) ORDER BY data',
+        ids
+    ).fetchall()
+    db.close()
+
+    matched = {}
+    sem_ficha = []
+    for it in itens:
+        nome = (it['produto'] or '').strip().upper()
+        total = float(it['total'] or 0)
+        if total <= 0:
+            continue
+        pid = prod_map.get(_norm_reg_name(nome))
+        if pid:
+            matched[pid] = matched.get(pid, 0) + total
+        else:
+            sem_ficha.append({'nome': nome, 'qty': total})
+
+    form_data = {f'qty_{pid}': qty for pid, qty in matched.items()}
+    lista, custo_total = _calcular_lista(prods_all, form_data)
+    lista = [i for i in lista if i['qtd_necessaria'] > 0]
+
+    return render_template('registros_lista_compras.html',
+                           lista=lista, custo_total=custo_total,
+                           sem_ficha=sem_ficha, registros_sel=registros_sel,
+                           reg_ids=ids)
+
+
+@app.route('/registros/lista-compras/exportar', methods=['POST'])
+def registros_lista_compras_exportar():
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from datetime import date as _date
+
+    ids = request.form.getlist('reg_ids')
+    if not ids:
+        flash('Nenhum registro selecionado.', 'warning')
+        return redirect(url_for('registro_lista', tab='futura'))
+
+    ALIASES = {
+        'CUSCUZ':                                16,
+        'CUSCUZ CARNE SOL':                      16,
+        'MIX DE FRUTAS UVA E MANGA':             12,
+        'SALADA TERIYAKI COM PROTEINA':           4,
+        'SANDUICHE DE PEITO DE PERU':            11,
+        'GELATINA DE MORANGO':                   17,
+        'GELATINA DE UVA':                       18,
+        'OVERNIGHT 180G':                        31,
+        'OVERNIGHT 180g':                        31,
+        'SALADA PEITO DE FRANGO + PROTEINA':     24,
+        'MANDIOQUINHA ROSBIFE':                   7,
+    }
+
+    db = get_db()
+    prods_all = db.execute('SELECT * FROM produtos ORDER BY nome').fetchall()
+    prod_map = {_norm_reg_name(p['nome']): p['id'] for p in prods_all}
+    for alias_key, pid in ALIASES.items():
+        prod_map[_norm_reg_name(alias_key)] = pid
+
+    placeholders = ','.join('?' * len(ids))
+    registros_sel = db.execute(
+        f'SELECT id, rodada, data FROM registros_producao WHERE id IN ({placeholders}) ORDER BY data', ids
+    ).fetchall()
+
+    # ── Monta matched (produto_id → qtd) por registro ──
+    def _matched_para_reg(reg_id):
+        itens = db.execute(
+            'SELECT produto, qtd_planejada FROM registro_itens WHERE registro_id=?', (reg_id,)
+        ).fetchall()
+        matched = {}
+        for it in itens:
+            nome = (it['produto'] or '').strip().upper()
+            qty = float(it['qtd_planejada'] or 0)
+            if qty <= 0: continue
+            pid = prod_map.get(_norm_reg_name(nome))
+            if pid:
+                matched[pid] = matched.get(pid, 0) + qty
+        return matched
+
+    all_estoques = {r['id']: float(r['estoque_atual'] or 0)
+                    for r in db.execute('SELECT id, estoque_atual FROM insumos').fetchall()}
+
+    # ── Cascata: cada dia herda o estoque projetado do anterior ──
+    estoque_proj = dict(all_estoques)
+    dias_ins = []
+    for reg in registros_sel:
+        matched = _matched_para_reg(reg['id'])
+        form_data = {f'qty_{pid}': qty for pid, qty in matched.items()}
+
+        # Cascata: usa estoque projetado do dia anterior
+        lista, custo = _calcular_lista(prods_all, form_data, estoque_override=estoque_proj)
+        lista = [i for i in lista if i['qtd_necessaria'] > 0]
+
+        # Independente (sem cascata): sempre usa estoque original
+        lista_ind, custo_ind = _calcular_lista(prods_all, form_data,
+                                               estoque_override=dict(all_estoques))
+        lista_ind = [i for i in lista_ind if i['qtd_necessaria'] > 0]
+        ind_map = {i['id']: i for i in lista_ind}
+
+        # Projeta estoque após este dia
+        for item in lista:
+            iid = item['id']
+            est = estoque_proj.get(iid, 0.0)
+            uso = item['qtd_necessaria']
+            compra_uso = item['qtd_compra'] * item['fator_conversao']
+            estoque_proj[iid] = max(0.0, est - uso + compra_uso)
+
+        dias_ins.append({'reg': reg, 'lista': lista, 'custo': custo,
+                         'lista_ind': lista_ind, 'custo_ind': custo_ind,
+                         'ind_map': ind_map})
+
+    db.close()
+
+    # Índice unificado de insumos para o Consolidado
+    union_ins = {}
+    for d in dias_ins:
+        for item in d['lista']:
+            union_ins[item['id']] = item
+    todos_insumos = sorted(union_ins.items(), key=lambda x: x[1]['nome'])
+
+    # ── Estilos ───────────────────────────────────────
+    AZUL = '1A3A5C'; VERDE = '1E6B3C'; BRANCO = 'FFFFFF'
+    AMBAR = 'FFF3E0'; CINZA = 'F4F6F9'; AZUL_CL = 'E9F0FA'
+    CORES_DIA = ['2E75B6', '2E8B57', 'B85C00', '6B3FA0', '8B0000']
+
+    def fill(h): return PatternFill('solid', fgColor=h)
+    def font(bold=False, color='000000', sz=9): return Font(bold=bold, color=color, size=sz)
+    def aln(h='center', v='center'): return Alignment(horizontal=h, vertical=v)
+    thin = Side(style='thin', color='CCCCCC')
+    brd = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    wb = Workbook()
+    wb.remove(wb.active)  # remove aba vazia
+
+    def _fmt_brl(v): return f"R$ {v:,.2f}".replace(',','X').replace('.',',').replace('X','.')
+    def _fmt_qc(qc): return (int(qc) if qc == int(qc) else qc) if qc > 0 else '—'
+
+    # ── Aba por dia (lista já calculada em cascata) ───────────────────────────
+    for di, d in enumerate(dias_ins):
+        reg = d['reg']
+        lista = d['lista']
+        custo_dia = d['custo']
+        cor = CORES_DIA[di % len(CORES_DIA)]
+        label = reg['rodada']
+        safe_title = label.replace('/', '-')[:31]
+        ws = wb.create_sheet(title=safe_title)
+
+        # 9 colunas: #, Insumo, Necessário, Est.Cascata, Compra Cascata, Compra Indep, Unid, Preço, Valor
+        ws.merge_cells('A1:I1')
+        ws['A1'] = f'Produção — {label}  (dia {di+1} de {len(dias_ins)})'
+        ws['A1'].font = Font(bold=True, color=BRANCO, size=11)
+        ws['A1'].fill = fill(cor); ws['A1'].alignment = aln()
+        ws.row_dimensions[1].height = 20
+
+        hdrs = ['#', 'Insumo', 'Qtd Necessária', 'Estoque (cascata)',
+                'Compra Cascata', 'Compra Indep.', 'Unid.', 'Preço/Unid.', 'Valor (R$)']
+        cor_ind = 'B8520A'  # laranja para col indep
+        for ci, h in enumerate(hdrs, 1):
+            c = ws.cell(row=2, column=ci, value=h)
+            c.font = Font(bold=True, color=BRANCO, size=9)
+            c.fill = fill(cor if ci != 6 else 'C0612B')
+            c.alignment = aln(); c.border = brd
+
+        ws.column_dimensions['A'].width = 5
+        ws.column_dimensions['B'].width = 34
+        from openpyxl.utils import get_column_letter
+        widths = [15, 16, 14, 14, 10, 12, 12]
+        for i, w in enumerate(widths):
+            ws.column_dimensions[get_column_letter(3 + i)].width = w
+
+        ind_map = d['ind_map']
+        row = 3
+        for idx, item in enumerate(sorted(lista, key=lambda x: x['nome']), 1):
+            qc   = item['qtd_compra']
+            ind  = ind_map.get(item['id'])
+            qc_i = ind['qtd_compra'] if ind else 0
+            preco = item.get('preco_compra')
+            valor = item.get('valor')
+            bg   = AMBAR if (qc > 0 or qc_i > 0) else CINZA
+            est  = item['estoque_disponivel']
+            vals = [
+                idx,
+                item['nome'],
+                f"{item['qtd_necessaria']:.0f} {item['unidade_uso']}",
+                f"{est:.0f}" if est > 0 else '—',
+                _fmt_qc(qc),
+                _fmt_qc(qc_i),
+                item.get('unidade_compra') or item['unidade_uso'],
+                _fmt_brl(preco) if preco else '—',
+                _fmt_brl(valor) if valor else '—',
+            ]
+            for ci, val in enumerate(vals, 1):
+                c = ws.cell(row=row, column=ci, value=val)
+                c.fill = fill(bg); c.border = brd
+                c.alignment = aln() if ci != 2 else aln('left')
+                if ci == 5:
+                    c.font = font(bold=(qc > 0), color='CC2200' if qc > 0 else '000000')
+                elif ci == 6:
+                    c.font = font(bold=(qc_i > 0), color=cor_ind if qc_i > 0 else '000000')
+                else:
+                    c.font = font()
+            row += 1
+
+        # Total financeiro da aba — cascata + indep
+        custo_ind = d['custo_ind']
+        ws.merge_cells(f'A{row}:D{row}')
+        c = ws.cell(row=row, column=1, value='TOTAL ESTIMADO')
+        c.font = Font(bold=True, color=BRANCO, size=10)
+        c.fill = fill(cor); c.alignment = aln('right')
+        # cascata
+        c = ws.cell(row=row, column=5, value=_fmt_brl(custo_dia))
+        c.font = Font(bold=True, color='FFD700', size=10)
+        c.fill = fill(cor); c.alignment = aln()
+        # indep
+        c = ws.cell(row=row, column=6, value=_fmt_brl(custo_ind))
+        c.font = Font(bold=True, color='FFD700', size=10)
+        c.fill = fill('C0612B'); c.alignment = aln()
+        ws.merge_cells(f'G{row}:I{row}')
+        c = ws.cell(row=row, column=7, value='← cascata  |  indep. →')
+        c.font = Font(italic=True, color='888888', size=8)
+        c.fill = fill(CINZA); c.alignment = aln()
+
+    # ── Aba consolidada ───────────────────────────────
+    n_dias = len(dias_ins)
+    ws = wb.create_sheet(title='Consolidado')
+    from openpyxl.utils import get_column_letter
+
+    # Monta mapa por dia para lookup rápido: {di: {iid: item}}
+    dia_maps = [{item['id']: item for item in d['lista']} for d in dias_ins]
+
+    # Colunas: #, Insumo, Unid. | [dia qtd_nec x n] | Total Nec | Est. Atual | Compra Cascata | Unid.Compra | Preço | Valor
+    n_cols = 3 + n_dias + 5
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=n_cols)
+    ws.cell(1, 1).value = f'Lista de Compras Consolidada — {_date.today().strftime("%d/%m/%Y")}'
+    ws.cell(1, 1).font = Font(bold=True, color=BRANCO, size=13)
+    ws.cell(1, 1).fill = fill(AZUL); ws.cell(1, 1).alignment = aln()
+    ws.row_dimensions[1].height = 22
+
+    hdrs2 = ['#', 'Insumo', 'Unid.']
+    for d in dias_ins:
+        hdrs2.append(d['reg']['rodada'].split()[0][:10])
+    hdrs2 += ['Total Nec.', 'Estoque', 'A Comprar\n(cascata)', 'Unid.Compra', 'Preço/Un.', 'Valor (R$)']
+    for ci, h in enumerate(hdrs2, 1):
+        c = ws.cell(row=2, column=ci, value=h)
+        c.font = Font(bold=True, color=BRANCO, size=9)
+        c.fill = fill(VERDE); c.alignment = aln(); c.border = brd
+    ws.row_dimensions[2].height = 28
+
+    ws.column_dimensions['A'].width = 5
+    ws.column_dimensions['B'].width = 36
+    ws.column_dimensions['C'].width = 8
+    for ci in range(4, 4 + n_dias):
+        ws.column_dimensions[get_column_letter(ci)].width = 11
+    col_tot  = 4 + n_dias      # Total Nec.
+    col_est  = col_tot + 1     # Estoque
+    col_comp = col_est + 1     # A Comprar
+    col_uc   = col_comp + 1    # Unid.Compra
+    col_prec = col_uc + 1      # Preço
+    col_val  = col_prec + 1    # Valor
+    for ci in range(col_tot, col_val + 1):
+        ws.column_dimensions[get_column_letter(ci)].width = 13
+
+    custo_total = 0.0
+    row = 3
+    for idx, (iid, info) in enumerate(todos_insumos, 1):
+        nome = info['nome']
+        unid_uso = info['unidade_uso']
+        uc = info.get('unidade_compra') or unid_uso
+        preco = info.get('preco_compra')
+        fator = info.get('fator_conversao', 1) or 1
+        estoque = all_estoques.get(iid, 0.0)
+
+        qtd_por_dia = [dia_maps[di].get(iid, {}).get('qtd_necessaria', 0) for di in range(n_dias)]
+        qtd_total = sum(qtd_por_dia)
+        # Compra cascata total = soma de qtd_compra de cada dia (já considera crédito do dia anterior)
+        qc_casc = sum(dia_maps[di].get(iid, {}).get('qtd_compra', 0) for di in range(n_dias))
+        valor = (qc_casc * preco) if (preco is not None and qc_casc > 0) else None
+        if valor: custo_total += valor
+        bg = AMBAR if qc_casc > 0 else CINZA
+
+        row_vals = [idx, nome, unid_uso]
+        for qtd_d in qtd_por_dia:
+            row_vals.append(round(qtd_d, 1) if qtd_d > 0 else '—')
+        row_vals += [
+            round(qtd_total, 1),
+            round(estoque, 1) if estoque > 0 else '—',
+            _fmt_qc(qc_casc),
+            uc,
+            _fmt_brl(preco) if preco else '—',
+            _fmt_brl(valor) if valor else '—',
+        ]
+        for ci, val in enumerate(row_vals, 1):
+            c = ws.cell(row=row, column=ci, value=val)
+            c.fill = fill(bg); c.border = brd
+            c.alignment = aln() if ci != 2 else aln('left')
+            is_compra = ci == col_comp
+            c.font = Font(size=9, bold=(is_compra and qc_casc > 0),
+                          color='CC2200' if (is_compra and qc_casc > 0) else '000000')
+        row += 1
+
+    # Linha de totais por dia (custo indep. vs cascata)
+    row += 1
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
+    ws.cell(row, 1).value = 'Custo por dia (cascata)'
+    ws.cell(row, 1).font = Font(bold=True, size=9, color=BRANCO)
+    ws.cell(row, 1).fill = fill(AZUL); ws.cell(row, 1).alignment = aln('right')
+    for di, d in enumerate(dias_ins):
+        c = ws.cell(row=row, column=4 + di, value=_fmt_brl(d['custo']))
+        c.font = Font(bold=True, color='FFD700', size=9)
+        c.fill = fill(AZUL); c.alignment = aln()
+
+    row += 1
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
+    ws.cell(row, 1).value = 'Custo por dia (indep., sem cascata)'
+    ws.cell(row, 1).font = Font(bold=True, size=9, color=BRANCO)
+    ws.cell(row, 1).fill = fill('C0612B'); ws.cell(row, 1).alignment = aln('right')
+    for di, d in enumerate(dias_ins):
+        c = ws.cell(row=row, column=4 + di, value=_fmt_brl(d['custo_ind']))
+        c.font = Font(bold=True, color='FFD700', size=9)
+        c.fill = fill('C0612B'); c.alignment = aln()
+
+    # Total geral cascata
+    row += 1
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=col_val - 1)
+    c = ws.cell(row=row, column=1, value='TOTAL GERAL (cascata)')
+    c.font = Font(bold=True, color=BRANCO, size=10)
+    c.fill = fill(AZUL); c.alignment = aln('right')
+    c = ws.cell(row=row, column=col_val, value=_fmt_brl(custo_total))
+    c.font = Font(bold=True, color='FFD700', size=10)
+    c.fill = fill(AZUL); c.alignment = aln()
+
+    import tempfile
+    tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+    wb.save(tmp.name); tmp.close()
+    fname = f'lista_compras_{_date.today().isoformat()}.xlsx'
+    return send_file(tmp.name, as_attachment=True, download_name=fname,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+@app.route('/registros/<int:id>/arquivar', methods=['POST'])
+def registro_arquivar(id):
+    db = get_db()
+    db.execute('UPDATE registros_producao SET no_historico=1 WHERE id=?', (id,))
+    db.commit(); db.close()
+    return jsonify(ok=True)
 
 @app.route('/registros/<int:id>/lote', methods=['POST'])
 def registro_lote(id):

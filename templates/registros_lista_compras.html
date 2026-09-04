@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Lista de Compras — Previsão{% endblock %}
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+  <div>
+    <h1><i class="bi bi-cart3 me-2"></i>Lista de Compras</h1>
+    <p class="mb-0">
+      Baseada em:
+      {% for r in registros_sel %}
+        <span class="badge bg-secondary me-1">{{ r.rodada }}</span>
+      {% endfor %}
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <form method="POST" action="{{ url_for('registros_lista_compras_exportar') }}">
+      {% for rid in reg_ids %}
+        <input type="hidden" name="reg_ids" value="{{ rid }}">
+      {% endfor %}
+      <button type="submit" class="btn btn-success">
+        <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
+      </button>
+    </form>
+    <a href="{{ url_for('registro_lista', tab='futura') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Voltar
+    </a>
+  </div>
+</div>
+
+{% if sem_ficha %}
+<div class="alert alert-warning py-2 mb-3">
+  <strong><i class="bi bi-exclamation-triangle me-1"></i>Sem ficha técnica:</strong>
+  {% for s in sem_ficha %}
+    <span class="badge bg-warning text-dark me-1">{{ s.nome }} ({{ s.qty|int }})</span>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if not lista %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-cart-x" style="font-size:2.5rem"></i>
+  <p class="mt-2">Nenhum insumo calculado. Verifique as fichas técnicas.</p>
+</div>
+{% else %}
+
+{# Agrupa por categoria do insumo #}
+{% set cats = {} %}
+{% for i in lista %}
+  {% set cat = i.categoria or 'Outros' %}
+  {% if cat not in cats %}{% set _ = cats.update({cat: []}) %}{% endif %}
+  {% set _ = cats[cat].append(i) %}
+{% endfor %}
+
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div>
+    <span class="fw-semibold">{{ lista|length }} insumos</span>
+    <span class="text-muted ms-2">·</span>
+    <span class="ms-2">Custo estimado:
+      <strong class="text-success">R$ {{ '%.2f'|format(custo_total) | replace('.', ',') }}</strong>
+    </span>
+  </div>
+</div>
+
+{% for cat, itens in cats.items() %}
+<div class="card shadow-sm mb-3">
+  <div class="card-header py-2" style="background:#1a3a5c">
+    <span class="text-white fw-semibold small">{{ cat | upper }}</span>
+    <span class="badge bg-light text-dark ms-2">{{ itens|length }}</span>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-hover mb-0 align-middle" style="font-size:.85rem">
+      <thead style="background:#e9f0fa">
+        <tr>
+          <th>Insumo</th>
+          <th class="text-center">Necessário</th>
+          <th class="text-center">Estoque</th>
+          <th class="text-center text-danger">A Comprar</th>
+          <th class="text-center">Unid. Compra</th>
+          <th class="text-center">Preço/Unid.</th>
+          <th class="text-center text-success">Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in itens %}
+        <tr {% if i.qtd_compra > 0 %}style="background:#fff8f0"{% endif %}>
+          <td class="fw-semibold">{{ i.nome }}</td>
+          <td class="text-center font-monospace">
+            {{ '%.0f'|format(i.qtd_necessaria) }} <small class="text-muted">{{ i.unidade_uso }}</small>
+          </td>
+          <td class="text-center font-monospace">
+            {% if i.estoque_disponivel > 0 %}
+              <span class="text-success">{{ '%.0f'|format(i.estoque_disponivel) }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-center fw-bold">
+            {% if i.qtd_compra > 0 %}
+              <span class="badge bg-danger" style="font-size:.82rem">
+                {%- if i.qtd_compra == i.qtd_compra | int -%}
+                  {{ i.qtd_compra | int }}
+                {%- else -%}
+                  {{ '%.2f'|format(i.qtd_compra) }}
+                {%- endif -%}
+              </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-center text-muted small">{{ i.unidade_compra or i.unidade_uso }}</td>
+          <td class="text-center font-monospace small">
+            {% if i.preco_compra is not none %}
+              R$ {{ '%.2f'|format(i.preco_compra) | replace('.', ',') }}
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-center font-monospace">
+            {% if i.valor is not none %}
+              <span class="text-success fw-semibold">R$ {{ '%.2f'|format(i.valor) | replace('.', ',') }}</span>
+            {% else %}<span class="text-muted small">sem preço</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="background:#f0f4fb">
+          <td colspan="6" class="text-end fw-bold small pe-3 py-2">Total {{ cat | upper }}:</td>
+          {% set soma = namespace(v=0) %}
+          {% for i in itens %}{% if i.valor is not none %}{% set soma.v = soma.v + i.valor %}{% endif %}{% endfor %}
+          <td class="text-center fw-bold font-monospace py-2">
+            {% if soma.v > 0 %}R$ {{ '%.2f'|format(soma.v) | replace('.', ',') }}{% else %}—{% endif %}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endfor %}
+
+<div class="card shadow-sm mt-2" style="background:#1a3a5c">
+  <div class="card-body py-3 d-flex justify-content-between align-items-center">
+    <span class="text-white fw-semibold">TOTAL GERAL</span>
+    <span class="fw-bold fs-5 text-warning font-monospace">R$ {{ '%.2f'|format(custo_total) | replace('.', ',') }}</span>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
