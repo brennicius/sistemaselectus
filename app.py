@@ -3265,6 +3265,106 @@ def cafe_del_contagem(cid):
     db.commit(); db.close()
     return redirect(url_for('cafe_estoque'))
 
+# ─────────────── CAFÉ — EXPORTAR / IMPORTAR ──────────────────────────────────
+
+@app.route('/cafe/exportar')
+def cafe_exportar():
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    db = get_db()
+    _init_estoque_tables(db)
+
+    wb = openpyxl.Workbook()
+
+    # ── Aba 1: Leituras ──
+    ws = wb.active
+    ws.title = 'Leituras'
+    maquinas = db.execute("SELECT * FROM cafe_maquinas ORDER BY id").fetchall()
+    maq_map  = {m['id']: m['nome'] for m in maquinas}
+    bebidas_cols = [col for col, _ in NESTLE_BEBIDAS]
+    bebidas_nomes = [nome for _, nome in NESTLE_BEBIDAS]
+    header = ['Máquina', 'PDV', 'Tipo', 'Data'] + bebidas_nomes
+    ws.append(header)
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='0F2540')
+    rows_l = db.execute("SELECT l.*, m.nome as maq_nome, m.pdv, m.tipo FROM cafe_leituras l JOIN cafe_maquinas m ON l.maquina_id=m.id ORDER BY l.data DESC, l.maquina_id").fetchall()
+    for r in rows_l:
+        vals = [r[col] for col in bebidas_cols]
+        ws.append([r['maq_nome'], r['pdv'], r['tipo'], r['data']] + vals)
+
+    # ── Aba 2: Entradas (compras) ──
+    ws2 = wb.create_sheet('Entradas')
+    ws2.append(['ID', 'Data', 'Insumo', 'Origem', 'Local', 'Qtd (kg)', 'Obs'])
+    for cell in ws2[1]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='375623')
+    for r in db.execute("SELECT * FROM cafe_estoque_entradas ORDER BY data DESC").fetchall():
+        ws2.append([r['id'], r['data'], r['insumo'], r['origem'], r['local'], r['qtd_kg'], r['obs'] or ''])
+
+    # ── Aba 3: Contagens (inventários) ──
+    ws3 = wb.create_sheet('Contagens')
+    ws3.append(['ID', 'Data', 'Insumo', 'Local', 'Qtd (kg)'])
+    for cell in ws3[1]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='4A235A')
+    for r in db.execute("SELECT * FROM cafe_estoque_contagens ORDER BY data DESC").fetchall():
+        ws3.append([r['id'], r['data'], r['insumo'], r['local'], r['qtd_kg']])
+
+    db.close()
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    from datetime import date as _date
+    fname = f'cafe_{_date.today().isoformat()}.xlsx'
+    return send_file(buf, as_attachment=True, download_name=fname,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+@app.route('/cafe/importar', methods=['POST'])
+def cafe_importar():
+    import openpyxl
+    f = request.files.get('arquivo')
+    if not f:
+        flash('Nenhum arquivo enviado.', 'danger')
+        return redirect(url_for('cafe_lista'))
+    aba = request.form.get('aba', 'Entradas')
+    wb = openpyxl.load_workbook(f, data_only=True)
+    db = get_db()
+    _init_estoque_tables(db)
+    inseridos = 0
+
+    if aba == 'Entradas' and 'Entradas' in wb.sheetnames:
+        ws = wb['Entradas']
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            _, data, insumo, origem, local, qtd_kg, obs = (list(row) + [None]*7)[:7]
+            if not data or not insumo or qtd_kg is None: continue
+            data = str(data)[:10]
+            existe = db.execute("SELECT id FROM cafe_estoque_entradas WHERE data=? AND insumo=? AND qtd_kg=?",
+                                (data, insumo, float(qtd_kg))).fetchone()
+            if not existe:
+                db.execute("INSERT INTO cafe_estoque_entradas (data, insumo, origem, local, qtd_kg, obs) VALUES (?,?,?,?,?,?)",
+                           (data, insumo, origem or 'Fornecedor', local or 'Central', float(qtd_kg), obs or ''))
+                inseridos += 1
+
+    elif aba == 'Contagens' and 'Contagens' in wb.sheetnames:
+        ws = wb['Contagens']
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            _, data, insumo, local, qtd_kg = (list(row) + [None]*5)[:5]
+            if not data or not insumo or qtd_kg is None: continue
+            data = str(data)[:10]
+            existe = db.execute("SELECT id FROM cafe_estoque_contagens WHERE data=? AND insumo=? AND local=?",
+                                (data, insumo, local or 'Central')).fetchone()
+            if not existe:
+                db.execute("INSERT INTO cafe_estoque_contagens (data, insumo, local, qtd_kg) VALUES (?,?,?,?)",
+                           (data, insumo, local or 'Central', float(qtd_kg)))
+                inseridos += 1
+
+    db.commit(); db.close()
+    flash(f'{inseridos} registro(s) importado(s) com sucesso.', 'success' if inseridos else 'info')
+    return redirect(url_for('cafe_estoque'))
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 init_db()
