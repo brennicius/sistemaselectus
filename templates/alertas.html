@@ -15,6 +15,8 @@
   .sort-col:hover { background: rgba(255,255,255,.08); }
   th.col-cozinha { background: #1a3a5c; color: #fff; }
   th.col-central { background: #375623; color: #fff; }
+  .unit-select { font-size:.72rem; max-width:68px; padding:0 2px; height:28px; }
+  .unit-select:focus { box-shadow: none; }
 </style>
 
 <div class="page-header d-flex justify-content-between align-items-start">
@@ -117,13 +119,23 @@
           </td>
 
           {# Cozinha #}
+          {% set fator = ins.qtd_por_embalagem or 1 %}
           <td class="text-end" style="background:rgba(26,58,92,.05)">
             <div class="d-flex justify-content-end align-items-center gap-1 estoque-row"
-                 data-id="{{ ins.id }}" data-endpoint="/insumos/{{ ins.id }}/estoque">
-              <input type="number" step="0.01" min="0"
+                 data-id="{{ ins.id }}" data-endpoint="/insumos/{{ ins.id }}/estoque"
+                 data-fator="{{ fator }}">
+              <input type="number" step="any" min="0"
                      class="form-control form-control-sm estoque-input font-monospace"
                      value="{{ '%.2f'|format(cozinha) }}"
                      data-original="{{ '%.2f'|format(cozinha) }}">
+              {% if ins.unidade_compra and ins.unidade_compra != ins.unidade_uso %}
+              <select class="form-select form-select-sm unit-select unit-sel" title="Unidade de entrada">
+                <option value="uso">{{ ins.unidade_uso }}</option>
+                <option value="compra">{{ ins.unidade_compra }}</option>
+              </select>
+              {% else %}
+              <span class="text-muted" style="font-size:.72rem;min-width:36px;text-align:center">{{ ins.unidade_uso }}</span>
+              {% endif %}
               <button class="btn btn-sm btn-outline-secondary btn-save" title="Salvar cozinha">
                 <i class="bi bi-floppy"></i>
               </button>
@@ -133,11 +145,20 @@
           {# Central #}
           <td class="text-end" style="background:rgba(55,86,35,.05)">
             <div class="d-flex justify-content-end align-items-center gap-1 estoque-row"
-                 data-id="{{ ins.id }}" data-endpoint="/insumos/{{ ins.id }}/estoque_central">
-              <input type="number" step="0.01" min="0"
+                 data-id="{{ ins.id }}" data-endpoint="/insumos/{{ ins.id }}/estoque_central"
+                 data-fator="{{ fator }}">
+              <input type="number" step="any" min="0"
                      class="form-control form-control-sm estoque-input font-monospace"
                      value="{{ '%.2f'|format(central) }}"
                      data-original="{{ '%.2f'|format(central) }}">
+              {% if ins.unidade_compra and ins.unidade_compra != ins.unidade_uso %}
+              <select class="form-select form-select-sm unit-select unit-sel" title="Unidade de entrada">
+                <option value="uso">{{ ins.unidade_uso }}</option>
+                <option value="compra">{{ ins.unidade_compra }}</option>
+              </select>
+              {% else %}
+              <span class="text-muted" style="font-size:.72rem;min-width:36px;text-align:center">{{ ins.unidade_uso }}</span>
+              {% endif %}
               <button class="btn btn-sm btn-outline-secondary btn-save" title="Salvar central">
                 <i class="bi bi-floppy"></i>
               </button>
@@ -270,24 +291,30 @@ document.querySelectorAll('.estoque-input').forEach(input => {
 // Salvar — usa data-endpoint para diferenciar cozinha / central
 document.querySelectorAll('.btn-save').forEach(btn => {
   btn.addEventListener('click', function() {
-    const row     = this.closest('.estoque-row');
+    const row      = this.closest('.estoque-row');
     const endpoint = row.dataset.endpoint;
-    const input   = row.querySelector('.estoque-input');
-    const val     = input.value.trim();
+    const input    = row.querySelector('.estoque-input');
+    const sel      = row.querySelector('.unit-sel');
+    const fator    = parseFloat(row.dataset.fator) || 1;
+    const raw      = parseFloat(input.value.trim()) || 0;
+    // Converte: se selecionou "compra" multiplica pelo fator de conversão
+    const val      = (sel && sel.value === 'compra') ? raw * fator : raw;
     fetch(endpoint, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ estoque: val === '' ? 0 : parseFloat(val) })
+      body: JSON.stringify({ estoque: val })
     }).then(r => r.json()).then(d => {
       if (!d.ok) return;
-      input.dataset.original = parseFloat(val).toFixed(2);
+      // Mostra o valor convertido (em unidade de uso) no campo após salvar
+      input.value = val.toFixed(2);
+      input.dataset.original = val.toFixed(2);
+      if (sel) sel.value = 'uso';
       // Atualiza data-cozinha / data-central na linha para ordenação
       const tr = row.closest('tr');
-      const v = parseFloat(val) || 0;
       if (endpoint.includes('estoque_central')) {
-        tr.dataset.central = v;
+        tr.dataset.central = val;
       } else {
-        tr.dataset.cozinha = v;
+        tr.dataset.cozinha = val;
       }
       // Atualiza total
       const total = (parseFloat(tr.dataset.cozinha) || 0) + (parseFloat(tr.dataset.central) || 0);

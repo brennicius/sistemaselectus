@@ -1512,7 +1512,8 @@ def insumo_ajuste_desfazer(lid):
 def alertas():
     db = get_db()
     insumos = db.execute('''
-        SELECT id, nome, unidade_uso, estoque_atual, estoque_central, estoque_minimo, fornecedor
+        SELECT id, nome, unidade_uso, unidade_compra, qtd_por_embalagem,
+               estoque_atual, estoque_central, estoque_minimo, fornecedor
         FROM insumos
         ORDER BY nome COLLATE NOCASE
     ''').fetchall()
