@@ -168,9 +168,9 @@
           {# Total #}
           <td class="text-end font-monospace fw-semibold" style="background:rgba(74,35,90,.06)" id="total-{{ ins.id }}">
             {% if total_est > 0 %}
-              <span style="color:#7c3aed">{{ total_est|num_br(2) }}</span>
+              <span style="color:#7c3aed">{{ total_est|num_br(2) }} <span class="fw-normal" style="font-size:.72rem;color:#9d71d4">{{ ins.unidade_uso }}</span></span>
             {% else %}
-              <span class="text-muted">0,00</span>
+              <span class="text-muted">0,00 <span style="font-size:.72rem">{{ ins.unidade_uso }}</span></span>
             {% endif %}
           </td>
 
@@ -321,10 +321,11 @@ document.querySelectorAll('.btn-save').forEach(btn => {
       tr.dataset.total = total;
       const iid = row.dataset.id;
       const totalEl = document.getElementById('total-' + iid);
+      const unid = row.closest('tr').querySelector('.badge.bg-info')?.textContent?.trim() || '';
       if (totalEl) {
         totalEl.innerHTML = total > 0
-          ? `<span style="color:#7c3aed">${total.toFixed(2).replace('.',',')}</span>`
-          : `<span class="text-muted">0,00</span>`;
+          ? `<span style="color:#7c3aed">${total.toFixed(2).replace('.',',')} <span class="fw-normal" style="font-size:.72rem;color:#9d71d4">${unid}</span></span>`
+          : `<span class="text-muted">0,00 <span style="font-size:.72rem">${unid}</span></span>`;
       }
       row.classList.remove('dirty');
       row.classList.add('saved');
