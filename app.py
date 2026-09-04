@@ -5,6 +5,7 @@ from datetime import datetime, date
 
 app = Flask(__name__)
 app.secret_key = 'selectus_cozinha_2024'
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 DB = os.path.join(os.path.dirname(__file__), 'cozinha.db')
 
 CATEGORIAS = [
@@ -461,6 +462,15 @@ def insumo_estoque(id):
     v = float(val) if str(val).strip() not in ('', 'null', 'None') else 0.0
     db = get_db()
     db.execute('UPDATE insumos SET estoque_atual=? WHERE id=?', (v, id))
+    db.commit(); db.close()
+    return jsonify(ok=True)
+
+@app.route('/insumos/<int:id>/estoque_central', methods=['POST'])
+def insumo_estoque_central(id):
+    val = request.json.get('estoque', 0)
+    v = float(val) if str(val).strip() not in ('', 'null', 'None') else 0.0
+    db = get_db()
+    db.execute('UPDATE insumos SET estoque_central=? WHERE id=?', (v, id))
     db.commit(); db.close()
     return jsonify(ok=True)
 
@@ -1502,7 +1512,7 @@ def insumo_ajuste_desfazer(lid):
 def alertas():
     db = get_db()
     insumos = db.execute('''
-        SELECT id, nome, unidade_uso, estoque_atual, estoque_minimo, fornecedor
+        SELECT id, nome, unidade_uso, estoque_atual, estoque_central, estoque_minimo, fornecedor
         FROM insumos
         ORDER BY nome COLLATE NOCASE
     ''').fetchall()

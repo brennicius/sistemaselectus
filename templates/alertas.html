@@ -13,8 +13,8 @@
   .badge-status { font-size: .68rem; }
   .sort-col { white-space: nowrap; }
   .sort-col:hover { background: rgba(255,255,255,.08); }
-  .sort-col .sort-label { display:inline-flex; align-items:center; gap:4px; }
-  .sort-col .sort-icon { font-size:.75rem; }
+  th.col-cozinha { background: #1a3a5c; color: #fff; }
+  th.col-central { background: #375623; color: #fff; }
 </style>
 
 <div class="page-header d-flex justify-content-between align-items-start">
@@ -39,8 +39,14 @@
   <button type="button" class="btn btn-sm btn-outline-secondary sort-btn active" data-col="nome" data-asc="1">
     <i class="bi bi-sort-alpha-down me-1"></i>Nome
   </button>
-  <button type="button" class="btn btn-sm btn-outline-secondary sort-btn" data-col="atual" data-asc="0">
-    <i class="bi bi-sort-numeric-down me-1"></i>Estoque Atual
+  <button type="button" class="btn btn-sm btn-outline-secondary sort-btn" data-col="cozinha" data-asc="0">
+    <i class="bi bi-sort-numeric-down me-1"></i>Cozinha
+  </button>
+  <button type="button" class="btn btn-sm btn-outline-secondary sort-btn" data-col="central" data-asc="0">
+    <i class="bi bi-sort-numeric-down me-1"></i>Central
+  </button>
+  <button type="button" class="btn btn-sm btn-outline-secondary sort-btn" data-col="total" data-asc="0">
+    <i class="bi bi-sort-numeric-down me-1"></i>Total
   </button>
   <button type="button" class="btn btn-sm btn-outline-secondary sort-btn" data-col="minimo" data-asc="0">
     <i class="bi bi-sort-numeric-down me-1"></i>Estoque Mínimo
@@ -55,35 +61,49 @@
     <table class="table table-hover table-sm mb-0 align-middle" id="tabela-estoque">
       <thead>
         <tr>
-          <th class="sort-col" data-col="nome" style="cursor:pointer;user-select:none">
-            Insumo <i class="bi bi-arrow-down-up text-muted ms-1 sort-icon" data-col="nome"></i>
+          <th rowspan="2" class="align-middle" style="cursor:pointer;user-select:none" data-col="nome">
+            Insumo <i class="bi bi-arrow-down-up text-muted ms-1"></i>
           </th>
-          <th class="text-center sort-col" data-col="unidade" style="cursor:pointer;user-select:none">
-            Unidade <i class="bi bi-arrow-down-up text-muted ms-1 sort-icon" data-col="unidade"></i>
+          <th rowspan="2" class="text-center align-middle" data-col="unidade" style="cursor:pointer;user-select:none">
+            Unidade <i class="bi bi-arrow-down-up text-muted ms-1"></i>
           </th>
-          <th class="text-end sort-col" data-col="minimo" style="cursor:pointer;user-select:none">
-            Estoque Mínimo <i class="bi bi-arrow-down-up text-muted ms-1 sort-icon" data-col="minimo"></i>
+          <th rowspan="2" class="text-end align-middle" data-col="minimo" style="cursor:pointer;user-select:none">
+            Est. Mínimo <i class="bi bi-arrow-down-up text-muted ms-1"></i>
           </th>
-          <th class="text-end sort-col" data-col="atual" style="min-width:160px;cursor:pointer;user-select:none">
-            Estoque Atual <i class="bi bi-arrow-down-up text-muted ms-1 sort-icon" data-col="atual"></i>
+          <th class="text-center col-cozinha" style="min-width:160px">
+            <i class="bi bi-house me-1"></i>Cozinha
           </th>
-          <th class="text-center">Status</th>
+          <th class="text-center col-central" style="min-width:160px">
+            <i class="bi bi-building me-1"></i>Central
+          </th>
+          <th class="text-center" style="background:#4a235a;color:#fff;min-width:110px">
+            <i class="bi bi-sigma me-1"></i>Total
+          </th>
+          <th rowspan="2" class="text-center align-middle">Status</th>
+        </tr>
+        <tr>
+          <th class="text-center col-cozinha small fw-normal" style="font-size:.75rem">estoque_atual</th>
+          <th class="text-center col-central small fw-normal" style="font-size:.75rem">estoque_central</th>
+          <th class="text-center small fw-normal" style="font-size:.75rem;background:#4a235a;color:#fff">cozinha + central</th>
         </tr>
       </thead>
       <tbody>
         {% for ins in insumos %}
-        {% set atual = ins.estoque_atual or 0 %}
+        {% set cozinha = ins.estoque_atual or 0 %}
+        {% set central = ins.estoque_central or 0 %}
         {% set minimo = ins.estoque_minimo or 0 %}
         {% if minimo == 0 %}
           {% set status = 'sem_minimo' %}
-        {% elif atual == 0 %}
+        {% elif cozinha + central == 0 %}
           {% set status = 'zerado' %}
-        {% elif atual < minimo %}
+        {% elif cozinha + central < minimo %}
           {% set status = 'baixo' %}
         {% else %}
           {% set status = 'ok' %}
         {% endif %}
+        {% set total_est = cozinha + central %}
         <tr data-nome="{{ ins.nome|lower }}" data-status="{{ status }}"
+            data-cozinha="{{ cozinha }}" data-central="{{ central }}" data-total="{{ total_est }}" data-minimo="{{ minimo }}"
             class="{{ 'alerta-baixo' if status == 'baixo' else ('alerta-zero' if status == 'zerado' else '') }}">
           <td class="fw-semibold">
             {{ ins.nome }}
@@ -95,17 +115,44 @@
           <td class="text-end font-monospace small text-muted">
             {{ minimo|num_br(2) if minimo else '—' }}
           </td>
-          <td class="text-end">
-            <div class="d-flex justify-content-end align-items-center gap-1 estoque-row" data-id="{{ ins.id }}">
+
+          {# Cozinha #}
+          <td class="text-end" style="background:rgba(26,58,92,.05)">
+            <div class="d-flex justify-content-end align-items-center gap-1 estoque-row"
+                 data-id="{{ ins.id }}" data-endpoint="/insumos/{{ ins.id }}/estoque">
               <input type="number" step="0.01" min="0"
                      class="form-control form-control-sm estoque-input font-monospace"
-                     value="{{ '%.2f'|format(atual) }}"
-                     data-original="{{ '%.2f'|format(atual) }}">
-              <button class="btn btn-sm btn-outline-secondary btn-save" title="Salvar">
+                     value="{{ '%.2f'|format(cozinha) }}"
+                     data-original="{{ '%.2f'|format(cozinha) }}">
+              <button class="btn btn-sm btn-outline-secondary btn-save" title="Salvar cozinha">
                 <i class="bi bi-floppy"></i>
               </button>
             </div>
           </td>
+
+          {# Central #}
+          <td class="text-end" style="background:rgba(55,86,35,.05)">
+            <div class="d-flex justify-content-end align-items-center gap-1 estoque-row"
+                 data-id="{{ ins.id }}" data-endpoint="/insumos/{{ ins.id }}/estoque_central">
+              <input type="number" step="0.01" min="0"
+                     class="form-control form-control-sm estoque-input font-monospace"
+                     value="{{ '%.2f'|format(central) }}"
+                     data-original="{{ '%.2f'|format(central) }}">
+              <button class="btn btn-sm btn-outline-secondary btn-save" title="Salvar central">
+                <i class="bi bi-floppy"></i>
+              </button>
+            </div>
+          </td>
+
+          {# Total #}
+          <td class="text-end font-monospace fw-semibold" style="background:rgba(74,35,90,.06)" id="total-{{ ins.id }}">
+            {% if total_est > 0 %}
+              <span style="color:#7c3aed">{{ total_est|num_br(2) }}</span>
+            {% else %}
+              <span class="text-muted">0,00</span>
+            {% endif %}
+          </td>
+
           <td class="text-center">
             {% if status == 'sem_minimo' %}
               <span class="badge bg-light text-muted border badge-status">Sem mínimo</span>
@@ -126,8 +173,9 @@
 
 <div class="mt-2 text-muted small">
   <i class="bi bi-info-circle me-1"></i>
-  Edite o valor de estoque e clique em <i class="bi bi-floppy"></i> para salvar.
-  &nbsp;·&nbsp; O botão fica <span style="color:#fd7e14;font-weight:600">laranja</span> quando há alteração não salva.
+  Edite o valor e clique em <i class="bi bi-floppy"></i> para salvar.
+  &nbsp;·&nbsp; Botão <span style="color:#fd7e14;font-weight:600">laranja</span> = alteração não salva.
+  &nbsp;·&nbsp; Status calculado sobre <strong>Cozinha + Central</strong> vs. mínimo.
 </div>
 
 {% endblock %}
@@ -142,8 +190,10 @@ function getVal(tr, col) {
   switch(col) {
     case 'nome':    return norm(tr.dataset.nome || '');
     case 'unidade': return norm(tr.querySelector('.badge.bg-info')?.textContent?.trim() || '');
-    case 'minimo':  return parseFloat(tr.querySelector('td:nth-child(3) .font-monospace')?.textContent?.replace(',','.')) || 0;
-    case 'atual':   return parseFloat(tr.querySelector('.estoque-input')?.value) || 0;
+    case 'minimo':  return parseFloat(tr.dataset.minimo) || 0;
+    case 'cozinha': return parseFloat(tr.dataset.cozinha) || 0;
+    case 'central': return parseFloat(tr.dataset.central) || 0;
+    case 'total':   return parseFloat(tr.dataset.total)   || 0;
     default: return '';
   }
 }
@@ -163,20 +213,14 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
   btn.addEventListener('click', function() {
     const col = this.dataset.col;
     const defaultAsc = this.dataset.asc === '1';
-    if (col === sortCol) {
-      sortAsc = !sortAsc;
-    } else {
-      sortCol = col;
-      sortAsc = defaultAsc;
-    }
-    // visual: active state
+    sortCol = col;
+    sortAsc = (col === sortCol) ? !sortAsc : defaultAsc;
     document.querySelectorAll('.sort-btn').forEach(b => {
       b.classList.remove('active','btn-primary');
       b.classList.add('btn-outline-secondary');
     });
     this.classList.add('active','btn-primary');
     this.classList.remove('btn-outline-secondary');
-    // update icon direction
     const icon = this.querySelector('i');
     if (icon) {
       const isAlpha = col === 'nome' || col === 'unidade';
@@ -188,7 +232,7 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
   });
 });
 
-sortTable(); // default: alfabético
+sortTable();
 
 // Filtros
 const buscaEl  = document.getElementById('busca-estoque');
@@ -206,7 +250,7 @@ function applyFilters() {
 buscaEl.addEventListener('input', applyFilters);
 filtroEl.addEventListener('change', applyFilters);
 
-// Dirty state — detecta alteração no input
+// Dirty state
 document.querySelectorAll('.estoque-input').forEach(input => {
   input.addEventListener('input', function() {
     const row = this.closest('.estoque-row');
@@ -223,20 +267,38 @@ document.querySelectorAll('.estoque-input').forEach(input => {
   });
 });
 
-// Salvar
+// Salvar — usa data-endpoint para diferenciar cozinha / central
 document.querySelectorAll('.btn-save').forEach(btn => {
   btn.addEventListener('click', function() {
-    const row  = this.closest('.estoque-row');
-    const id   = row.dataset.id;
-    const input = row.querySelector('.estoque-input');
-    const val  = input.value.trim();
-    fetch(`/insumos/${id}/estoque`, {
+    const row     = this.closest('.estoque-row');
+    const endpoint = row.dataset.endpoint;
+    const input   = row.querySelector('.estoque-input');
+    const val     = input.value.trim();
+    fetch(endpoint, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ estoque: val === '' ? 0 : parseFloat(val) })
     }).then(r => r.json()).then(d => {
       if (!d.ok) return;
       input.dataset.original = parseFloat(val).toFixed(2);
+      // Atualiza data-cozinha / data-central na linha para ordenação
+      const tr = row.closest('tr');
+      const v = parseFloat(val) || 0;
+      if (endpoint.includes('estoque_central')) {
+        tr.dataset.central = v;
+      } else {
+        tr.dataset.cozinha = v;
+      }
+      // Atualiza total
+      const total = (parseFloat(tr.dataset.cozinha) || 0) + (parseFloat(tr.dataset.central) || 0);
+      tr.dataset.total = total;
+      const iid = row.dataset.id;
+      const totalEl = document.getElementById('total-' + iid);
+      if (totalEl) {
+        totalEl.innerHTML = total > 0
+          ? `<span style="color:#7c3aed">${total.toFixed(2).replace('.',',')}</span>`
+          : `<span class="text-muted">0,00</span>`;
+      }
       row.classList.remove('dirty');
       row.classList.add('saved');
       this.classList.remove('dirty');
