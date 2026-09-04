@@ -14,6 +14,9 @@
   .selo-nome-nao_revisado  { background:#fde8e8; color:#9b1c1c; border:1px solid #f05252; }
   .selo-nome-em_revisao    { background:#feecdc; color:#7e3a00; border:1px solid #ff8a4c; }
   .selo-nome-revisado      { background:#edebfe; color:#3e1c96; border:1px solid #9061f9; }
+  .selo-fp-nao_revisado { background:#f3f4f6; color:#6b7280; border:1px solid #d1d5db; }
+  .selo-fp-em_revisao   { background:#fef9c3; color:#854d0e; border:1px solid #fde047; }
+  .selo-fp-revisado     { background:#dcfce7; color:#166534; border:1px solid #86efac; }
   /* Observação */
   .obs-wrapper { position:relative; display:inline-block; }
   .obs-icon { font-size:.75rem; color:#6366f1; cursor:pointer; vertical-align:middle; margin-left:4px; }
@@ -78,6 +81,22 @@
   <button type="button" id="nome-filter-clear" class="btn btn-sm btn-outline-secondary mb-0" style="display:none" title="Limpar filtro de nome">
     <i class="bi bi-x-lg"></i>
   </button>
+  <span class="text-muted small mb-1 ms-2">Fat. Perda:</span>
+  <div class="d-flex flex-column align-items-center gap-0">
+    <span class="text-muted mb-1" style="font-size:.65rem;font-weight:600;letter-spacing:.03em" id="cnt-fp-nao_revisado">—</span>
+    <button type="button" class="btn btn-sm btn-outline-secondary fp-filter-btn" data-fp="nao_revisado">Sem revisão</button>
+  </div>
+  <div class="d-flex flex-column align-items-center gap-0">
+    <span class="text-muted mb-1" style="font-size:.65rem;font-weight:600;letter-spacing:.03em" id="cnt-fp-em_revisao">—</span>
+    <button type="button" class="btn btn-sm btn-outline-warning fp-filter-btn" data-fp="em_revisao">Em revisão</button>
+  </div>
+  <div class="d-flex flex-column align-items-center gap-0">
+    <span class="text-muted mb-1" style="font-size:.65rem;font-weight:600;letter-spacing:.03em" id="cnt-fp-revisado">—</span>
+    <button type="button" class="btn btn-sm btn-outline-success fp-filter-btn" data-fp="revisado">FP revisado</button>
+  </div>
+  <button type="button" id="fp-filter-clear" class="btn btn-sm btn-outline-secondary mb-0" style="display:none" title="Limpar filtro">
+    <i class="bi bi-x-lg"></i>
+  </button>
   <div class="d-flex flex-column">
     <span class="text-muted mb-1" style="font-size:.65rem">&nbsp;</span>
     <div class="d-flex align-items-center gap-1">
@@ -109,7 +128,8 @@
       <tbody>
         {% for ins in insumos %}
         {% set mud = mudancas.get(ins.id) %}
-        <tr class="{{ 'sem-preco' if ins.id in sem_preco_ids else '' }}" data-nome="{{ ins.nome|lower }}" data-custo="{{ ins.status_revisao_custo or 'nao_revisado' }}" data-nome-status="{{ ins.status_revisao_nome or 'nao_revisado' }}" data-fornecedor="{{ (ins.fornecedor or '')|lower }}">
+        {% set fp_status = ins.status_revisao_fp or 'nao_revisado' %}
+        <tr class="{{ 'sem-preco' if ins.id in sem_preco_ids else '' }}" data-nome="{{ ins.nome|lower }}" data-custo="{{ ins.status_revisao_custo or 'nao_revisado' }}" data-nome-status="{{ ins.status_revisao_nome or 'nao_revisado' }}" data-fp="{{ fp_status }}" data-fornecedor="{{ (ins.fornecedor or '')|lower }}">
           {% set rc = ins.status_revisao_custo or 'nao_revisado' %}
           {% set rn = ins.status_revisao_nome or 'nao_revisado' %}
           <td class="fw-semibold">
@@ -131,6 +151,12 @@
                   data-id="{{ ins.id }}" data-status="{{ rn }}"
                   title="Clique para alterar status de revisão do nome">
               NOME {{ {'nao_revisado':'NÃO REVISADO','em_revisao':'EM REVISÃO','revisado':'REVISADO'}[rn] }}
+            </span>
+            <span class="selo-revisao selo-fp-{{ fp_status }} ins-fp-btn ms-1 mt-1"
+                  style="cursor:pointer"
+                  data-id="{{ ins.id }}" data-status="{{ fp_status }}"
+                  title="Clique para alterar status de revisão do fator de perda">
+              {{ {'nao_revisado':'FP SEM REVISÃO','em_revisao':'FP EM REVISÃO','revisado':'FP REVISADO'}[fp_status] }}
             </span>
             <span class="obs-wrapper">
               <i class="bi bi-chat-left-text obs-icon {{ '' if ins.observacao else 'obs-icon-empty' }}"
@@ -593,6 +619,73 @@ document.querySelectorAll('.ins-custo-btn').forEach(el => {
   });
 });
 
+// ── Selo FP (Fator de Perda) ──
+const INS_FP_CYCLE = ['nao_revisado', 'em_revisao', 'revisado'];
+const INS_FP_LABEL = { nao_revisado: 'FP SEM REVISÃO', em_revisao: 'FP EM REVISÃO', revisado: 'FP REVISADO' };
+
+document.querySelectorAll('.ins-fp-btn').forEach(el => {
+  el.addEventListener('click', function() {
+    const id = this.dataset.id;
+    const cur = this.dataset.status;
+    const next = INS_FP_CYCLE[(INS_FP_CYCLE.indexOf(cur) + 1) % INS_FP_CYCLE.length];
+    fetch(`/insumos/${id}/revisao-fp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: next })
+    }).then(r => r.json()).then(d => {
+      if (d.ok) {
+        this.dataset.status = next;
+        this.className = `selo-revisao selo-fp-${next} ins-fp-btn ms-1 mt-1`;
+        this.style.cursor = 'pointer';
+        this.textContent = INS_FP_LABEL[next];
+        const tr = this.closest('tr');
+        if (tr) tr.dataset.fp = next;
+        applyVisible();
+      }
+    });
+  });
+});
+
+// ── Filtro de Fator de Perda ──
+const fpAtivos    = new Set();
+const fpFilterClr = document.getElementById('fp-filter-clear');
+const FP_ON = {
+  nao_revisado: ['btn-secondary', 'btn-outline-secondary'],
+  em_revisao:   ['btn-warning',   'btn-outline-warning'],
+  revisado:     ['btn-success',   'btn-outline-success'],
+};
+
+function updateFpBtn(btn) {
+  const c = btn.dataset.fp;
+  if (!FP_ON[c]) return;
+  const [on, off] = FP_ON[c];
+  if (fpAtivos.has(c)) {
+    btn.classList.replace(off, on);
+    btn.innerHTML = '<i class="bi bi-check2 me-1"></i>' + btn.dataset.label;
+  } else {
+    btn.classList.replace(on, off);
+    btn.textContent = btn.dataset.label;
+  }
+}
+
+document.querySelectorAll('.fp-filter-btn').forEach(btn => {
+  btn.dataset.label = btn.textContent.trim();
+  btn.addEventListener('click', () => {
+    const c = btn.dataset.fp;
+    fpAtivos.has(c) ? fpAtivos.delete(c) : fpAtivos.add(c);
+    updateFpBtn(btn);
+    applyVisible();
+  });
+});
+
+if (fpFilterClr) {
+  fpFilterClr.addEventListener('click', () => {
+    fpAtivos.clear();
+    document.querySelectorAll('.fp-filter-btn').forEach(updateFpBtn);
+    applyVisible();
+  });
+}
+
 // ── Buscador + Filtro de custo + Filtro de fornecedor ──
 const buscaInput     = document.getElementById('busca-insumo');
 const buscaClear     = document.getElementById('busca-clear');
@@ -634,13 +727,15 @@ function applyVisible() {
   buscaClear.style.display = q ? '' : 'none';
   document.querySelectorAll('#tabela-insumos tbody tr').forEach(tr => {
     const okBusca = !q    || norm(tr.dataset.nome).includes(q);
-    const okCusto = custoAtivos.size === 0 || custoAtivos.has(tr.dataset.custo || 'nao_revisado');
-    const okNome  = nomeAtivos.size  === 0 || nomeAtivos.has(tr.dataset.nomeStatus || 'nao_revisado');
+    const okCusto = custoAtivos.size  === 0 || custoAtivos.has(tr.dataset.custo || 'nao_revisado');
+    const okNome  = nomeAtivos.size   === 0 || nomeAtivos.has(tr.dataset.nomeStatus || 'nao_revisado');
+    const okFp   = fpAtivos.size     === 0 || fpAtivos.has(tr.dataset.fp || 'nao_revisado');
     const okForn  = !forn || (forn === '__sem_fornecedor__' ? !tr.dataset.fornecedor : tr.dataset.fornecedor === forn);
-    tr.style.display = (okBusca && okCusto && okNome && okForn) ? '' : 'none';
+    tr.style.display = (okBusca && okCusto && okNome && okFp && okForn) ? '' : 'none';
   });
   custoFilterClr.style.display = custoAtivos.size > 0 ? '' : 'none';
   if (nomeFilterClr) nomeFilterClr.style.display = nomeAtivos.size > 0 ? '' : 'none';
+  if (fpFilterClr)   fpFilterClr.style.display   = fpAtivos.size   > 0 ? '' : 'none';
 }
 
 fornFilter.addEventListener('change', applyVisible);
@@ -683,15 +778,20 @@ buscaClear.addEventListener('click', () => { buscaInput.value = ''; applyVisible
   const rows = document.querySelectorAll('#tabela-insumos tbody tr');
   const cc = { nao_revisado: 0, em_revisao: 0, revisado: 0 };
   const nc = { nao_revisado: 0, em_revisao: 0, revisado: 0 };
+  const fc = { nao_revisado: 0, em_revisao: 0, revisado: 0 };
   rows.forEach(tr => {
-    const c = tr.dataset.custo || 'nao_revisado';
+    const c = tr.dataset.custo      || 'nao_revisado';
     const n = tr.dataset.nomeStatus || 'nao_revisado';
+    const f = tr.dataset.fp         || 'nao_revisado';
     if (cc[c] !== undefined) cc[c]++;
     if (nc[n] !== undefined) nc[n]++;
+    if (fc[f] !== undefined) fc[f]++;
   });
   ['nao_revisado','em_revisao','revisado'].forEach(s => {
     document.getElementById('cnt-custo-' + s).textContent = cc[s];
     document.getElementById('cnt-nome-'  + s).textContent = nc[s];
+    const el = document.getElementById('cnt-fp-' + s);
+    if (el) el.textContent = fc[s];
   });
 })();
 

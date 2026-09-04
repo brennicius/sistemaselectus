@@ -354,9 +354,11 @@ def _parse_insumo_form(d):
     unid_emb = d.get('unid_embalagem','').strip() or None
     vinc = int(d['produto_vinculado_id']) if d.get('produto_vinculado_id','').strip() else None
     fornecedor = d.get('fornecedor','').strip() or None
-    aprov_str = d.get('aproveitamento','').strip()
-    aproveitamento = float(aprov_str) if aprov_str else 100.0
-    aproveitamento = max(1.0, min(100.0, aproveitamento))
+    perda_str = d.get('perda','').strip()
+    if perda_str:
+        aproveitamento = max(1.0, min(100.0, 100.0 - float(perda_str)))
+    else:
+        aproveitamento = 100.0
 
     if qtd_emb and unid_emb:
         cf = conv_factor(unid_emb, uu)
@@ -654,6 +656,16 @@ def insumo_revisao_nome(id):
         return jsonify(ok=False), 400
     db = get_db()
     db.execute('UPDATE insumos SET status_revisao_nome=? WHERE id=?', (status, id))
+    db.commit(); db.close()
+    return jsonify(ok=True, status=status)
+
+@app.route('/insumos/<int:id>/revisao-fp', methods=['POST'])
+def insumo_revisao_fp(id):
+    status = request.json.get('status', 'nao_revisado')
+    if status not in ('nao_revisado', 'em_revisao', 'revisado'):
+        return jsonify(ok=False), 400
+    db = get_db()
+    db.execute('UPDATE insumos SET status_revisao_fp=? WHERE id=?', (status, id))
     db.commit(); db.close()
     return jsonify(ok=True, status=status)
 
@@ -984,7 +996,9 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
     _visited = _visited | {produto_id}
 
     rows = db.execute('''
-        SELECT ft.quantidade, i.id ins_id, i.nome, i.unidade_uso,
+        SELECT ft.quantidade,
+               COALESCE(i.aproveitamento, 100) AS aproveitamento,
+               i.id ins_id, i.nome, i.unidade_uso,
                i.unidade_compra, i.preco_compra, i.fator_conversao,
                i.produto_vinculado_id,
                COALESCE(i.estoque_atual, 0) as estoque_atual,
@@ -994,6 +1008,7 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
         WHERE ft.produto_id=?''', (produto_id,)).fetchall()
 
     for r in rows:
+        aprov = (r['aproveitamento'] or 100) / 100
         if r['produto_vinculado_id']:
             # Sub-receita: calcula escala e expande recursivamente
             rend = r['rend_vinc'] or 1
@@ -1002,7 +1017,8 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
             _expand_ingredientes(db, r['produto_vinculado_id'], sub_scale, ins_map, _visited)
         else:
             iid = r['ins_id']
-            qtd_uso = r['quantidade'] * scale
+            # divide pelo aproveitamento: se aprov=85%, precisa de qty/0.85 de ingrediente bruto
+            qtd_uso = r['quantidade'] * scale / aprov
             if iid not in ins_map:
                 ins_map[iid] = {'nome': r['nome'], 'unidade_uso': r['unidade_uso'],
                                 'unidade_compra': r['unidade_compra'],
