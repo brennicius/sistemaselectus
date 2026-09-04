@@ -126,7 +126,52 @@
       <i class="bi bi-table"></i> Consolidado
     </a>
   </nav>
-  <div class="sidebar-footer">v1.0 · Selectus &copy; 2025</div>
+  <div class="sidebar-footer" style="padding:10px 14px">
+    <div class="d-flex gap-2 mb-2">
+      <a href="{{ url_for('sistema_exportar') }}"
+         class="btn btn-sm w-50 fw-semibold"
+         style="background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);font-size:.75rem"
+         title="Baixar banco de dados completo">
+        <i class="bi bi-download me-1"></i>Exportar
+      </a>
+      <button class="btn btn-sm w-50 fw-semibold"
+              style="background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);font-size:.75rem"
+              data-bs-toggle="modal" data-bs-target="#modalImportarBase"
+              title="Restaurar banco de dados">
+        <i class="bi bi-upload me-1"></i>Importar
+      </button>
+    </div>
+    <div style="font-size:.7rem;color:rgba(255,255,255,.3)">v1.0 · Selectus &copy; 2025</div>
+  </div>
+</div>
+
+{# Modal importar base completa #}
+<div class="modal fade" id="modalImportarBase" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" action="{{ url_for('sistema_importar') }}" enctype="multipart/form-data">
+      <div class="modal-content">
+        <div class="modal-header" style="background:#1a3a5c">
+          <h5 class="modal-title text-white"><i class="bi bi-upload me-2"></i>Importar Base Completa</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-warning py-2 small">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            <strong>Atenção:</strong> o arquivo importado <strong>substitui toda a base atual</strong>.
+            Use o arquivo <code>.db</code> exportado por este sistema.
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Arquivo de base (.db)</label>
+            <input type="file" name="arquivo" class="form-control" accept=".db" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-danger"><i class="bi bi-upload me-1"></i>Importar e substituir</button>
+        </div>
+      </div>
+    </form>
+  </div>
 </div>
 
 <div id="main">

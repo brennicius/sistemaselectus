@@ -3265,6 +3265,43 @@ def cafe_del_contagem(cid):
     db.commit(); db.close()
     return redirect(url_for('cafe_estoque'))
 
+# ─────────────── BASE COMPLETA — EXPORTAR / IMPORTAR ────────────────────────
+
+@app.route('/sistema/exportar')
+def sistema_exportar():
+    db_path = os.path.join(os.path.dirname(__file__), 'cozinha.db')
+    from datetime import date as _date
+    fname = f'selectus_base_{_date.today().isoformat()}.db'
+    return send_file(db_path, as_attachment=True, download_name=fname,
+                     mimetype='application/octet-stream')
+
+
+@app.route('/sistema/importar', methods=['POST'])
+def sistema_importar():
+    import sqlite3 as _sqlite3, shutil, tempfile
+    f = request.files.get('arquivo')
+    if not f:
+        flash('Nenhum arquivo enviado.', 'danger')
+        return redirect(request.referrer or url_for('index'))
+    # Salva em temp e valida que é SQLite
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.db')
+    f.save(tmp.name)
+    tmp.close()
+    try:
+        test = _sqlite3.connect(tmp.name)
+        test.execute("SELECT name FROM sqlite_master LIMIT 1").fetchone()
+        test.close()
+    except Exception as e:
+        os.unlink(tmp.name)
+        flash(f'Arquivo inválido: {e}', 'danger')
+        return redirect(request.referrer or url_for('index'))
+    db_path = os.path.join(os.path.dirname(__file__), 'cozinha.db')
+    shutil.copy2(tmp.name, db_path)
+    os.unlink(tmp.name)
+    flash('Base importada com sucesso! O sistema foi atualizado.', 'success')
+    return redirect(url_for('index'))
+
+
 # ─────────────── CAFÉ — EXPORTAR / IMPORTAR ──────────────────────────────────
 
 @app.route('/cafe/exportar')
