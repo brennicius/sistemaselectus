@@ -3328,36 +3328,54 @@ def cafe_importar():
     if not f:
         flash('Nenhum arquivo enviado.', 'danger')
         return redirect(url_for('cafe_lista'))
-    aba = request.form.get('aba', 'Entradas')
+    aba = request.form.get('aba', 'Tudo')
     wb = openpyxl.load_workbook(f, data_only=True)
     db = get_db()
     _init_estoque_tables(db)
     inseridos = 0
 
-    if aba == 'Entradas' and 'Entradas' in wb.sheetnames:
-        ws = wb['Entradas']
-        for row in ws.iter_rows(min_row=2, values_only=True):
+    abas_importar = {'Entradas', 'Contagens', 'Leituras'} if aba == 'Tudo' else {aba}
+
+    if 'Entradas' in abas_importar and 'Entradas' in wb.sheetnames:
+        for row in wb['Entradas'].iter_rows(min_row=2, values_only=True):
             _, data, insumo, origem, local, qtd_kg, obs = (list(row) + [None]*7)[:7]
             if not data or not insumo or qtd_kg is None: continue
             data = str(data)[:10]
-            existe = db.execute("SELECT id FROM cafe_estoque_entradas WHERE data=? AND insumo=? AND qtd_kg=?",
-                                (data, insumo, float(qtd_kg))).fetchone()
-            if not existe:
+            if not db.execute("SELECT id FROM cafe_estoque_entradas WHERE data=? AND insumo=? AND qtd_kg=?",
+                              (data, insumo, float(qtd_kg))).fetchone():
                 db.execute("INSERT INTO cafe_estoque_entradas (data, insumo, origem, local, qtd_kg, obs) VALUES (?,?,?,?,?,?)",
                            (data, insumo, origem or 'Fornecedor', local or 'Central', float(qtd_kg), obs or ''))
                 inseridos += 1
 
-    elif aba == 'Contagens' and 'Contagens' in wb.sheetnames:
-        ws = wb['Contagens']
-        for row in ws.iter_rows(min_row=2, values_only=True):
+    if 'Contagens' in abas_importar and 'Contagens' in wb.sheetnames:
+        for row in wb['Contagens'].iter_rows(min_row=2, values_only=True):
             _, data, insumo, local, qtd_kg = (list(row) + [None]*5)[:5]
             if not data or not insumo or qtd_kg is None: continue
             data = str(data)[:10]
-            existe = db.execute("SELECT id FROM cafe_estoque_contagens WHERE data=? AND insumo=? AND local=?",
-                                (data, insumo, local or 'Central')).fetchone()
-            if not existe:
+            if not db.execute("SELECT id FROM cafe_estoque_contagens WHERE data=? AND insumo=? AND local=?",
+                              (data, insumo, local or 'Central')).fetchone():
                 db.execute("INSERT INTO cafe_estoque_contagens (data, insumo, local, qtd_kg) VALUES (?,?,?,?)",
                            (data, insumo, local or 'Central', float(qtd_kg)))
+                inseridos += 1
+
+    if 'Leituras' in abas_importar and 'Leituras' in wb.sheetnames:
+        COLS_L = ['expresso','curto','duplo','americano','capuccino','cafe_leite',
+                  'cafe_leite_curto','achoc_kitkat','capp_alpino','achoc_alpino','mocaccino_2f','achoc_2f']
+        maq_map = {(r['nome'], r['pdv']): r['id']
+                   for r in db.execute("SELECT id, nome, pdv FROM cafe_maquinas").fetchall()}
+        for row in wb['Leituras'].iter_rows(min_row=2, values_only=True):
+            cells = list(row) + [None]*16
+            maq_nome, pdv, tipo, data_str = cells[0], cells[1], cells[2], cells[3]
+            vals = cells[4:16]
+            if not maq_nome or not data_str: continue
+            data_str = str(data_str)[:10]
+            mid = maq_map.get((maq_nome, pdv))
+            if not mid: continue
+            if not db.execute("SELECT id FROM cafe_leituras WHERE maquina_id=? AND data=?", (mid, data_str)).fetchone():
+                cols_sql = ', '.join(COLS_L)
+                ph = ', '.join(['?']*12)
+                db.execute(f"INSERT INTO cafe_leituras (maquina_id, data, {cols_sql}) VALUES (?,?,{ph})",
+                           [mid, data_str] + [int(v) if v is not None else None for v in vals])
                 inseridos += 1
 
     db.commit(); db.close()
