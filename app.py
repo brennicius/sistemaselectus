@@ -14,6 +14,7 @@ CATEGORIAS = [
     ('Frutas',         'bg-danger'),
     ('Sanduíches',     'bg-primary'),
     ('Sobremesas',     'bg-purple'),
+    ('Sobremesas especiais', 'bg-purple'),
     ('Base saladas',   'bg-secondary'),
     ('Produção',       'bg-dark text-white'),
     ('Poke',           'bg-info text-dark'),

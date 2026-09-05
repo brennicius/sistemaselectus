@@ -107,6 +107,12 @@
       </select>
     </div>
   </div>
+  <div class="d-flex flex-column">
+    <span class="text-muted mb-1" style="font-size:.65rem">&nbsp;</span>
+    <button type="button" id="btn-ultimos" class="btn btn-sm btn-outline-primary" title="Mostrar apenas os últimos 30 insumos cadastrados">
+      <i class="bi bi-clock-history me-1"></i>Últimos 30
+    </button>
+  </div>
 </div>
 
 <div class="card shadow-sm">
@@ -129,7 +135,7 @@
         {% for ins in insumos %}
         {% set mud = mudancas.get(ins.id) %}
         {% set fp_status = ins.status_revisao_fp or 'nao_revisado' %}
-        <tr class="{{ 'sem-preco' if ins.id in sem_preco_ids else '' }}" data-nome="{{ ins.nome|lower }}" data-custo="{{ ins.status_revisao_custo or 'nao_revisado' }}" data-nome-status="{{ ins.status_revisao_nome or 'nao_revisado' }}" data-fp="{{ fp_status }}" data-fornecedor="{{ (ins.fornecedor or '')|lower }}">
+        <tr class="{{ 'sem-preco' if ins.id in sem_preco_ids else '' }}" data-id="{{ ins.id }}" data-nome="{{ ins.nome|lower }}" data-custo="{{ ins.status_revisao_custo or 'nao_revisado' }}" data-nome-status="{{ ins.status_revisao_nome or 'nao_revisado' }}" data-fp="{{ fp_status }}" data-fornecedor="{{ (ins.fornecedor or '')|lower }}">
           {% set rc = ins.status_revisao_custo or 'nao_revisado' %}
           {% set rn = ins.status_revisao_nome or 'nao_revisado' %}
           <td class="fw-semibold">
@@ -721,17 +727,42 @@ const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   });
 })();
 
+let ultimosAtivo = false;
+let ultimosIds   = new Set();
+
+(function computeUltimos() {
+  const ids = Array.from(document.querySelectorAll('#tabela-insumos tbody tr'))
+    .map(tr => parseInt(tr.dataset.id || '0'))
+    .filter(n => !isNaN(n));
+  ids.sort((a, b) => b - a);
+  ultimosIds = new Set(ids.slice(0, 30));
+})();
+
+const btnUltimos = document.getElementById('btn-ultimos');
+btnUltimos.addEventListener('click', () => {
+  ultimosAtivo = !ultimosAtivo;
+  if (ultimosAtivo) {
+    btnUltimos.classList.replace('btn-outline-primary', 'btn-primary');
+    btnUltimos.innerHTML = '<i class="bi bi-check2 me-1"></i>Últimos 30';
+  } else {
+    btnUltimos.classList.replace('btn-primary', 'btn-outline-primary');
+    btnUltimos.innerHTML = '<i class="bi bi-clock-history me-1"></i>Últimos 30';
+  }
+  applyVisible();
+});
+
 function applyVisible() {
   const q    = norm(buscaInput.value.trim());
   const forn = fornFilter.value;
   buscaClear.style.display = q ? '' : 'none';
   document.querySelectorAll('#tabela-insumos tbody tr').forEach(tr => {
-    const okBusca = !q    || norm(tr.dataset.nome).includes(q);
-    const okCusto = custoAtivos.size  === 0 || custoAtivos.has(tr.dataset.custo || 'nao_revisado');
-    const okNome  = nomeAtivos.size   === 0 || nomeAtivos.has(tr.dataset.nomeStatus || 'nao_revisado');
-    const okFp   = fpAtivos.size     === 0 || fpAtivos.has(tr.dataset.fp || 'nao_revisado');
-    const okForn  = !forn || (forn === '__sem_fornecedor__' ? !tr.dataset.fornecedor : tr.dataset.fornecedor === forn);
-    tr.style.display = (okBusca && okCusto && okNome && okFp && okForn) ? '' : 'none';
+    const okBusca   = !q    || norm(tr.dataset.nome).includes(q);
+    const okCusto   = custoAtivos.size === 0 || custoAtivos.has(tr.dataset.custo || 'nao_revisado');
+    const okNome    = nomeAtivos.size  === 0 || nomeAtivos.has(tr.dataset.nomeStatus || 'nao_revisado');
+    const okFp      = fpAtivos.size    === 0 || fpAtivos.has(tr.dataset.fp || 'nao_revisado');
+    const okForn    = !forn || (forn === '__sem_fornecedor__' ? !tr.dataset.fornecedor : tr.dataset.fornecedor === forn);
+    const okUltimos = !ultimosAtivo || ultimosIds.has(parseInt(tr.dataset.id || '0'));
+    tr.style.display = (okBusca && okCusto && okNome && okFp && okForn && okUltimos) ? '' : 'none';
   });
   custoFilterClr.style.display = custoAtivos.size > 0 ? '' : 'none';
   if (nomeFilterClr) nomeFilterClr.style.display = nomeAtivos.size > 0 ? '' : 'none';
