@@ -80,6 +80,18 @@
   </button>
 </div>
 
+<!-- Filtro Categoria -->
+<div class="mb-3 d-flex gap-2 align-items-center flex-wrap">
+  <span class="text-muted small">Categoria:</span>
+  {% for nome, cls in categorias %}
+  <button type="button" class="btn btn-sm btn-outline-secondary filter-cat-btn" data-cat="{{ nome }}">{{ nome }}</button>
+  {% endfor %}
+  <button type="button" id="filter-cat-clear" class="btn btn-sm btn-outline-secondary" style="display:none" title="Limpar">
+    <i class="bi bi-x-lg"></i>
+  </button>
+  <span id="cat-contador" class="text-muted small" style="display:none"></span>
+</div>
+
 <div class="row g-3" id="fichas-grid">
   {% for r in resultado %}
   {% set mud = mudancas_custo.get(r.p.id) %}
@@ -305,7 +317,10 @@ const buscaClear   = document.getElementById('busca-clear');
 const clearRevBtn  = document.getElementById('filter-clear-btn');
 const revAtivos    = new Set();
 const ativoAtivos  = new Set();
+const catAtivos    = new Set();
 const filterAtivoClear = document.getElementById('filter-ativo-clear');
+const filterCatClear   = document.getElementById('filter-cat-clear');
+const catContador      = document.getElementById('cat-contador');
 
 const REV_ON  = { nao_revisada: ['btn-warning','btn-outline-warning'], em_revisao: ['btn-info','btn-outline-info'], revisada: ['btn-success','btn-outline-success'] };
 const ATIVO_ON = { ativo: ['btn-success','btn-outline-success'], inativo: ['btn-danger','btn-outline-danger'] };
@@ -313,14 +328,25 @@ const ATIVO_ON = { ativo: ['btn-success','btn-outline-success'], inativo: ['btn-
 function applyVisible() {
   const q = buscaInput.value.trim().toLowerCase();
   buscaClear.style.display = q ? '' : 'none';
+  let visible = 0;
   document.querySelectorAll('.ficha-col').forEach(col => {
     const okBusca = !q || col.dataset.nome.toLowerCase().includes(q) || col.dataset.cat.toLowerCase().includes(q);
     const okRev   = revAtivos.size === 0 || revAtivos.has(col.dataset.revisao || 'nao_revisada');
     const okAtivo = ativoAtivos.size === 0 || ativoAtivos.has(col.dataset.ativo || 'ativo');
-    col.style.display = (okBusca && okRev && okAtivo) ? '' : 'none';
+    const okCat   = catAtivos.size === 0 || catAtivos.has(col.dataset.cat || '');
+    const show = okBusca && okRev && okAtivo && okCat;
+    col.style.display = show ? '' : 'none';
+    if (show) visible++;
   });
   clearRevBtn.style.display = revAtivos.size > 0 ? '' : 'none';
   filterAtivoClear.style.display = ativoAtivos.size > 0 ? '' : 'none';
+  filterCatClear.style.display = catAtivos.size > 0 ? '' : 'none';
+  if (catAtivos.size > 0) {
+    catContador.style.display = '';
+    catContador.textContent = visible + ' produto' + (visible !== 1 ? 's' : '');
+  } else {
+    catContador.style.display = 'none';
+  }
 }
 
 // Filtro Ativo/Inativo
@@ -402,6 +428,35 @@ document.querySelectorAll('.filter-rev-btn').forEach(btn => {
 clearRevBtn.addEventListener('click', () => {
   revAtivos.clear();
   document.querySelectorAll('.filter-rev-btn').forEach(updateRevBtn);
+  applyVisible();
+});
+
+// Filtro Categoria
+document.querySelectorAll('.filter-cat-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const cat = btn.dataset.cat;
+    if (catAtivos.has(cat)) {
+      catAtivos.delete(cat);
+      btn.classList.remove('btn-secondary');
+      btn.classList.add('btn-outline-secondary');
+      btn.innerHTML = btn.dataset.label || btn.textContent.replace(/✓ /,'');
+    } else {
+      catAtivos.add(cat);
+      btn.classList.remove('btn-outline-secondary');
+      btn.classList.add('btn-secondary');
+      btn.dataset.label = btn.textContent.trim();
+      btn.innerHTML = '<i class="bi bi-check2 me-1"></i>' + btn.dataset.label;
+    }
+    applyVisible();
+  });
+});
+filterCatClear.addEventListener('click', () => {
+  catAtivos.clear();
+  document.querySelectorAll('.filter-cat-btn').forEach(btn => {
+    btn.classList.remove('btn-secondary');
+    btn.classList.add('btn-outline-secondary');
+    if (btn.dataset.label) btn.textContent = btn.dataset.label;
+  });
   applyVisible();
 });
 
