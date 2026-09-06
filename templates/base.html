@@ -115,6 +115,9 @@
     <a href="{{ url_for('requisicoes_lista') }}" class="{{ 'active' if 'requisicao' in request.endpoint }}">
       <i class="bi bi-arrow-left-right"></i> Requisições
     </a>
+    <a href="{{ url_for('descartes_lista') }}" class="{{ 'active' if 'descarte' in request.endpoint }}">
+      <i class="bi bi-trash3"></i> Descartes
+    </a>
     <a href="{{ url_for('alertas') }}" class="{{ 'active' if request.endpoint == 'alertas' }}" style="justify-content:space-between">
       <span><i class="bi bi-archive me-2"></i>Estoque</span>
       {% if n_alertas > 0 %}<span class="badge bg-danger">{{ n_alertas }}</span>{% endif %}

@@ -3832,6 +3832,112 @@ def cafe_importar():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# DESCARTES
+# ─────────────────────────────────────────────────────────────────────────────
+
+PDVS_DESCARTE = ['Amaro', 'Portugues', 'Izabel', 'Agnus', 'Cris']
+
+@app.route('/descartes')
+def descartes_lista():
+    db = get_db()
+    hoje = date.today().isoformat()
+
+    data_ini = request.args.get('data_ini', '')
+    data_fim = request.args.get('data_fim', '')
+    local    = request.args.get('local', '')
+
+    filtro = {'data_ini': data_ini, 'data_fim': data_fim, 'local': local}
+
+    sql  = "SELECT * FROM descartes WHERE 1=1"
+    args = []
+    if data_ini:
+        sql += " AND data >= ?"; args.append(data_ini)
+    if data_fim:
+        sql += " AND data <= ?"; args.append(data_fim)
+    if local:
+        sql += " AND local = ?"; args.append(local)
+    sql += " ORDER BY data DESC, id DESC"
+
+    rows = [dict(r) for r in db.execute(sql, args).fetchall()]
+
+    # totais por PDV
+    totais = {}
+    for r in rows:
+        totais[r['local']] = totais.get(r['local'], 0) + r['qtd_descartada']
+
+    # autocomplete: nomes de produtos já cadastrados
+    nomes_auto = sorted({r['nome'] for r in db.execute("SELECT nome FROM produtos WHERE ativo=1").fetchall()})
+
+    # comparativo por produto × PDV
+    comp_sql = """
+        SELECT produto, local AS pdv,
+               SUM(qtd_descartada) AS descartado
+        FROM descartes WHERE 1=1
+    """
+    comp_args = []
+    if data_ini:
+        comp_sql += " AND data >= ?"; comp_args.append(data_ini)
+    if data_fim:
+        comp_sql += " AND data <= ?"; comp_args.append(data_fim)
+    if local:
+        comp_sql += " AND local = ?"; comp_args.append(local)
+    comp_sql += " GROUP BY produto, local ORDER BY produto, local"
+    comparativo = [dict(r) for r in db.execute(comp_sql, comp_args).fetchall()]
+    for c in comparativo:
+        c['enviado'] = None
+        c['pct']     = None
+
+    # comp_map keyed by (PRODUTO_UPPER, local, lote) — empty for now, can be enriched later
+    comp_map = {}
+
+    db.close()
+    return render_template('descartes.html',
+                           rows=rows, filtro=filtro, pdvs=PDVS_DESCARTE,
+                           nomes_auto=nomes_auto, hoje=hoje,
+                           totais=totais, comparativo=comparativo,
+                           comp_map=comp_map)
+
+
+@app.route('/descartes/novo', methods=['POST'])
+def descartes_novo():
+    db = get_db()
+    data         = request.form.get('data', '')
+    local        = request.form.get('local', '')
+    produto      = request.form.get('produto', '').strip()
+    qtd          = int(request.form.get('qtd_descartada', 0) or 0)
+    lote         = request.form.get('lote', '').strip() or None
+
+    if data and local and produto and qtd > 0:
+        db.execute(
+            "INSERT INTO descartes (data, local, produto, qtd_descartada, lote) VALUES (?,?,?,?,?)",
+            (data, local, produto, qtd, lote)
+        )
+        db.commit()
+        flash('Descarte registrado.', 'success')
+    else:
+        flash('Preencha todos os campos obrigatórios.', 'warning')
+    db.close()
+
+    filtro_data_ini = request.form.get('filtro_data_ini', '')
+    filtro_data_fim = request.form.get('filtro_data_fim', '')
+    filtro_local    = request.form.get('filtro_local', '')
+    return redirect(url_for('descartes_lista',
+                            data_ini=filtro_data_ini,
+                            data_fim=filtro_data_fim,
+                            local=filtro_local))
+
+
+@app.route('/descartes/excluir/<int:id>', methods=['POST'])
+def descartes_excluir(id):
+    db = get_db()
+    db.execute("DELETE FROM descartes WHERE id=?", (id,))
+    db.commit()
+    db.close()
+    flash('Descarte excluído.', 'info')
+    return redirect(url_for('descartes_lista'))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 init_db()
 
