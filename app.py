@@ -3891,15 +3891,23 @@ def descartes_lista():
 
     pivot_pdvs = PDVS_DESCARTE
 
+    import re as _re
+    def _norm_prod(s):
+        s = _re.sub(r'\s*-\s*N\b', '', s, flags=_re.IGNORECASE)
+        s = _re.sub(r'\s*-\s*150G\b', '', s, flags=_re.IGNORECASE)
+        return s.strip()
+
     # group by (data, lote): {(data,lote): {produto: {pdv: qtd, '_enviado': N}}}
     from collections import OrderedDict
     dates_pivot = OrderedDict()
     for r in pivot_rows:
         key = (r['data'], r['lote'] or '')
         prod_map = dates_pivot.setdefault(key, {})
-        prod_map.setdefault(r['produto'], {'_enviado': r['enviado'] or 0})[r['pdv']] = r['qtd']
+        nome = _norm_prod(r['produto'])
+        entry = prod_map.setdefault(nome, {'_enviado': r['enviado'] or 0})
+        entry[r['pdv']] = entry.get(r['pdv'], 0) + r['qtd']
         if r['enviado']:
-            prod_map[r['produto']]['_enviado'] = r['enviado']
+            entry['_enviado'] = max(entry['_enviado'], r['enviado'])
 
     pivot_by_date = []
     for (d, lote), prod_map in dates_pivot.items():
