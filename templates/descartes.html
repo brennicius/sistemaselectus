@@ -97,10 +97,15 @@
       {% endfor %}
     </select>
   </div>
+  <div>
+    <label class="form-label mb-1" style="font-size:.78rem;font-weight:600">Lote</label>
+    <input type="text" name="lote" class="form-control form-control-sm" value="{{ filtro.lote }}"
+           placeholder="ex: 26A31" style="width:110px" autocomplete="off">
+  </div>
   <button type="submit" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-funnel me-1"></i>Filtrar
   </button>
-  {% if filtro.data_ini or filtro.data_fim or filtro.local %}
+  {% if filtro.data_ini or filtro.data_fim or filtro.local or filtro.lote %}
   <a href="{{ url_for('descartes_lista') }}" class="btn btn-outline-danger btn-sm">
     <i class="bi bi-x-circle me-1"></i>Limpar
   </a>

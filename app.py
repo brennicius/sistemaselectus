@@ -3845,8 +3845,9 @@ def descartes_lista():
     data_ini = request.args.get('data_ini', '')
     data_fim = request.args.get('data_fim', '')
     local    = request.args.get('local', '')
+    lote_f   = request.args.get('lote', '').strip().upper()
 
-    filtro = {'data_ini': data_ini, 'data_fim': data_fim, 'local': local}
+    filtro = {'data_ini': data_ini, 'data_fim': data_fim, 'local': local, 'lote': lote_f}
 
     sql  = "SELECT * FROM descartes WHERE 1=1"
     args = []
@@ -3856,6 +3857,8 @@ def descartes_lista():
         sql += " AND data <= ?"; args.append(data_fim)
     if local:
         sql += " AND local = ?"; args.append(local)
+    if lote_f:
+        sql += " AND UPPER(lote) = ?"; args.append(lote_f)
     sql += " ORDER BY data DESC, id DESC"
 
     rows = [dict(r) for r in db.execute(sql, args).fetchall()]
@@ -3897,6 +3900,8 @@ def descartes_lista():
         pivot_sql += " AND d.data <= ?"; pivot_args.append(data_fim)
     if local:
         pivot_sql += " AND d.local = ?"; pivot_args.append(local)
+    if lote_f:
+        pivot_sql += " AND UPPER(d.lote) = ?"; pivot_args.append(lote_f)
     pivot_sql += " GROUP BY d.data, d.lote, d.produto, d.local ORDER BY d.data DESC, d.lote, d.produto"
     pivot_rows = db.execute(pivot_sql, pivot_args).fetchall()
 
