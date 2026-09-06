@@ -3868,34 +3868,49 @@ def descartes_lista():
     # autocomplete: nomes de produtos já cadastrados
     nomes_auto = sorted({r['nome'] for r in db.execute("SELECT nome FROM produtos WHERE ativo=1").fetchall()})
 
-    # comparativo por produto × PDV
-    comp_sql = """
-        SELECT produto, local AS pdv,
-               SUM(qtd_descartada) AS descartado
+    # pivot: produto × PDV como colunas
+    pivot_sql = """
+        SELECT produto, local AS pdv, SUM(qtd_descartada) AS qtd
         FROM descartes WHERE 1=1
     """
-    comp_args = []
+    pivot_args = []
     if data_ini:
-        comp_sql += " AND data >= ?"; comp_args.append(data_ini)
+        pivot_sql += " AND data >= ?"; pivot_args.append(data_ini)
     if data_fim:
-        comp_sql += " AND data <= ?"; comp_args.append(data_fim)
+        pivot_sql += " AND data <= ?"; pivot_args.append(data_fim)
     if local:
-        comp_sql += " AND local = ?"; comp_args.append(local)
-    comp_sql += " GROUP BY produto, local ORDER BY produto, local"
-    comparativo = [dict(r) for r in db.execute(comp_sql, comp_args).fetchall()]
-    for c in comparativo:
-        c['enviado'] = None
-        c['pct']     = None
+        pivot_sql += " AND local = ?"; pivot_args.append(local)
+    pivot_sql += " GROUP BY produto, local"
+    pivot_rows = db.execute(pivot_sql, pivot_args).fetchall()
 
-    # comp_map keyed by (PRODUTO_UPPER, local, lote) — empty for now, can be enriched later
+    # build pivot: {produto: {pdv: qtd}}
+    pivot = {}
+    for r in pivot_rows:
+        pivot.setdefault(r['produto'], {})[r['pdv']] = r['qtd']
+
+    # list of (produto, {pdv: qtd, 'total': N}) sorted by produto
+    pivot_pdvs = PDVS_DESCARTE
+    pivot_table = []
+    for prod, pdv_map in sorted(pivot.items()):
+        row_total = sum(pdv_map.values())
+        pivot_table.append({'produto': prod, 'pdvs': pdv_map, 'total': row_total})
+
+    # totals row
+    pivot_col_totals = {pdv: sum(r['pdvs'].get(pdv, 0) for r in pivot_table) for pdv in pivot_pdvs}
+    pivot_grand_total = sum(pivot_col_totals.values())
+
     comp_map = {}
+    comparativo = []  # kept for template compat
 
     db.close()
     return render_template('descartes.html',
                            rows=rows, filtro=filtro, pdvs=PDVS_DESCARTE,
                            nomes_auto=nomes_auto, hoje=hoje,
                            totais=totais, comparativo=comparativo,
-                           comp_map=comp_map)
+                           comp_map=comp_map,
+                           pivot_table=pivot_table, pivot_pdvs=pivot_pdvs,
+                           pivot_col_totals=pivot_col_totals,
+                           pivot_grand_total=pivot_grand_total)
 
 
 @app.route('/descartes/novo', methods=['POST'])

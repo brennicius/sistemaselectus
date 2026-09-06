@@ -194,58 +194,52 @@
 </div>
 {% endif %}
 
-{% if comparativo %}
+{% if pivot_table %}
 <div class="mt-4">
   <h6 class="fw-semibold mb-2" style="color:#1a3a5c">
-    <i class="bi bi-bar-chart-line me-1"></i>Total por Produto × PDV
+    <i class="bi bi-grid-3x3-gap me-1"></i>Total por Produto × PDV
   </h6>
   <div class="card shadow-sm">
     <div class="card-body p-0">
+      <div class="overflow-x-auto">
       <table class="table table-sm table-hover align-middle mb-0" style="font-size:.83rem">
         <thead style="background:#1a3a5c;color:#fff">
           <tr>
             <th>Produto</th>
-            <th style="width:110px">PDV</th>
-            <th class="text-end" style="width:90px">Total Enviado</th>
-            <th class="text-end" style="width:90px">Total Desc.</th>
-            <th class="text-end" style="width:75px">% Desc.</th>
-            <th style="width:120px"></th>
+            {% for pdv in pivot_pdvs %}
+            <th class="text-center" style="width:75px">{{ pdv }}</th>
+            {% endfor %}
+            <th class="text-center" style="width:65px">Total</th>
           </tr>
         </thead>
         <tbody>
-          {% set ns3 = namespace(cur_prod='') %}
-          {% for c in comparativo %}
-          {% if c.produto != ns3.cur_prod %}
-          {% set ns3.cur_prod = c.produto %}
-          <tr style="background:#f1f5f9">
-            <td colspan="6" class="fw-semibold" style="font-size:.78rem;color:#475569;padding:4px 12px">
-              {{ c.produto }}
-            </td>
-          </tr>
-          {% endif %}
+          {% for r in pivot_table %}
           <tr>
-            <td></td>
-            <td><span class="badge-pdv pdv-{{ c.pdv }}">{{ c.pdv }}</span></td>
-            <td class="text-end font-monospace text-muted">{{ c.enviado }}</td>
-            <td class="text-end font-monospace fw-semibold text-danger">{{ c.descartado }}</td>
-            <td class="text-end font-monospace">
-              {% if c.pct is not none %}
-              <span class="fw-semibold {{ 'text-danger' if c.pct >= 15 else ('text-warning' if c.pct >= 8 else 'text-success') }}">
-                {{ c.pct }}%
-              </span>
-              {% else %}<span class="text-muted">—</span>{% endif %}
+            <td class="fw-semibold">{{ r.produto }}</td>
+            {% for pdv in pivot_pdvs %}
+            {% set q = r.pdvs.get(pdv, 0) %}
+            <td class="text-center font-monospace {% if q > 0 %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+              {{ q if q > 0 else '—' }}
             </td>
-            <td>
-              {% if c.pct is not none %}
-              <div style="background:#e5e7eb;border-radius:4px;height:7px;overflow:hidden;margin:0 8px">
-                <div style="height:100%;width:{{ [c.pct,100]|min }}%;background:{{ '#dc2626' if c.pct >= 15 else ('#f59e0b' if c.pct >= 8 else '#16a34a') }}"></div>
-              </div>
-              {% endif %}
-            </td>
+            {% endfor %}
+            <td class="text-center fw-bold text-danger font-monospace">{{ r.total }}</td>
           </tr>
           {% endfor %}
         </tbody>
+        <tfoot style="background:#f1f5f9;border-top:2px solid #cbd5e1">
+          <tr>
+            <td class="fw-bold" style="font-size:.8rem;color:#475569">Total</td>
+            {% for pdv in pivot_pdvs %}
+            {% set ct = pivot_col_totals.get(pdv, 0) %}
+            <td class="text-center fw-bold font-monospace {% if ct > 0 %}text-danger{% else %}text-muted{% endif %}">
+              {{ ct if ct > 0 else '—' }}
+            </td>
+            {% endfor %}
+            <td class="text-center fw-bold text-danger font-monospace">{{ pivot_grand_total }}</td>
+          </tr>
+        </tfoot>
       </table>
+      </div>
     </div>
   </div>
 </div>
