@@ -3868,39 +3868,63 @@ def descartes_lista():
     # autocomplete: nomes de produtos já cadastrados
     nomes_auto = sorted({r['nome'] for r in db.execute("SELECT nome FROM produtos WHERE ativo=1").fetchall()})
 
-    # pivot: produto × PDV como colunas
+    # pivot por data+lote: produto × PDV, com enviado de registro_itens
     pivot_sql = """
-        SELECT produto, local AS pdv, SUM(qtd_descartada) AS qtd
-        FROM descartes WHERE 1=1
+        SELECT d.data, d.lote, d.produto, d.local AS pdv,
+               SUM(d.qtd_descartada) AS qtd,
+               MAX(COALESCE(ri.env_amaro,0)+COALESCE(ri.env_izabel,0)+
+                   COALESCE(ri.env_portugues,0)+COALESCE(ri.env_agnus,0)+
+                   COALESCE(ri.env_cris,0)) AS enviado
+        FROM descartes d
+        LEFT JOIN registro_itens ri ON d.registro_item_id = ri.id
+        WHERE 1=1
     """
     pivot_args = []
     if data_ini:
-        pivot_sql += " AND data >= ?"; pivot_args.append(data_ini)
+        pivot_sql += " AND d.data >= ?"; pivot_args.append(data_ini)
     if data_fim:
-        pivot_sql += " AND data <= ?"; pivot_args.append(data_fim)
+        pivot_sql += " AND d.data <= ?"; pivot_args.append(data_fim)
     if local:
-        pivot_sql += " AND local = ?"; pivot_args.append(local)
-    pivot_sql += " GROUP BY produto, local"
+        pivot_sql += " AND d.local = ?"; pivot_args.append(local)
+    pivot_sql += " GROUP BY d.data, d.lote, d.produto, d.local ORDER BY d.data DESC, d.lote, d.produto"
     pivot_rows = db.execute(pivot_sql, pivot_args).fetchall()
 
-    # build pivot: {produto: {pdv: qtd}}
-    pivot = {}
-    for r in pivot_rows:
-        pivot.setdefault(r['produto'], {})[r['pdv']] = r['qtd']
-
-    # list of (produto, {pdv: qtd, 'total': N}) sorted by produto
     pivot_pdvs = PDVS_DESCARTE
-    pivot_table = []
-    for prod, pdv_map in sorted(pivot.items()):
-        row_total = sum(pdv_map.values())
-        pivot_table.append({'produto': prod, 'pdvs': pdv_map, 'total': row_total})
 
-    # totals row
-    pivot_col_totals = {pdv: sum(r['pdvs'].get(pdv, 0) for r in pivot_table) for pdv in pivot_pdvs}
-    pivot_grand_total = sum(pivot_col_totals.values())
+    # group by (data, lote): {(data,lote): {produto: {pdv: qtd, '_enviado': N}}}
+    from collections import OrderedDict
+    dates_pivot = OrderedDict()
+    for r in pivot_rows:
+        key = (r['data'], r['lote'] or '')
+        prod_map = dates_pivot.setdefault(key, {})
+        prod_map.setdefault(r['produto'], {'_enviado': r['enviado'] or 0})[r['pdv']] = r['qtd']
+        if r['enviado']:
+            prod_map[r['produto']]['_enviado'] = r['enviado']
+
+    pivot_by_date = []
+    for (d, lote), prod_map in dates_pivot.items():
+        tbl = []
+        for prod, pdv_map in sorted(prod_map.items()):
+            enviado = pdv_map.get('_enviado', 0) or 0
+            qtds = {k: v for k, v in pdv_map.items() if k != '_enviado'}
+            tbl.append({
+                'produto': prod,
+                'pdvs': qtds,
+                'enviado': enviado,
+                'total': sum(qtds.values()),
+            })
+        col_totals = {pdv: sum(r['pdvs'].get(pdv, 0) for r in tbl) for pdv in pivot_pdvs}
+        pivot_by_date.append({
+            'data': d,
+            'lote': lote,
+            'table': tbl,
+            'col_totals': col_totals,
+            'grand_total': sum(col_totals.values()),
+            'total_enviado': sum(r['enviado'] for r in tbl),
+        })
 
     comp_map = {}
-    comparativo = []  # kept for template compat
+    comparativo = []
 
     db.close()
     return render_template('descartes.html',
@@ -3908,9 +3932,7 @@ def descartes_lista():
                            nomes_auto=nomes_auto, hoje=hoje,
                            totais=totais, comparativo=comparativo,
                            comp_map=comp_map,
-                           pivot_table=pivot_table, pivot_pdvs=pivot_pdvs,
-                           pivot_col_totals=pivot_col_totals,
-                           pivot_grand_total=pivot_grand_total)
+                           pivot_by_date=pivot_by_date, pivot_pdvs=pivot_pdvs)
 
 
 @app.route('/descartes/novo', methods=['POST'])

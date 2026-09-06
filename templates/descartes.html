@@ -10,6 +10,13 @@
   .pdv-Cris     { background:#f3e8ff; color:#7e22ce; }
   .filter-bar   { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 16px; }
   .add-card     { border-left:4px solid #2e75b6; }
+  .pivot-date-header {
+    font-size:.82rem; font-weight:700; color:#1a3a5c;
+    padding:6px 12px; background:#e8f0f8; border-radius:6px;
+    margin-bottom:6px; display:flex; align-items:center; gap:6px;
+  }
+  .pivot-tbl th { font-size:.82rem; }
+  .pivot-tbl td { font-size:.83rem; }
 </style>
 
 <div class="page-header d-flex justify-content-between align-items-center">
@@ -112,81 +119,74 @@
   {% endif %}
 </form>
 
-{# ── Tabela ── #}
-{% if rows %}
-<div class="card shadow-sm">
-  <div class="card-body p-0">
-    <table class="table table-sm table-hover align-middle mb-0" style="font-size:.85rem">
-      <thead style="background:#1a3a5c;color:#fff">
-        <tr>
-          <th style="width:90px">Data</th>
-          <th style="width:100px">PDV</th>
-          <th>Produto</th>
-          <th style="width:75px">Lote</th>
-          <th class="text-end" style="width:55px">Qtd</th>
-          <th class="text-end" style="width:70px;font-size:.75rem">Enviado</th>
-          <th class="text-end" style="width:70px;font-size:.75rem">Total Desc.</th>
-          <th class="text-end" style="width:65px;font-size:.75rem">% Desc.</th>
-          <th style="width:90px;font-size:.7rem">Vinculado</th>
-          <th style="width:40px"></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% set ns = namespace(cur_date='') %}
-        {% for r in rows %}
-        {% if r.data != ns.cur_date %}
-        {% set ns.cur_date = r.data %}
-        <tr style="background:#f1f5f9">
-          <td colspan="10" class="fw-semibold" style="font-size:.78rem;color:#475569;padding:4px 12px">
-            <i class="bi bi-calendar3 me-1"></i>
-            {{ r.data[8:10] }}/{{ r.data[5:7] }}/{{ r.data[0:4] }}
-          </td>
-        </tr>
-        {% endif %}
-        {% set cm = comp_map.get((r.produto|upper, r.local, r.lote), {}) %}
-        <tr>
-          <td class="text-muted" style="font-size:.78rem">{{ r.data[8:10] }}/{{ r.data[5:7] }}</td>
-          <td><span class="badge-pdv pdv-{{ r.local }}">{{ r.local }}</span></td>
-          <td class="fw-semibold">{{ r.produto }}</td>
-          <td class="text-muted font-monospace" style="font-size:.78rem">{{ r.lote or '—' }}</td>
-          <td class="text-end fw-semibold text-danger">{{ r.qtd_descartada }}</td>
-          <td class="text-end font-monospace text-muted" style="font-size:.82rem">
-            {{ cm.enviado if cm.enviado else '—' }}
-          </td>
-          <td class="text-end font-monospace" style="font-size:.82rem">
-            {% if cm.descartado %}
-            <span class="text-danger fw-semibold">{{ cm.descartado }}</span>
-            {% else %}—{% endif %}
-          </td>
-          <td class="text-end" style="font-size:.82rem">
-            {% if cm.pct is not none and cm.pct is defined %}
-            {% set pct = cm.pct %}
-            <span class="fw-semibold {{ 'text-danger' if pct >= 15 else ('text-warning' if pct >= 8 else 'text-success') }}">
-              {{ pct }}%
-            </span>
-            {% else %}—{% endif %}
-          </td>
-          <td class="text-muted" style="font-size:.7rem">
-            {% if r.registro_item_id %}
-            <span class="badge bg-light text-secondary border">vinculado</span>
-            {% else %}
-            <span class="text-muted">avulso</span>
-            {% endif %}
-          </td>
-          <td>
-            <form method="post" action="{{ url_for('descartes_excluir', id=r.id) }}"
-                  onsubmit="return confirm('Excluir este descarte?')">
-              <button class="btn btn-link btn-sm text-danger p-0" title="Excluir">
-                <i class="bi bi-trash3"></i>
-              </button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+{# ── PIVOT: produto × PDV por data (visão principal) ── #}
+{% if pivot_by_date %}
+  {% for day in pivot_by_date %}
+  <div class="pivot-date-header mt-3">
+    <i class="bi bi-calendar3"></i>
+    {{ day.data[8:10] }}/{{ day.data[5:7] }}/{{ day.data[0:4] }}
+    {% if day.lote %}
+    <span class="badge" style="background:#2e75b6;font-size:.72rem">{{ day.lote }}</span>
+    {% endif %}
+    <span class="ms-1 badge bg-secondary" style="font-size:.72rem;font-weight:500">{{ day.grand_total }} descartados</span>
   </div>
-</div>
+  <div class="card shadow-sm mb-3">
+    <div class="card-body p-0">
+      <div style="overflow-x:auto">
+        <table class="table table-sm table-hover align-middle mb-0 pivot-tbl">
+          <thead style="background:#1a3a5c;color:#fff">
+            <tr>
+              <th>Produto</th>
+              <th class="text-center" style="width:75px;font-size:.78rem">Enviado</th>
+              {% for pdv in pivot_pdvs %}
+              <th class="text-center" style="width:80px">{{ pdv }}</th>
+              {% endfor %}
+              <th class="text-center" style="width:70px">Desc.</th>
+              <th class="text-center" style="width:60px;font-size:.78rem">% Desc.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in day.table %}
+            {% set pct = ((r.total / r.enviado * 100) | round(0) | int) if r.enviado else None %}
+            <tr>
+              <td class="fw-semibold">{{ r.produto }}</td>
+              <td class="text-center font-monospace text-secondary">{{ r.enviado if r.enviado else '—' }}</td>
+              {% for pdv in pivot_pdvs %}
+              {% set q = r.pdvs.get(pdv, 0) %}
+              <td class="text-center font-monospace {% if q > 0 %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+                {{ q if q > 0 else '—' }}
+              </td>
+              {% endfor %}
+              <td class="text-center fw-bold text-danger font-monospace">{{ r.total }}</td>
+              <td class="text-center font-monospace">
+                {% if pct is not none %}
+                <span class="fw-semibold {{ 'text-danger' if pct >= 15 else ('text-warning' if pct >= 8 else 'text-success') }}">
+                  {{ pct }}%
+                </span>
+                {% else %}—{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot style="background:#f1f5f9;border-top:2px solid #cbd5e1">
+            <tr>
+              <td class="fw-bold" style="color:#475569">Total</td>
+              <td class="text-center fw-bold font-monospace text-secondary">{{ day.total_enviado if day.total_enviado else '—' }}</td>
+              {% for pdv in pivot_pdvs %}
+              {% set ct = day.col_totals.get(pdv, 0) %}
+              <td class="text-center fw-bold font-monospace {% if ct > 0 %}text-danger{% else %}text-muted{% endif %}">
+                {{ ct if ct > 0 else '—' }}
+              </td>
+              {% endfor %}
+              <td class="text-center fw-bold text-danger font-monospace">{{ day.grand_total }}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
 {% else %}
 <div class="text-center text-muted py-5">
   <i class="bi bi-inbox" style="font-size:2.5rem;opacity:.3"></i>
@@ -194,51 +194,65 @@
 </div>
 {% endif %}
 
-{% if pivot_table %}
-<div class="mt-4">
-  <h6 class="fw-semibold mb-2" style="color:#1a3a5c">
-    <i class="bi bi-grid-3x3-gap me-1"></i>Total por Produto × PDV
-  </h6>
-  <div class="card shadow-sm">
-    <div class="card-body p-0">
-      <div class="overflow-x-auto">
-      <table class="table table-sm table-hover align-middle mb-0" style="font-size:.83rem">
-        <thead style="background:#1a3a5c;color:#fff">
-          <tr>
-            <th>Produto</th>
-            {% for pdv in pivot_pdvs %}
-            <th class="text-center" style="width:75px">{{ pdv }}</th>
+{# ── Lista detalhada (collapsível) ── #}
+{% if rows %}
+<div class="mt-3">
+  <button class="btn btn-outline-secondary btn-sm mb-2" type="button"
+          data-bs-toggle="collapse" data-bs-target="#listaDetalhada">
+    <i class="bi bi-list-ul me-1"></i>Ver lista detalhada ({{ rows|length }} registros)
+  </button>
+  <div class="collapse" id="listaDetalhada">
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.85rem">
+          <thead style="background:#1a3a5c;color:#fff">
+            <tr>
+              <th style="width:90px">Data</th>
+              <th style="width:100px">PDV</th>
+              <th>Produto</th>
+              <th style="width:75px">Lote</th>
+              <th class="text-end" style="width:55px">Qtd</th>
+              <th style="width:90px;font-size:.7rem">Vinculado</th>
+              <th style="width:40px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% set ns = namespace(cur_date='') %}
+            {% for r in rows %}
+            {% if r.data != ns.cur_date %}
+            {% set ns.cur_date = r.data %}
+            <tr style="background:#f1f5f9">
+              <td colspan="7" class="fw-semibold" style="font-size:.78rem;color:#475569;padding:4px 12px">
+                <i class="bi bi-calendar3 me-1"></i>
+                {{ r.data[8:10] }}/{{ r.data[5:7] }}/{{ r.data[0:4] }}
+              </td>
+            </tr>
+            {% endif %}
+            <tr>
+              <td class="text-muted" style="font-size:.78rem">{{ r.data[8:10] }}/{{ r.data[5:7] }}</td>
+              <td><span class="badge-pdv pdv-{{ r.local }}">{{ r.local }}</span></td>
+              <td class="fw-semibold">{{ r.produto }}</td>
+              <td class="text-muted font-monospace" style="font-size:.78rem">{{ r.lote or '—' }}</td>
+              <td class="text-end fw-semibold text-danger">{{ r.qtd_descartada }}</td>
+              <td class="text-muted" style="font-size:.7rem">
+                {% if r.registro_item_id %}
+                <span class="badge bg-light text-secondary border">vinculado</span>
+                {% else %}
+                <span class="text-muted">avulso</span>
+                {% endif %}
+              </td>
+              <td>
+                <form method="post" action="{{ url_for('descartes_excluir', id=r.id) }}"
+                      onsubmit="return confirm('Excluir este descarte?')">
+                  <button class="btn btn-link btn-sm text-danger p-0" title="Excluir">
+                    <i class="bi bi-trash3"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
             {% endfor %}
-            <th class="text-center" style="width:65px">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in pivot_table %}
-          <tr>
-            <td class="fw-semibold">{{ r.produto }}</td>
-            {% for pdv in pivot_pdvs %}
-            {% set q = r.pdvs.get(pdv, 0) %}
-            <td class="text-center font-monospace {% if q > 0 %}text-danger fw-semibold{% else %}text-muted{% endif %}">
-              {{ q if q > 0 else '—' }}
-            </td>
-            {% endfor %}
-            <td class="text-center fw-bold text-danger font-monospace">{{ r.total }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-        <tfoot style="background:#f1f5f9;border-top:2px solid #cbd5e1">
-          <tr>
-            <td class="fw-bold" style="font-size:.8rem;color:#475569">Total</td>
-            {% for pdv in pivot_pdvs %}
-            {% set ct = pivot_col_totals.get(pdv, 0) %}
-            <td class="text-center fw-bold font-monospace {% if ct > 0 %}text-danger{% else %}text-muted{% endif %}">
-              {{ ct if ct > 0 else '—' }}
-            </td>
-            {% endfor %}
-            <td class="text-center fw-bold text-danger font-monospace">{{ pivot_grand_total }}</td>
-          </tr>
-        </tfoot>
-      </table>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
