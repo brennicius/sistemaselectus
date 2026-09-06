@@ -128,58 +128,88 @@
     {% if day.lote %}
     <span class="badge" style="background:#2e75b6;font-size:.72rem">{{ day.lote }}</span>
     {% endif %}
-    <span class="ms-1 badge bg-secondary" style="font-size:.72rem;font-weight:500">{{ day.grand_total }} descartados</span>
+    <span class="ms-1 badge bg-secondary" style="font-size:.72rem;font-weight:500">{{ day.grand_desc }} descartados</span>
   </div>
   <div class="card shadow-sm mb-3">
     <div class="card-body p-0">
       <div style="overflow-x:auto">
-        <table class="table table-sm table-hover align-middle mb-0 pivot-tbl">
+        <table class="table table-sm table-hover align-middle mb-0 pivot-tbl" style="border-collapse:collapse">
           <thead style="background:#1a3a5c;color:#fff">
+            {# linha 1: grupos de PDV + Total #}
             <tr>
-              <th>Produto</th>
-              <th class="text-center" style="width:75px;font-size:.78rem">Enviado</th>
+              <th rowspan="2" style="vertical-align:middle;min-width:180px">Produto</th>
               {% for pdv in pivot_pdvs %}
-              <th class="text-center" style="width:80px">{{ pdv }}</th>
+              <th colspan="3" class="text-center" style="border-left:2px solid rgba(255,255,255,.2);padding:3px 6px">{{ pdv }}</th>
               {% endfor %}
-              <th class="text-center" style="width:70px">Desc.</th>
-              <th class="text-center" style="width:60px;font-size:.78rem">% Desc.</th>
+              <th colspan="3" class="text-center" style="border-left:2px solid rgba(255,255,255,.4);padding:3px 6px">Total</th>
+            </tr>
+            {# linha 2: sub-colunas Env / Desc / % #}
+            <tr style="background:#264f7a">
+              {% for pdv in pivot_pdvs %}
+              <th class="text-center" style="border-left:2px solid rgba(255,255,255,.2);width:52px;font-size:.72rem;font-weight:500">Env</th>
+              <th class="text-center" style="width:52px;font-size:.72rem;font-weight:500">Desc</th>
+              <th class="text-center" style="width:46px;font-size:.72rem;font-weight:500">%</th>
+              {% endfor %}
+              <th class="text-center" style="border-left:2px solid rgba(255,255,255,.4);width:52px;font-size:.72rem;font-weight:500">Env</th>
+              <th class="text-center" style="width:52px;font-size:.72rem;font-weight:500">Desc</th>
+              <th class="text-center" style="width:46px;font-size:.72rem;font-weight:500">%</th>
             </tr>
           </thead>
           <tbody>
             {% for r in day.table %}
-            {% set pct = ((r.total / r.enviado * 100) | round(0) | int) if r.enviado else None %}
+            {% set tot_env  = r.total_env %}
+            {% set tot_desc = r.total_desc %}
+            {% set tot_pct  = ((tot_desc / tot_env * 100) | round(0) | int) if tot_env else None %}
             <tr>
               <td class="fw-semibold">{{ r.produto }}</td>
-              <td class="text-center font-monospace text-secondary">{{ r.enviado if r.enviado else '—' }}</td>
               {% for pdv in pivot_pdvs %}
-              {% set q = r.pdvs.get(pdv, 0) %}
-              <td class="text-center font-monospace {% if q > 0 %}text-danger fw-semibold{% else %}text-muted{% endif %}">
-                {{ q if q > 0 else '—' }}
+              {% set env  = r.env.get(pdv, 0) %}
+              {% set desc = r.desc.get(pdv, 0) %}
+              {% set pct  = ((desc / env * 100) | round(0) | int) if env else None %}
+              <td class="text-center font-monospace text-secondary" style="border-left:2px solid #e2e8f0">{{ env if env else '—' }}</td>
+              <td class="text-center font-monospace {% if desc > 0 %}text-danger fw-semibold{% else %}text-muted{% endif %}">{{ desc if desc else '—' }}</td>
+              <td class="text-center font-monospace" style="font-size:.8rem">
+                {% if pct is not none %}
+                <span class="fw-semibold {{ 'text-danger' if pct >= 15 else ('text-warning' if pct >= 8 else 'text-success') }}">{{ pct }}%</span>
+                {% else %}—{% endif %}
               </td>
               {% endfor %}
-              <td class="text-center fw-bold text-danger font-monospace">{{ r.total }}</td>
-              <td class="text-center font-monospace">
-                {% if pct is not none %}
-                <span class="fw-semibold {{ 'text-danger' if pct >= 15 else ('text-warning' if pct >= 8 else 'text-success') }}">
-                  {{ pct }}%
-                </span>
+              {# Total #}
+              <td class="text-center fw-bold font-monospace text-secondary" style="border-left:2px solid #cbd5e1">{{ tot_env if tot_env else '—' }}</td>
+              <td class="text-center fw-bold font-monospace text-danger">{{ tot_desc if tot_desc else '—' }}</td>
+              <td class="text-center font-monospace" style="font-size:.8rem">
+                {% if tot_pct is not none %}
+                <span class="fw-semibold {{ 'text-danger' if tot_pct >= 15 else ('text-warning' if tot_pct >= 8 else 'text-success') }}">{{ tot_pct }}%</span>
                 {% else %}—{% endif %}
               </td>
             </tr>
             {% endfor %}
           </tbody>
           <tfoot style="background:#f1f5f9;border-top:2px solid #cbd5e1">
+            {% set ge = day.grand_env %}
+            {% set gd = day.grand_desc %}
+            {% set gp = ((gd / ge * 100) | round(0) | int) if ge else None %}
             <tr>
               <td class="fw-bold" style="color:#475569">Total</td>
-              <td class="text-center fw-bold font-monospace text-secondary">{{ day.total_enviado if day.total_enviado else '—' }}</td>
               {% for pdv in pivot_pdvs %}
-              {% set ct = day.col_totals.get(pdv, 0) %}
-              <td class="text-center fw-bold font-monospace {% if ct > 0 %}text-danger{% else %}text-muted{% endif %}">
-                {{ ct if ct > 0 else '—' }}
+              {% set ce = day.col_env_totals.get(pdv, 0) %}
+              {% set cd = day.col_desc_totals.get(pdv, 0) %}
+              {% set cp = ((cd / ce * 100) | round(0) | int) if ce else None %}
+              <td class="text-center fw-bold font-monospace text-secondary" style="border-left:2px solid #e2e8f0">{{ ce if ce else '—' }}</td>
+              <td class="text-center fw-bold font-monospace {% if cd %}text-danger{% else %}text-muted{% endif %}">{{ cd if cd else '—' }}</td>
+              <td class="text-center font-monospace" style="font-size:.8rem">
+                {% if cp is not none %}
+                <span class="fw-semibold {{ 'text-danger' if cp >= 15 else ('text-warning' if cp >= 8 else 'text-success') }}">{{ cp }}%</span>
+                {% else %}—{% endif %}
               </td>
               {% endfor %}
-              <td class="text-center fw-bold text-danger font-monospace">{{ day.grand_total }}</td>
-              <td></td>
+              <td class="text-center fw-bold font-monospace text-secondary" style="border-left:2px solid #cbd5e1">{{ ge if ge else '—' }}</td>
+              <td class="text-center fw-bold text-danger font-monospace">{{ gd if gd else '—' }}</td>
+              <td class="text-center font-monospace" style="font-size:.8rem">
+                {% if gp is not none %}
+                <span class="fw-semibold {{ 'text-danger' if gp >= 15 else ('text-warning' if gp >= 8 else 'text-success') }}">{{ gp }}%</span>
+                {% else %}—{% endif %}
+              </td>
             </tr>
           </tfoot>
         </table>

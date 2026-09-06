@@ -3868,13 +3868,24 @@ def descartes_lista():
     # autocomplete: nomes de produtos já cadastrados
     nomes_auto = sorted({r['nome'] for r in db.execute("SELECT nome FROM produtos WHERE ativo=1").fetchall()})
 
-    # pivot por data+lote: produto × PDV, com enviado de registro_itens
+    # mapeamento PDV → coluna env_* em registro_itens
+    PDV_ENV = {
+        'Amaro':    'env_amaro',
+        'Portugues':'env_portugues',
+        'Izabel':   'env_izabel',
+        'Agnus':    'env_agnus',
+        'Cris':     'env_cris',
+    }
+
+    # pivot por data+lote: produto × PDV com env por PDV
     pivot_sql = """
         SELECT d.data, d.lote, d.produto, d.local AS pdv,
                SUM(d.qtd_descartada) AS qtd,
-               MAX(COALESCE(ri.env_amaro,0)+COALESCE(ri.env_izabel,0)+
-                   COALESCE(ri.env_portugues,0)+COALESCE(ri.env_agnus,0)+
-                   COALESCE(ri.env_cris,0)) AS enviado
+               MAX(ri.env_amaro)    AS env_amaro,
+               MAX(ri.env_portugues) AS env_portugues,
+               MAX(ri.env_izabel)   AS env_izabel,
+               MAX(ri.env_agnus)    AS env_agnus,
+               MAX(ri.env_cris)     AS env_cris
         FROM descartes d
         LEFT JOIN registro_itens ri ON d.registro_item_id = ri.id
         WHERE 1=1
@@ -3897,38 +3908,47 @@ def descartes_lista():
         s = _re.sub(r'\s*-\s*150G\b', '', s, flags=_re.IGNORECASE)
         return s.strip()
 
-    # group by (data, lote): {(data,lote): {produto: {pdv: qtd, '_enviado': N}}}
+    # group: {(data,lote): {produto: {'env': {pdv:N}, 'desc': {pdv:N}}}}
     from collections import OrderedDict
     dates_pivot = OrderedDict()
     for r in pivot_rows:
         key = (r['data'], r['lote'] or '')
         prod_map = dates_pivot.setdefault(key, {})
         nome = _norm_prod(r['produto'])
-        entry = prod_map.setdefault(nome, {'_enviado': r['enviado'] or 0})
-        entry[r['pdv']] = entry.get(r['pdv'], 0) + r['qtd']
-        if r['enviado']:
-            entry['_enviado'] = max(entry['_enviado'], r['enviado'])
+        entry = prod_map.setdefault(nome, {'env': {}, 'desc': {}})
+        # env por PDV (mesmo valor para todas as linhas do mesmo produto+lote)
+        for pdv, col in PDV_ENV.items():
+            v = r[col]
+            if v and v > entry['env'].get(pdv, 0):
+                entry['env'][pdv] = v
+        # desc acumulado por PDV
+        entry['desc'][r['pdv']] = entry['desc'].get(r['pdv'], 0) + r['qtd']
 
     pivot_by_date = []
     for (d, lote), prod_map in dates_pivot.items():
         tbl = []
-        for prod, pdv_map in sorted(prod_map.items()):
-            enviado = pdv_map.get('_enviado', 0) or 0
-            qtds = {k: v for k, v in pdv_map.items() if k != '_enviado'}
+        for prod, data in sorted(prod_map.items()):
+            env  = data['env']
+            desc = data['desc']
+            total_env  = sum(env.values())
+            total_desc = sum(desc.values())
             tbl.append({
-                'produto': prod,
-                'pdvs': qtds,
-                'enviado': enviado,
-                'total': sum(qtds.values()),
+                'produto':     prod,
+                'env':         env,
+                'desc':        desc,
+                'total_env':   total_env,
+                'total_desc':  total_desc,
             })
-        col_totals = {pdv: sum(r['pdvs'].get(pdv, 0) for r in tbl) for pdv in pivot_pdvs}
+        col_desc_totals = {pdv: sum(r['desc'].get(pdv, 0) for r in tbl) for pdv in pivot_pdvs}
+        col_env_totals  = {pdv: sum(r['env'].get(pdv, 0)  for r in tbl) for pdv in pivot_pdvs}
         pivot_by_date.append({
             'data': d,
             'lote': lote,
             'table': tbl,
-            'col_totals': col_totals,
-            'grand_total': sum(col_totals.values()),
-            'total_enviado': sum(r['enviado'] for r in tbl),
+            'col_desc_totals': col_desc_totals,
+            'col_env_totals':  col_env_totals,
+            'grand_desc':  sum(col_desc_totals.values()),
+            'grand_env':   sum(col_env_totals.values()),
         })
 
     comp_map = {}
