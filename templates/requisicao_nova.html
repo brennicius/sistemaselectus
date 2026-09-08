@@ -195,10 +195,15 @@ function addRow(id, nome, un, estoque, qtdEmb, unidEmb) {
     <input type="hidden" name="insumo_id" value="${id}">
   `;
 
+  const estoqueDisplay = temEmb && qtdEmb > 0
+    ? `<span class="estoque-val">${(estoque/qtdEmb).toFixed(2)}</span> <span class="estoque-un">${unidEmb}</span>
+       <div class="text-muted" style="font-size:.72rem">(${estoque.toFixed(1)} ${un})</div>`
+    : `${estoque.toFixed(1)}`;
+
   tr.innerHTML = `
     <td class="fw-semibold">${nome}</td>
     <td class="text-center"><span class="badge bg-info text-dark">${un}</span></td>
-    <td class="text-end text-muted small">${estoque.toFixed(1)}</td>
+    <td class="text-end text-muted small" id="est-${id}">${estoqueDisplay}</td>
     <td class="text-end">${toggleHtml}</td>
     <td>
       <button type="button" class="btn btn-sm btn-outline-danger btn-remove" style="padding:2px 6px">
@@ -209,10 +214,21 @@ function addRow(id, nome, un, estoque, qtdEmb, unidEmb) {
 
   // Lógica do toggle embalagem ↔ base
   if (temEmb) {
-    const display = tr.querySelector('.qtd-display');
-    const sel     = tr.querySelector('.unid-select');
-    const hidden  = tr.querySelector('.qtd-hidden');
-    const conv    = tr.querySelector(`#conv-${id}`);
+    const display  = tr.querySelector('.qtd-display');
+    const sel      = tr.querySelector('.unid-select');
+    const hidden   = tr.querySelector('.qtd-hidden');
+    const conv     = tr.querySelector(`#conv-${id}`);
+    const estCell  = document.getElementById(`est-${id}`);
+
+    function updateEstoque() {
+      if (sel.value === 'emb' && qtdEmb > 0) {
+        estCell.innerHTML = `<span>${(estoque/qtdEmb).toFixed(2)}</span> ${unidEmb}
+          <div class="text-muted" style="font-size:.72rem">(${estoque.toFixed(1)} ${un})</div>`;
+      } else {
+        estCell.innerHTML = `${estoque.toFixed(1)} ${un}
+          <div class="text-muted" style="font-size:.72rem">(${(estoque/qtdEmb).toFixed(2)} ${unidEmb})</div>`;
+      }
+    }
 
     function recalc() {
       const v = parseFloat(display.value) || 0;
@@ -228,7 +244,12 @@ function addRow(id, nome, un, estoque, qtdEmb, unidEmb) {
       hidden.required = true;
     }
     display.addEventListener('input', recalc);
-    sel.addEventListener('change', () => { display.value = ''; conv.textContent = ''; hidden.value = ''; recalc(); });
+    sel.addEventListener('change', () => {
+      display.value = ''; conv.textContent = ''; hidden.value = '';
+      updateEstoque();
+      recalc();
+    });
+    updateEstoque();
   }
 
   tr.querySelector('.btn-remove').addEventListener('click', () => {
