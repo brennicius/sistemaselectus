@@ -37,11 +37,17 @@
               <span class="badge bg-warning text-dark">Pendente</span>
             {% endif %}
           </td>
-          <td class="text-end">
+          <td class="text-end d-flex gap-2 justify-content-end">
             <a href="{{ url_for('nf_confirmar', nf_id=nf.id) }}" class="btn btn-sm btn-primary">
               <i class="bi bi-box-arrow-in-down me-1"></i>
               {% if nf.status == 'confirmada' %}Ver{% else %}Confirmar{% endif %}
             </a>
+            <form method="POST" action="{{ url_for('nf_excluir', nf_id=nf.id) }}"
+                  onsubmit="return confirm('Excluir esta NF? Esta ação não desfaz os ajustes de estoque já realizados.')">
+              <button type="submit" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash3"></i>
+              </button>
+            </form>
           </td>
         </tr>
       {% endfor %}

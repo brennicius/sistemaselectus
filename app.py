@@ -1539,6 +1539,16 @@ def nf_lista():
     return render_template('nf_lista.html', nfs=nfs)
 
 
+@app.route('/nf/<int:nf_id>/excluir', methods=['POST'])
+def nf_excluir(nf_id):
+    db = get_db()
+    db.execute('DELETE FROM nf_itens WHERE nf_id=?', (nf_id,))
+    db.execute('DELETE FROM nf_entradas WHERE id=?', (nf_id,))
+    db.commit(); db.close()
+    flash('NF excluída.', 'warning')
+    return redirect(url_for('nf_lista'))
+
+
 @app.route('/nf/<int:nf_id>/confirmar', methods=['GET', 'POST'])
 def nf_confirmar(nf_id):
     db  = get_db()
@@ -1577,7 +1587,8 @@ def nf_confirmar(nf_id):
         return redirect(url_for('nf_lista'))
 
     itens   = db.execute(
-        '''SELECT ni.*, ins.nome AS ins_nome, ins.unidade_compra
+        '''SELECT ni.*, ins.nome AS ins_nome, ins.unidade_compra,
+                  ins.estoque_central, ins.estoque_atual
            FROM nf_itens ni
            LEFT JOIN insumos ins ON ins.id = ni.insumo_id
            WHERE ni.nf_id=? ORDER BY ni.id''', (nf_id,)

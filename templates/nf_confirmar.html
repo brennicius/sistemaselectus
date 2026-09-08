@@ -46,12 +46,14 @@
           <th style="width:30px" class="text-center">#</th>
           <th>Descrição na Nota Fiscal</th>
           <th style="width:80px" class="text-center">Qtd NF</th>
-          <th style="width:55px" class="text-center">Unid</th>
+          <th style="width:55px" class="text-center">Unid NF</th>
           <th style="width:80px" class="text-center">Total R$</th>
           <th style="width:18px"></th>
-          <th style="min-width:260px">Insumo no Sistema</th>
-          <th style="width:100px" class="text-center">Qtd Entrada</th>
-          <th style="min-width:180px">Observação</th>
+          <th style="min-width:220px">Insumo no Sistema</th>
+          <th style="width:80px" class="text-center">Unid Cad.</th>
+          <th style="width:100px" class="text-center">Estoque Atual</th>
+          <th style="width:110px" class="text-center">Qtd Entrada</th>
+          <th style="min-width:160px">Observação</th>
         </tr>
       </thead>
       <tbody>
@@ -98,10 +100,29 @@
               {% for ins in insumos %}
               <option value="{{ ins.id }}"
                 {% if ins.id == it.insumo_id %}selected{% endif %}>
-                [{{ ins.id }}] {{ ins.nome }} ({{ ins.unidade_compra }})
+                [{{ ins.id }}] {{ ins.nome }}
               </option>
               {% endfor %}
             </select>
+          </td>
+
+          {# Unidade cadastrada #}
+          <td class="text-center align-middle">
+            {% if it.unidade_compra %}
+              <span class="badge bg-primary">{{ it.unidade_compra }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          {# Estoque atual (central) #}
+          <td class="text-center align-middle">
+            {% if it.insumo_id %}
+              <span class="fw-semibold">{{ '%.2f'|format(it.estoque_central or 0) }}</span>
+              <span class="text-muted small"> {{ it.unidade_compra or '' }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
           </td>
 
           {# Qtd entrada #}
