@@ -1256,7 +1256,7 @@ def requisicao_nova():
                        i.estoque_central, i.qtd_por_embalagem
                 FROM nf_itens ni
                 JOIN insumos i ON i.id = ni.insumo_id
-                WHERE ni.nf_id=? AND ni.insumo_id IS NOT NULL
+                WHERE ni.nf_id=? AND ni.insumo_id IS NOT NULL AND ni.confirmado=1
                 ORDER BY i.nome COLLATE NOCASE
             ''', (nf_id,)).fetchall()
             pre_itens = [dict(r) for r in rows]
