@@ -1588,7 +1588,8 @@ def nf_confirmar(nf_id):
 
     itens   = db.execute(
         '''SELECT ni.*, ins.nome AS ins_nome, ins.unidade_compra,
-                  ins.estoque_central, ins.estoque_atual
+                  ins.estoque_central, ins.estoque_atual,
+                  ins.qtd_por_embalagem, ins.unid_embalagem
            FROM nf_itens ni
            LEFT JOIN insumos ins ON ins.id = ni.insumo_id
            WHERE ni.nf_id=? ORDER BY ni.id''', (nf_id,)

@@ -91,7 +91,7 @@
           {# Seta #}
           <td class="text-center align-middle" style="color:#2e75b6;font-weight:bold">→</td>
 
-          {# Insumo select #}
+          {# Insumo select + embalagem info #}
           <td class="align-middle">
             <select name="ins_{{ it.id }}" class="form-select form-select-sm ins-select"
                     data-item="{{ it.id }}"
@@ -104,6 +104,17 @@
               </option>
               {% endfor %}
             </select>
+            {% if it.insumo_id and it.qtd_por_embalagem %}
+            <div class="text-muted mt-1" style="font-size:.78rem">
+              <i class="bi bi-box-seam me-1"></i>
+              {% if it.qtd_por_embalagem == it.qtd_por_embalagem|int %}
+                {{ it.qtd_por_embalagem|int }}
+              {% else %}
+                {{ '%.0f'|format(it.qtd_por_embalagem) }}
+              {% endif %}
+              {{ it.unid_embalagem or it.unidade_compra }} / {{ it.unidade_compra }}
+            </div>
+            {% endif %}
           </td>
 
           {# Unidade cadastrada #}
