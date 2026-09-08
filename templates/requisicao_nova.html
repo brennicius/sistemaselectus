@@ -109,6 +109,9 @@
       <div class="card-header fw-semibold bg-light d-flex justify-content-between align-items-center">
         <span><i class="bi bi-list-check me-1"></i> Itens a enviar</span>
         <div class="d-flex align-items-center gap-2">
+          <button type="button" id="btn-filtro-pendente" class="btn btn-sm btn-outline-warning" style="display:none;font-size:.75rem;padding:2px 8px" onclick="toggleFiltroPendente()">
+            <i class="bi bi-funnel me-1"></i>Ver pendentes (<span id="n-pendentes">0</span>)
+          </button>
           <span class="text-muted small" id="revisados-label" style="display:none">
             <span id="n-revisados">0</span>/<span id="n-total-itens">0</span> revisados
           </span>
@@ -301,6 +304,27 @@ function addRow(id, nome, un, estoque, qtdEmb, unidEmb) {
   updateCount();
 }
 
+let filtroPendenteAtivo = false;
+function toggleFiltroPendente() {
+  filtroPendenteAtivo = !filtroPendenteAtivo;
+  const btn = document.getElementById('btn-filtro-pendente');
+  document.querySelectorAll('#tbody-itens tr[data-id]').forEach(tr => {
+    if (filtroPendenteAtivo) {
+      tr.style.display = tr.dataset.ok === '1' ? 'none' : '';
+    } else {
+      tr.style.display = '';
+    }
+  });
+  if (filtroPendenteAtivo) {
+    btn.classList.replace('btn-outline-warning', 'btn-warning');
+    btn.innerHTML = `<i class="bi bi-funnel-fill me-1"></i>Mostrar todos`;
+  } else {
+    btn.classList.replace('btn-warning', 'btn-outline-warning');
+    const pend = document.querySelectorAll('#tbody-itens tr[data-id]:not([data-ok="1"])').length;
+    btn.innerHTML = `<i class="bi bi-funnel me-1"></i>Ver pendentes (<span id="n-pendentes">${pend}</span>)`;
+  }
+}
+
 function marcarTodos() {
   document.querySelectorAll('#tbody-itens tr[data-id]').forEach(tr => {
     if (tr.dataset.ok !== '1') {
@@ -321,14 +345,25 @@ function updateCount() {
   document.getElementById('n-total-itens').textContent = n;
   const labelEl = document.getElementById('revisados-label');
   const btnMarcar = document.getElementById('btn-marcar-todos');
+  const pendentes = n - revisados;
+  const btnFiltro = document.getElementById('btn-filtro-pendente');
   if (n > 0) {
     labelEl.style.display = '';
     btnMarcar.style.display = '';
+    if (!filtroPendenteAtivo) {
+      btnFiltro.style.display = pendentes > 0 ? '' : 'none';
+      btnFiltro.innerHTML = `<i class="bi bi-funnel me-1"></i>Ver pendentes (${pendentes})`;
+    }
   } else {
     labelEl.style.display = 'none';
     btnMarcar.style.display = 'none';
+    btnFiltro.style.display = 'none';
   }
-  // Enviar ativo quando todos revisados (ou nenhum item)
+  // Se filtro ativo e item foi marcado, esconde a linha
+  if (filtroPendenteAtivo) {
+    document.querySelectorAll('#tbody-itens tr[data-ok="1"]').forEach(tr => tr.style.display = 'none');
+  }
+  // Enviar ativo quando todos revisados
   document.getElementById('btn-submit').disabled = n === 0 || revisados < n;
 }
 
