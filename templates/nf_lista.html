@@ -54,6 +54,7 @@
           <th>Fornecedor</th>
           <th>Data</th>
           <th class="text-end">Total R$</th>
+          <th class="text-center">Itens</th>
           <th class="text-center">Status</th>
           <th></th>
         </tr>
@@ -65,6 +66,10 @@
           <td>{{ nf.fornecedor }}</td>
           <td>{{ nf.data_emissao }}</td>
           <td class="text-end">R$ {{ '%.2f'|format(nf.total) }}</td>
+          <td class="text-center small">
+            <span class="text-success fw-semibold">{{ nf.itens_confirmados }}</span>
+            <span class="text-muted">/{{ nf.total_itens }}</span>
+          </td>
           <td class="text-center">
             {% if nf.status == 'confirmada' %}
               <span class="badge bg-success">Confirmada</span>

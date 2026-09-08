@@ -1570,9 +1570,15 @@ def insumo_ajuste_desfazer(lid):
 @app.route('/nf')
 def nf_lista():
     db  = get_db()
-    nfs = db.execute(
-        'SELECT * FROM nf_entradas ORDER BY id DESC'
-    ).fetchall()
+    nfs = db.execute('''
+        SELECT e.*,
+               COUNT(i.id)                          AS total_itens,
+               SUM(CASE WHEN i.confirmado=1 THEN 1 ELSE 0 END) AS itens_confirmados
+        FROM nf_entradas e
+        LEFT JOIN nf_itens i ON i.nf_id = e.id
+        GROUP BY e.id
+        ORDER BY e.id DESC
+    ''').fetchall()
     db.close()
     return render_template('nf_lista.html', nfs=nfs)
 
