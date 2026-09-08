@@ -56,7 +56,7 @@
 {% else %}
 <div style="overflow-x:auto">
   <table class="table table-sm table-hover mb-0 align-middle" style="font-size:.82rem;min-width:700px">
-    <thead style="background:{{ cor }}">
+    <thead style="background:{{ cor }};position:sticky;top:0;z-index:10">
       <tr>
         <th style="color:#fff;min-width:85px">Data</th>
         {% for col, label in cols_ativos %}
