@@ -254,6 +254,25 @@ function updateCount() {
   document.getElementById('btn-submit').disabled = n === 0;
 }
 
+// Normaliza unidade para comparação (pct, un, lt, kg, cx, maco, bisnaga…)
+function normUnid(u) {
+  if (!u) return '';
+  const m = {
+    'und':'un','und.':'un','unidade':'un',
+    'pct':'pct','pacote':'pct','saco':'pct','sc':'pct',
+    'lta':'lt','lata':'lt',
+    'cxa':'cx','caixa':'cx','cxs':'cx',
+    'mco':'maco','maço':'maco','maco':'maco',
+    'bdj':'bdj','bandeja':'bdj',
+    'bsg':'bisnaga','bisnaga':'bisnaga',
+    'bld':'balde','balde':'balde',
+    'rlo':'rolo','rolo':'rolo',
+    'frd':'fardo','fardo':'fardo',
+  };
+  const k = u.toLowerCase().replace(/[\.\s]/g,'');
+  return m[k] || k;
+}
+
 // Pré-carregar itens da NF (se ?nf_id= fornecido)
 const preItens = {{ pre_itens | tojson }};
 preItens.forEach(it => {
@@ -269,16 +288,23 @@ preItens.forEach(it => {
     addBtn.classList.replace('btn-outline-success','btn-secondary');
     addBtn.innerHTML = '<i class="bi bi-check"></i>';
   }
-  // Preenche a quantidade vinda da NF
+  // Preenche quantidade vinda da NF, tentando usar a unidade da NF
   const row = document.querySelector(`#tbody-itens tr[data-id="${id}"]`);
   if (!row) return;
   const displayInp = row.querySelector('.qtd-display');
   const simpleInp  = row.querySelector('input[name="qtd_enviada"]');
-  const hidden     = row.querySelector('.qtd-hidden');
   const sel        = row.querySelector('.unid-select');
   const qtdNf      = it.qtd_nf || 0;
+
   if (displayInp && sel) {
-    // tem toggle — tenta usar unidade_compra se a qtd_nf parece em pacotes
+    // Verifica se a unidade da NF bate com a unidade de compra (embalagem)
+    const nfNorm  = normUnid(it.unid_nf || '');
+    const embNorm = normUnid(it.unidade_compra || '');
+    const useEmb  = embNorm && nfNorm && (nfNorm === embNorm || nfNorm.startsWith(embNorm) || embNorm.startsWith(nfNorm));
+    if (useEmb) {
+      sel.value = 'emb';
+      sel.dispatchEvent(new Event('change'));
+    }
     displayInp.value = qtdNf;
     displayInp.dispatchEvent(new Event('input'));
   } else if (simpleInp) {
