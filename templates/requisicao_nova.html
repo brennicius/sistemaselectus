@@ -196,8 +196,8 @@ function addRow(id, nome, un, estoque, qtdEmb, unidEmb) {
   `;
 
   const estoqueDisplay = temEmb && qtdEmb > 0
-    ? `<span class="estoque-val">${(estoque/qtdEmb).toFixed(2)}</span> <span class="estoque-un">${unidEmb}</span>
-       <div class="text-muted" style="font-size:.72rem">(${estoque.toFixed(1)} ${un})</div>`
+    ? `${estoque.toFixed(1)} ${un}
+       <div class="text-muted" style="font-size:.72rem">(${(estoque/qtdEmb).toFixed(2)} ${unidEmb})</div>`
     : `${estoque.toFixed(1)}`;
 
   tr.innerHTML = `
@@ -222,7 +222,7 @@ function addRow(id, nome, un, estoque, qtdEmb, unidEmb) {
 
     function updateEstoque() {
       if (sel.value === 'emb' && qtdEmb > 0) {
-        estCell.innerHTML = `<span>${(estoque/qtdEmb).toFixed(2)}</span> ${unidEmb}
+        estCell.innerHTML = `${(estoque/qtdEmb).toFixed(2)} ${unidEmb}
           <div class="text-muted" style="font-size:.72rem">(${estoque.toFixed(1)} ${un})</div>`;
       } else {
         estCell.innerHTML = `${estoque.toFixed(1)} ${un}
