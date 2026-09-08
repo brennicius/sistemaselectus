@@ -363,8 +363,8 @@ function updateCount() {
   if (filtroPendenteAtivo) {
     document.querySelectorAll('#tbody-itens tr[data-ok="1"]').forEach(tr => tr.style.display = 'none');
   }
-  // Enviar ativo quando todos revisados
-  document.getElementById('btn-submit').disabled = n === 0 || revisados < n;
+  // Enviar ativo quando há pelo menos 1 item (revisão é visual, não obrigatória)
+  document.getElementById('btn-submit').disabled = n === 0;
 }
 
 // Normaliza unidade para comparação (pct, un, lt, kg, cx, maco, bisnaga…)
