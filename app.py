@@ -1221,7 +1221,7 @@ def requisicao_nova():
 
         if not itens:
             flash('Adicione ao menos um insumo com quantidade válida.', 'warning')
-            insumos = db.execute('SELECT id, nome, unidade_uso, estoque_atual FROM insumos ORDER BY nome COLLATE NOCASE').fetchall()
+            insumos = db.execute('SELECT id, nome, unidade_uso, estoque_central FROM insumos ORDER BY nome COLLATE NOCASE').fetchall()
             db.close()
             return render_template('requisicao_nova.html', insumos=insumos, today=date.today().isoformat())
 
@@ -1232,15 +1232,16 @@ def requisicao_nova():
         for iid, qtd in itens:
             db.execute('INSERT INTO requisicao_itens (requisicao_id, insumo_id, qtd_enviada) VALUES (?,?,?)',
                        (req_id, iid, qtd))
-            db.execute('UPDATE insumos SET estoque_atual = COALESCE(estoque_atual,0) - ? WHERE id = ?',
-                       (qtd, iid))
+            # Central → Cozinha
+            db.execute('UPDATE insumos SET estoque_central = COALESCE(estoque_central,0) - ? WHERE id = ?', (qtd, iid))
+            db.execute('UPDATE insumos SET estoque_atual   = COALESCE(estoque_atual,0)   + ? WHERE id = ?', (qtd, iid))
 
         db.commit()
         db.close()
         flash(f'Requisição #{req_id} criada — {len(itens)} insumos enviados para produção.', 'success')
         return redirect(url_for('requisicao_ver', id=req_id))
 
-    insumos = db.execute('SELECT id, nome, unidade_uso, estoque_atual FROM insumos ORDER BY nome COLLATE NOCASE').fetchall()
+    insumos = db.execute('SELECT id, nome, unidade_uso, estoque_central FROM insumos ORDER BY nome COLLATE NOCASE').fetchall()
     db.close()
     return render_template('requisicao_nova.html', insumos=insumos, today=date.today().isoformat())
 
@@ -1288,7 +1289,10 @@ def requisicao_fechar(id):
         qtd_ret = min(qtd_ret, item['qtd_enviada'])
         db.execute('UPDATE requisicao_itens SET qtd_retornada=? WHERE id=?', (qtd_ret, int(iid)))
         if qtd_ret > 0:
-            db.execute('UPDATE insumos SET estoque_atual = COALESCE(estoque_atual,0) + ? WHERE id=?',
+            # Retorno: Cozinha → Central
+            db.execute('UPDATE insumos SET estoque_central = COALESCE(estoque_central,0) + ? WHERE id=?',
+                       (qtd_ret, item['insumo_id']))
+            db.execute('UPDATE insumos SET estoque_atual   = COALESCE(estoque_atual,0)   - ? WHERE id=?',
                        (qtd_ret, item['insumo_id']))
 
     db.execute("UPDATE requisicoes SET status='fechado', fechado_em=datetime('now','localtime') WHERE id=?", (id,))
@@ -1307,7 +1311,10 @@ def requisicao_cancelar(id):
         return redirect(url_for('requisicoes_lista'))
     itens = db.execute('SELECT insumo_id, qtd_enviada FROM requisicao_itens WHERE requisicao_id=?', (id,)).fetchall()
     for it in itens:
-        db.execute('UPDATE insumos SET estoque_atual = COALESCE(estoque_atual,0) + ? WHERE id=?',
+        # Cancelar: devolve à Central e remove da Cozinha
+        db.execute('UPDATE insumos SET estoque_central = COALESCE(estoque_central,0) + ? WHERE id=?',
+                   (it['qtd_enviada'], it['insumo_id']))
+        db.execute('UPDATE insumos SET estoque_atual   = COALESCE(estoque_atual,0)   - ? WHERE id=?',
                    (it['qtd_enviada'], it['insumo_id']))
     db.execute("UPDATE requisicoes SET status='cancelado', fechado_em=datetime('now','localtime') WHERE id=?", (id,))
     db.commit()
@@ -1327,16 +1334,20 @@ def requisicao_excluir(id):
     itens = db.execute('SELECT insumo_id, qtd_enviada, qtd_retornada FROM requisicao_itens WHERE requisicao_id=?', (id,)).fetchall()
 
     if req['status'] == 'aberto':
-        # Devolve tudo ao estoque
+        # Devolve tudo à Central e remove da Cozinha
         for it in itens:
-            db.execute('UPDATE insumos SET estoque_atual = COALESCE(estoque_atual,0) + ? WHERE id=?',
+            db.execute('UPDATE insumos SET estoque_central = COALESCE(estoque_central,0) + ? WHERE id=?',
+                       (it['qtd_enviada'], it['insumo_id']))
+            db.execute('UPDATE insumos SET estoque_atual   = COALESCE(estoque_atual,0)   - ? WHERE id=?',
                        (it['qtd_enviada'], it['insumo_id']))
     elif req['status'] == 'fechado':
-        # Devolve apenas o consumo (enviado − retornado), pois retorno já voltou no fechamento
+        # Retorno já voltou à Central no fechamento; devolve apenas o consumo (que ficou na cozinha)
         for it in itens:
             consumo = it['qtd_enviada'] - (it['qtd_retornada'] or 0)
             if consumo > 0:
-                db.execute('UPDATE insumos SET estoque_atual = COALESCE(estoque_atual,0) + ? WHERE id=?',
+                db.execute('UPDATE insumos SET estoque_central = COALESCE(estoque_central,0) + ? WHERE id=?',
+                           (consumo, it['insumo_id']))
+                db.execute('UPDATE insumos SET estoque_atual   = COALESCE(estoque_atual,0)   - ? WHERE id=?',
                            (consumo, it['insumo_id']))
     # cancelado: sem efeito no estoque
 

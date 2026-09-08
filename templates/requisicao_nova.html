@@ -40,10 +40,10 @@
               {% for ins in insumos %}
               <tr data-nome="{{ ins.nome|lower }}" data-id="{{ ins.id }}"
                   data-nome-orig="{{ ins.nome }}" data-un="{{ ins.unidade_uso }}"
-                  data-estoque="{{ ins.estoque_atual or 0 }}">
+                  data-estoque="{{ ins.estoque_central or 0 }}">
                 <td>{{ ins.nome }}</td>
                 <td class="text-center"><span class="badge bg-info text-dark">{{ ins.unidade_uso }}</span></td>
-                <td class="text-end text-muted small">{{ '%.1f'|format(ins.estoque_atual or 0) }}</td>
+                <td class="text-end text-muted small">{{ '%.1f'|format(ins.estoque_central or 0) }}</td>
                 <td><button type="button" class="btn btn-xs btn-outline-success btn-add-item" style="padding:1px 6px;font-size:.75rem"><i class="bi bi-plus"></i></button></td>
               </tr>
               {% endfor %}
@@ -67,7 +67,7 @@
             <tr>
               <th>Insumo</th>
               <th class="text-center">Unidade</th>
-              <th class="text-end">Estoque atual</th>
+              <th class="text-end">Estoque Central</th>
               <th class="text-end">Qtd enviada</th>
               <th></th>
             </tr>
