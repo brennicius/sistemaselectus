@@ -7,18 +7,18 @@ app = Flask(__name__)
 app.secret_key = 'selectus_cozinha_2024'
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
-# DATA_DIR permite apontar para volume persistente (ex: /data no Railway).
-# Se não definido, usa o diretório do app (desenvolvimento local).
-_app_dir = os.path.dirname(__file__)
-DATA_DIR = os.environ.get('DATA_DIR', _app_dir)
+_app_dir = os.path.abspath(os.path.dirname(__file__)) or '/app'
+_data_dir_env = os.environ.get('DATA_DIR', '').strip()
+DATA_DIR = _data_dir_env if _data_dir_env else _app_dir
 DB = os.path.join(DATA_DIR, 'cozinha.db')
-_seed_db = os.path.join(_app_dir, 'cozinha.db')
 
-# Na primeira execução no volume, copia o DB semente para não começar vazio.
-if DATA_DIR != _app_dir and not os.path.exists(DB) and os.path.exists(_seed_db):
-    import shutil as _sh
-    os.makedirs(DATA_DIR, exist_ok=True)
-    _sh.copy2(_seed_db, DB)
+# Na primeira execução no volume persistente, copia o DB semente para não começar vazio.
+if DATA_DIR != _app_dir:
+    _seed_db = os.path.join(_app_dir, 'cozinha.db')
+    if not os.path.exists(DB) and os.path.exists(_seed_db):
+        import shutil as _sh
+        os.makedirs(DATA_DIR, exist_ok=True)
+        _sh.copy2(_seed_db, DB)
 
 CATEGORIAS = [
     ('Cuscuz',         'bg-warning text-dark'),
