@@ -1539,6 +1539,243 @@ def nf_lista():
     return render_template('nf_lista.html', nfs=nfs)
 
 
+# ── helpers NF import ─────────────────────────────────────────────────────────
+
+def _nf_norm(s):
+    import unicodedata, re as _re
+    s = unicodedata.normalize('NFD', s or '').encode('ascii', 'ignore').decode().lower()
+    return _re.sub(r'\s+', ' ', s).strip()
+
+
+def _parse_danfe(pdf_bytes):
+    import pdfplumber, re, io
+
+    text = ''
+    tables = []
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        for page in pdf.pages:
+            text += (page.extract_text() or '') + '\n'
+            tbls = page.extract_tables()
+            if tbls:
+                tables.extend(tbls)
+
+    # ── Header ──
+    m = re.search(r'N[°º\.]\s*([\d\.]+)', text)
+    numero = re.sub(r'[^\d]', '', m.group(1)) if m else '0'
+
+    m = re.search(r'[Ss][eé]rie\s*[:\-]?\s*0*(\d+)', text)
+    serie = m.group(1) if m else '1'
+
+    fornecedor = ''
+    m = re.search(r'([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇ][A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇ\s&\.\/\-]{5,60}(?:LTDA|S\.?A\.?|EIRELI|ME|EPP|DO BRASIL)\.?)', text)
+    if m:
+        fornecedor = re.sub(r'\s+', ' ', m.group(1)).strip()
+
+    data_emissao = ''
+    for pat in [r'[Ee]miss[ãa]o\s*[:\-]?\s*(\d{2}/\d{2}/\d{4})',
+                r'(\d{2}/\d{2}/20\d{2})']:
+        m = re.search(pat, text)
+        if m:
+            data_emissao = m.group(1)
+            break
+
+    total = 0.0
+    for pat in [r'[Vv]alor\s+[Tt]otal\s+da\s+[Nn]ota\s*[R$\s]*([\d\.]+,\d+)',
+                r'TOTAL\s+DA\s+NOTA\s*[R$\s]*([\d\.]+,\d+)',
+                r'[Tt]otal\s+[R$\s]*([\d\.]+,\d+)']:
+        m = re.search(pat, text)
+        if m:
+            try:
+                total = float(m.group(1).replace('.', '').replace(',', '.'))
+            except Exception:
+                pass
+            break
+
+    header = {'numero': numero, 'serie': serie, 'fornecedor': fornecedor,
+               'data_emissao': data_emissao, 'total': total}
+
+    # ── Products ──
+    UNITS = {'UND','UN','KG','KGS','LT','LTA','PCT','MCO','CX','CXA','BDJ',
+             'SC','FD','G','ML','L','BISNAGA','MACO','BALDE','FRD'}
+    items = []
+
+    # Try table rows first
+    for table in tables:
+        for row in (table or []):
+            if not row:
+                continue
+            cells = [str(c or '').strip() for c in row]
+            # row must have at least 5 non-empty cells and one that matches a UNIT
+            non_empty = [c for c in cells if c]
+            if len(non_empty) < 4:
+                continue
+            # Find unit cell
+            unit_idx = None
+            for i, c in enumerate(cells):
+                if c.upper() in UNITS:
+                    unit_idx = i
+                    break
+            if unit_idx is None:
+                continue
+            # Qty should be just before unit
+            qty_val = None
+            for i in range(unit_idx - 1, max(unit_idx - 4, -1), -1):
+                try:
+                    qty_val = float(cells[i].replace('.', '').replace(',', '.'))
+                    break
+                except Exception:
+                    continue
+            if qty_val is None or qty_val <= 0:
+                continue
+            # Description: find the longest alphabetic cell before the qty
+            desc = ''
+            for i in range(min(unit_idx, len(cells))):
+                c = cells[i]
+                if len(c) > len(desc) and re.search(r'[A-Za-z]{3}', c):
+                    desc = c
+            if not desc or len(desc) < 4:
+                continue
+            # Total: last numeric cell after unit
+            total_item = 0.0
+            for c in reversed(cells[unit_idx:]):
+                try:
+                    v = float(c.replace('.', '').replace(',', '.'))
+                    if v > 0:
+                        total_item = v
+                        break
+                except Exception:
+                    continue
+            # Unit price: second-to-last numeric after unit
+            vlr_unit = 0.0
+            nums_after = []
+            for c in cells[unit_idx:]:
+                try:
+                    v = float(c.replace('.', '').replace(',', '.'))
+                    if v > 0:
+                        nums_after.append(v)
+                except Exception:
+                    pass
+            if len(nums_after) >= 2:
+                vlr_unit = nums_after[0]
+                total_item = nums_after[-1]
+            items.append({'descricao': desc, 'qtd': qty_val,
+                          'unid': cells[unit_idx].upper(),
+                          'vlr_unit': vlr_unit, 'total': total_item})
+
+    # Fallback: regex on raw text
+    if not items:
+        pat = re.compile(
+            r'^[\s\d]{0,6}([A-Z][A-Z0-9/\.\s\-]{4,50}?)\s+'
+            r'(\d+[,\.]\d+)\s+'
+            r'(' + '|'.join(UNITS) + r')\s+'
+            r'(\d+[,\.]\d+)',
+            re.MULTILINE | re.IGNORECASE
+        )
+        for m in pat.finditer(text):
+            try:
+                desc = m.group(1).strip()
+                if len(desc) < 4 or desc.upper() in UNITS:
+                    continue
+                qtd = float(m.group(2).replace(',', '.'))
+                unid = m.group(3).upper()
+                vlr = float(m.group(4).replace(',', '.'))
+                items.append({'descricao': desc, 'qtd': qtd, 'unid': unid,
+                              'vlr_unit': vlr, 'total': round(qtd * vlr, 2)})
+            except Exception:
+                continue
+
+    # Consolidate duplicates
+    from collections import OrderedDict
+    seen = OrderedDict()
+    for it in items:
+        key = it['descricao'].upper()
+        if key in seen:
+            seen[key]['qtd'] = round(seen[key]['qtd'] + it['qtd'], 4)
+            seen[key]['total'] = round(seen[key]['total'] + it['total'], 2)
+        else:
+            seen[key] = dict(it)
+
+    return header, list(seen.values())
+
+
+def _match_insumo_nf(descricao_nf, insumos):
+    """Returns (insumo_id, obs). Uses fuzzy matching."""
+    import difflib
+    nd = _nf_norm(descricao_nf)
+    best_ratio = 0.0
+    best_id = None
+    best_nome = ''
+    for ins in insumos:
+        ni = _nf_norm(ins['nome'])
+        # exact substring
+        if ni in nd or nd in ni:
+            return ins['id'], 'Checar: match por substring'
+        r = difflib.SequenceMatcher(None, nd, ni).ratio()
+        if r > best_ratio:
+            best_ratio = r
+            best_id = ins['id']
+            best_nome = ins['nome']
+    if best_ratio >= 0.55:
+        return best_id, f'Checar: similaridade {best_ratio:.0%} com "{best_nome}"'
+    return None, 'Sem match — vincular manualmente'
+
+
+@app.route('/nf/importar', methods=['POST'])
+def nf_importar():
+    arq = request.files.get('pdf')
+    if not arq or not arq.filename.lower().endswith('.pdf'):
+        flash('Selecione um arquivo PDF de nota fiscal.', 'danger')
+        return redirect(url_for('nf_lista'))
+
+    pdf_bytes = arq.read()
+    try:
+        header, itens = _parse_danfe(pdf_bytes)
+    except Exception as e:
+        flash(f'Erro ao processar PDF: {e}', 'danger')
+        return redirect(url_for('nf_lista'))
+
+    if not itens:
+        flash('Nenhum item de produto encontrado no PDF. Verifique se é um DANFE válido.', 'warning')
+        return redirect(url_for('nf_lista'))
+
+    db = get_db()
+
+    # Duplicate check
+    existing = db.execute(
+        'SELECT id FROM nf_entradas WHERE numero=? AND serie=?',
+        (header['numero'], header['serie'])
+    ).fetchone()
+    if existing:
+        db.close()
+        flash(f'NF {header["numero"]} série {header["serie"]} já está importada.', 'warning')
+        return redirect(url_for('nf_confirmar', nf_id=existing['id']))
+
+    db.execute(
+        '''INSERT INTO nf_entradas (numero, serie, fornecedor, data_emissao, total, status)
+           VALUES (?, ?, ?, ?, ?, 'pendente')''',
+        (header['numero'], header['serie'], header['fornecedor'],
+         header['data_emissao'], header['total'])
+    )
+    nf_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+
+    insumos = db.execute('SELECT id, nome FROM insumos').fetchall()
+    for it in itens:
+        ins_id, obs = _match_insumo_nf(it['descricao'], insumos)
+        db.execute(
+            '''INSERT INTO nf_itens
+               (nf_id, descricao_nf, qtd_nf, unid_nf, vlr_unit, total_item,
+                insumo_id, qtd_entrada, obs)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (nf_id, it['descricao'], it['qtd'], it['unid'],
+             it['vlr_unit'], it['total'], ins_id, it['qtd'], obs)
+        )
+
+    db.commit()
+    db.close()
+    flash(f'NF {header["numero"]} importada com {len(itens)} itens.', 'success')
+    return redirect(url_for('nf_confirmar', nf_id=nf_id))
+
+
 @app.route('/nf/<int:nf_id>/excluir', methods=['POST'])
 def nf_excluir(nf_id):
     db = get_db()
