@@ -1225,8 +1225,9 @@ def requisicao_nova():
             db.close()
             return render_template('requisicao_nova.html', insumos=insumos, today=date.today().isoformat())
 
-        db.execute('INSERT INTO requisicoes (data, status, observacao) VALUES (?,?,?)',
-                   (data, 'aberto', obs or None))
+        nf_origem_id = request.form.get('nf_origem_id', type=int)
+        db.execute('INSERT INTO requisicoes (data, status, observacao, nf_origem_id) VALUES (?,?,?,?)',
+                   (data, 'aberto', obs or None, nf_origem_id))
         req_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
 
         for iid, qtd in itens:
@@ -1813,6 +1814,24 @@ def nf_importar():
     return redirect(url_for('nf_confirmar', nf_id=nf_id))
 
 
+@app.route('/insumos/<int:insumo_id>/historico_preco')
+def insumo_historico_preco(insumo_id):
+    db = get_db()
+    insumo = db.execute('SELECT * FROM insumos WHERE id=?', (insumo_id,)).fetchone()
+    if not insumo:
+        db.close()
+        return 'Insumo não encontrado', 404
+    historico = db.execute('''
+        SELECT h.*, n.numero AS nf_numero
+        FROM insumo_preco_historico h
+        LEFT JOIN nf_entradas n ON n.id = h.nf_id
+        WHERE h.insumo_id = ?
+        ORDER BY h.data_ref DESC, h.id DESC
+    ''', (insumo_id,)).fetchall()
+    db.close()
+    return render_template('insumo_historico_preco.html', insumo=insumo, historico=historico)
+
+
 @app.route('/nf/<int:nf_id>/excluir', methods=['POST'])
 def nf_excluir(nf_id):
     db = get_db()
@@ -1857,8 +1876,14 @@ def nf_confirmar(nf_id):
                 # Atualiza custo unitário do insumo com o valor da NF
                 if item['vlr_unit'] and item['vlr_unit'] > 0:
                     db.execute(
-                        '''UPDATE insumos SET preco_compra=?, data_revisao_custo=? WHERE id=?''',
+                        'UPDATE insumos SET preco_compra=?, data_revisao_custo=? WHERE id=?',
                         (item['vlr_unit'], nf['data_emissao'], ins_id_v)
+                    )
+                    # Registra no histórico de preços
+                    db.execute(
+                        '''INSERT INTO insumo_preco_historico (insumo_id, preco, data_ref, nf_id, fornecedor)
+                           VALUES (?, ?, ?, ?, ?)''',
+                        (ins_id_v, item['vlr_unit'], nf['data_emissao'], nf_id, nf['fornecedor'])
                     )
         db.execute("UPDATE nf_entradas SET status='confirmada' WHERE id=?", (nf_id,))
         db.commit()
@@ -1877,8 +1902,27 @@ def nf_confirmar(nf_id):
     insumos = db.execute(
         'SELECT id, nome, unidade_compra FROM insumos ORDER BY nome'
     ).fetchall()
+    # Requisições geradas a partir desta NF + itens que ficaram de fora
+    requisicoes_nf = db.execute(
+        'SELECT * FROM requisicoes WHERE nf_origem_id=? ORDER BY id DESC', (nf_id,)
+    ).fetchall()
+    itens_fora = []
+    for req in requisicoes_nf:
+        fora = db.execute('''
+            SELECT ni.descricao_nf, ni.qtd_nf, ni.unid_nf, i.nome AS insumo_nome,
+                   ni.insumo_id, ? AS req_id, ? AS req_data
+            FROM nf_itens ni
+            LEFT JOIN insumos i ON i.id = ni.insumo_id
+            WHERE ni.nf_id = ?
+              AND ni.insumo_id IS NOT NULL
+              AND ni.insumo_id NOT IN (
+                  SELECT insumo_id FROM requisicao_itens WHERE requisicao_id = ?
+              )
+        ''', (req['id'], req['data'], nf_id, req['id'])).fetchall()
+        itens_fora.extend([dict(r) for r in fora])
     db.close()
-    return render_template('nf_confirmar.html', nf=nf, itens=itens, insumos=insumos)
+    return render_template('nf_confirmar.html', nf=nf, itens=itens, insumos=insumos,
+                           requisicoes_nf=requisicoes_nf, itens_fora=itens_fora)
 
 
 @app.route('/alertas')

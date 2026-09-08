@@ -61,6 +61,9 @@
 </div>
 
 <form method="post">
+{% if nf_origem %}
+<input type="hidden" name="nf_origem_id" value="{{ nf_origem.id }}">
+{% endif %}
 <div class="row g-3 mb-4">
   <div class="col-auto">
     <label class="form-label fw-semibold">Data do envio</label>

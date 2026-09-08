@@ -172,6 +172,41 @@
     </form>
   </div>
 </div>
+{% if itens_fora %}
+<div class="card shadow-sm mt-4 border-warning">
+  <div class="card-header bg-warning text-dark fw-semibold d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-exclamation-triangle me-2"></i>Itens da NF não incluídos na Requisição</span>
+    <span class="badge bg-dark">{{ itens_fora|length }}</span>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <thead>
+        <tr>
+          <th>Descrição na NF</th>
+          <th>Insumo vinculado</th>
+          <th class="text-center">Qtd NF</th>
+          <th class="text-center">Unid.</th>
+          <th class="text-end">Requisição</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for it in itens_fora %}
+        <tr>
+          <td class="small text-muted">{{ it.descricao_nf }}</td>
+          <td class="fw-semibold">{{ it.insumo_nome or '—' }}</td>
+          <td class="text-center">{{ it.qtd_nf }}</td>
+          <td class="text-center text-muted small">{{ it.unid_nf }}</td>
+          <td class="text-end small text-muted">#{{ it.req_id }} — {{ it.req_data }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer text-muted small">
+    Estes itens estavam na NF e têm insumo vinculado, mas não foram enviados para a produção na requisição correspondente.
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
