@@ -319,7 +319,9 @@ preItens.forEach(it => {
 
   if (displayInp && sel) {
     // Se o item tem toggle, a NF sempre vem em unidades de embalagem (pct, lata, cx…)
+    // dispatchEvent('change') atualiza o estoque e limpa o campo; depois setamos o valor
     sel.value = 'emb';
+    sel.dispatchEvent(new Event('change'));
     displayInp.value = qtdNf;
     displayInp.dispatchEvent(new Event('input'));
   } else if (simpleInp) {
