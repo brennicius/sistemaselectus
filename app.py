@@ -1854,6 +1854,12 @@ def nf_confirmar(nf_id):
                     'UPDATE insumos SET estoque_central = COALESCE(estoque_central,0) + ? WHERE id=?',
                     (qtd_f, ins_id_v)
                 )
+                # Atualiza custo unitário do insumo com o valor da NF
+                if item['vlr_unit'] and item['vlr_unit'] > 0:
+                    db.execute(
+                        '''UPDATE insumos SET preco_compra=?, data_revisao_custo=? WHERE id=?''',
+                        (item['vlr_unit'], nf['data_emissao'], ins_id_v)
+                    )
         db.execute("UPDATE nf_entradas SET status='confirmada' WHERE id=?", (nf_id,))
         db.commit()
         db.close()
