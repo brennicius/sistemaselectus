@@ -6,7 +6,19 @@ from datetime import datetime, date
 app = Flask(__name__)
 app.secret_key = 'selectus_cozinha_2024'
 app.config['TEMPLATES_AUTO_RELOAD'] = True
-DB = os.path.join(os.path.dirname(__file__), 'cozinha.db')
+
+# DATA_DIR permite apontar para volume persistente (ex: /data no Railway).
+# Se não definido, usa o diretório do app (desenvolvimento local).
+_app_dir = os.path.dirname(__file__)
+DATA_DIR = os.environ.get('DATA_DIR', _app_dir)
+DB = os.path.join(DATA_DIR, 'cozinha.db')
+_seed_db = os.path.join(_app_dir, 'cozinha.db')
+
+# Na primeira execução no volume, copia o DB semente para não começar vazio.
+if DATA_DIR != _app_dir and not os.path.exists(DB) and os.path.exists(_seed_db):
+    import shutil as _sh
+    os.makedirs(DATA_DIR, exist_ok=True)
+    _sh.copy2(_seed_db, DB)
 
 CATEGORIAS = [
     ('Cuscuz',         'bg-warning text-dark'),
@@ -4084,10 +4096,9 @@ def cafe_del_contagem(cid):
 
 @app.route('/sistema/exportar')
 def sistema_exportar():
-    db_path = os.path.join(os.path.dirname(__file__), 'cozinha.db')
     from datetime import date as _date
     fname = f'selectus_base_{_date.today().isoformat()}.db'
-    return send_file(db_path, as_attachment=True, download_name=fname,
+    return send_file(DB, as_attachment=True, download_name=fname,
                      mimetype='application/octet-stream')
 
 
@@ -4110,8 +4121,7 @@ def sistema_importar():
         os.unlink(tmp.name)
         flash(f'Arquivo inválido: {e}', 'danger')
         return redirect(request.referrer or url_for('index'))
-    db_path = os.path.join(os.path.dirname(__file__), 'cozinha.db')
-    shutil.copy2(tmp.name, db_path)
+    shutil.copy2(tmp.name, DB)
     os.unlink(tmp.name)
     flash('Base importada com sucesso! O sistema foi atualizado.', 'success')
     return redirect(url_for('index'))
