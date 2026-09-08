@@ -1250,13 +1250,15 @@ def requisicao_nova():
     if nf_id:
         nf_origem = db.execute('SELECT * FROM nf_entradas WHERE id=?', (nf_id,)).fetchone()
         if nf_origem:
-            rows = db.execute('''
+            # NF confirmada → só itens marcados; pendente → todos com insumo vinculado
+            filtro_conf = "AND ni.confirmado=1" if nf_origem['status'] == 'confirmada' else ""
+            rows = db.execute(f'''
                 SELECT ni.insumo_id, ni.qtd_nf, ni.unid_nf,
                        i.nome, i.unidade_uso, i.unidade_compra,
                        i.estoque_central, i.qtd_por_embalagem
                 FROM nf_itens ni
                 JOIN insumos i ON i.id = ni.insumo_id
-                WHERE ni.nf_id=? AND ni.insumo_id IS NOT NULL AND ni.confirmado=1
+                WHERE ni.nf_id=? AND ni.insumo_id IS NOT NULL {filtro_conf}
                 ORDER BY i.nome COLLATE NOCASE
             ''', (nf_id,)).fetchall()
             pre_itens = [dict(r) for r in rows]
