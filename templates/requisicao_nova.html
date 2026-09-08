@@ -8,9 +8,56 @@
   .qtd-input { width:90px; text-align:right; }
 </style>
 
-<div class="page-header">
-  <h1><i class="bi bi-arrow-right-circle me-2"></i>Nova Requisição de Produção</h1>
-  <p>Selecione os insumos e informe a quantidade enviada para a produção</p>
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <h1><i class="bi bi-arrow-right-circle me-2"></i>Nova Requisição de Produção</h1>
+    <p>Selecione os insumos e informe a quantidade enviada para a produção</p>
+  </div>
+  <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalImportarNF">
+    <i class="bi bi-receipt me-1"></i>Importar de NF
+  </button>
+</div>
+
+{% if nf_origem %}
+<div class="alert alert-info py-2 mb-3">
+  <i class="bi bi-receipt me-1"></i>
+  Itens pré-carregados da NF <strong>{{ nf_origem.numero }}</strong> — {{ nf_origem.fornecedor }} ({{ nf_origem.data_emissao }}).
+  Ajuste as quantidades conforme necessário.
+</div>
+{% endif %}
+
+{# Modal selecionar NF #}
+<div class="modal fade" id="modalImportarNF" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#1a3a5c">
+        <h5 class="modal-title text-white"><i class="bi bi-receipt me-2"></i>Selecionar Nota Fiscal</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        {% if nfs %}
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th>N° NF</th><th>Fornecedor</th><th>Data</th><th></th></tr></thead>
+          <tbody>
+          {% for nf in nfs %}
+            <tr>
+              <td class="fw-semibold">{{ nf.numero }}</td>
+              <td class="small">{{ nf.fornecedor }}</td>
+              <td class="small text-muted">{{ nf.data_emissao }}</td>
+              <td>
+                <a href="{{ url_for('requisicao_nova') }}?nf_id={{ nf.id }}"
+                   class="btn btn-sm btn-primary">Usar</a>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="p-3 text-muted text-center">Nenhuma NF cadastrada ainda.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 </div>
 
 <form method="post">
@@ -206,5 +253,38 @@ function updateCount() {
   document.getElementById('n-itens').textContent = n;
   document.getElementById('btn-submit').disabled = n === 0;
 }
+
+// Pré-carregar itens da NF (se ?nf_id= fornecido)
+const preItens = {{ pre_itens | tojson }};
+preItens.forEach(it => {
+  const id = String(it.insumo_id);
+  if (selected.has(id)) return;
+  selected.add(id);
+  addRow(id, it.nome, it.unidade_uso, it.estoque_central || 0,
+         it.qtd_por_embalagem || 0, it.unidade_compra || '');
+  // Desabilita o botão + na lista esquerda
+  const addBtn = document.querySelector(`#lista-add [data-id="${id}"] .btn-add-item`);
+  if (addBtn) {
+    addBtn.disabled = true;
+    addBtn.classList.replace('btn-outline-success','btn-secondary');
+    addBtn.innerHTML = '<i class="bi bi-check"></i>';
+  }
+  // Preenche a quantidade vinda da NF
+  const row = document.querySelector(`#tbody-itens tr[data-id="${id}"]`);
+  if (!row) return;
+  const displayInp = row.querySelector('.qtd-display');
+  const simpleInp  = row.querySelector('input[name="qtd_enviada"]');
+  const hidden     = row.querySelector('.qtd-hidden');
+  const sel        = row.querySelector('.unid-select');
+  const qtdNf      = it.qtd_nf || 0;
+  if (displayInp && sel) {
+    // tem toggle — tenta usar unidade_compra se a qtd_nf parece em pacotes
+    displayInp.value = qtdNf;
+    displayInp.dispatchEvent(new Event('input'));
+  } else if (simpleInp) {
+    simpleInp.value = qtdNf;
+  }
+});
+updateCount();
 </script>
 {% endblock %}

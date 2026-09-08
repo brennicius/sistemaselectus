@@ -1242,8 +1242,32 @@ def requisicao_nova():
         return redirect(url_for('requisicao_ver', id=req_id))
 
     insumos = db.execute('SELECT id, nome, unidade_uso, unidade_compra, estoque_central, qtd_por_embalagem FROM insumos ORDER BY nome COLLATE NOCASE').fetchall()
+
+    # Pré-carregar itens de uma NF se ?nf_id= fornecido
+    nf_id = request.args.get('nf_id', type=int)
+    pre_itens = []
+    nf_origem = None
+    if nf_id:
+        nf_origem = db.execute('SELECT * FROM nf_entradas WHERE id=?', (nf_id,)).fetchone()
+        if nf_origem:
+            rows = db.execute('''
+                SELECT ni.insumo_id, ni.qtd_nf, ni.unid_nf,
+                       i.nome, i.unidade_uso, i.unidade_compra,
+                       i.estoque_central, i.qtd_por_embalagem
+                FROM nf_itens ni
+                JOIN insumos i ON i.id = ni.insumo_id
+                WHERE ni.nf_id=? AND ni.insumo_id IS NOT NULL
+                ORDER BY i.nome COLLATE NOCASE
+            ''', (nf_id,)).fetchall()
+            pre_itens = [dict(r) for r in rows]
+
+    nfs_disponiveis = db.execute(
+        "SELECT id, numero, fornecedor, data_emissao FROM nf_entradas ORDER BY id DESC"
+    ).fetchall()
+
     db.close()
-    return render_template('requisicao_nova.html', insumos=insumos, today=date.today().isoformat())
+    return render_template('requisicao_nova.html', insumos=insumos, today=date.today().isoformat(),
+                           pre_itens=pre_itens, nf_origem=nf_origem, nfs=nfs_disponiveis)
 
 
 @app.route('/requisicoes/<int:id>')
