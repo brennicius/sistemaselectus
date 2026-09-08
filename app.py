@@ -1527,6 +1527,68 @@ def insumo_ajuste_desfazer(lid):
     return jsonify({'ok': True})
 
 
+# ─── Entrada de Nota Fiscal ──────────────────────────────────────────────────
+
+@app.route('/nf')
+def nf_lista():
+    db  = get_db()
+    nfs = db.execute(
+        'SELECT * FROM nf_entradas ORDER BY id DESC'
+    ).fetchall()
+    db.close()
+    return render_template('nf_lista.html', nfs=nfs)
+
+
+@app.route('/nf/<int:nf_id>/confirmar', methods=['GET', 'POST'])
+def nf_confirmar(nf_id):
+    db  = get_db()
+    nf  = db.execute('SELECT * FROM nf_entradas WHERE id=?', (nf_id,)).fetchone()
+    if not nf:
+        db.close()
+        return 'NF não encontrada', 404
+
+    if request.method == 'POST':
+        itens = db.execute(
+            'SELECT * FROM nf_itens WHERE nf_id=?', (nf_id,)
+        ).fetchall()
+        for item in itens:
+            iid    = str(item['id'])
+            incl   = request.form.get(f'incl_{iid}')
+            ins_id = request.form.get(f'ins_{iid}', '').strip()
+            qtd    = request.form.get(f'qtd_{iid}', '').replace(',', '.').strip()
+            obs    = request.form.get(f'obs_{iid}', '').strip()
+            try:
+                qtd_f = float(qtd) if qtd else 0.0
+            except ValueError:
+                qtd_f = 0.0
+            ins_id_v = int(ins_id) if ins_id and ins_id.isdigit() else None
+            db.execute('''UPDATE nf_itens SET insumo_id=?, qtd_entrada=?, obs=?, confirmado=?
+                          WHERE id=?''',
+                       (ins_id_v, qtd_f, obs, 1 if incl else 0, int(iid)))
+            if incl and ins_id_v and qtd_f > 0:
+                db.execute(
+                    'UPDATE insumos SET estoque_central = COALESCE(estoque_central,0) + ? WHERE id=?',
+                    (qtd_f, ins_id_v)
+                )
+        db.execute("UPDATE nf_entradas SET status='confirmada' WHERE id=?", (nf_id,))
+        db.commit()
+        db.close()
+        flash('Entrada confirmada e estoque atualizado.', 'success')
+        return redirect(url_for('nf_lista'))
+
+    itens   = db.execute(
+        '''SELECT ni.*, ins.nome AS ins_nome, ins.unidade_compra
+           FROM nf_itens ni
+           LEFT JOIN insumos ins ON ins.id = ni.insumo_id
+           WHERE ni.nf_id=? ORDER BY ni.id''', (nf_id,)
+    ).fetchall()
+    insumos = db.execute(
+        'SELECT id, nome, unidade_compra FROM insumos ORDER BY nome'
+    ).fetchall()
+    db.close()
+    return render_template('nf_confirmar.html', nf=nf, itens=itens, insumos=insumos)
+
+
 @app.route('/alertas')
 def alertas():
     db = get_db()

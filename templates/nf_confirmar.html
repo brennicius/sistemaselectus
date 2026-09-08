@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Confirmar NF {{ nf.numero }}{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <h1><i class="bi bi-box-arrow-in-down me-2"></i>Entrada de Nota Fiscal</h1>
+    <p>
+      NF-e {{ nf.numero }} · Série {{ nf.serie }} · {{ nf.fornecedor }}<br>
+      <span class="text-muted">Emissão: {{ nf.data_emissao }} &nbsp;·&nbsp; Total: R$ {{ '%.2f'|format(nf.total) }}</span>
+    </p>
+  </div>
+  <a href="{{ url_for('nf_lista') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Voltar
+  </a>
+</div>
+
+{% if nf.status == 'confirmada' %}
+<div class="alert alert-success">
+  <i class="bi bi-check-circle me-2"></i>Esta NF já foi confirmada e o estoque atualizado.
+</div>
+{% endif %}
+
+<div class="card shadow-sm mb-3">
+  <div class="card-body p-0">
+    <div class="p-3 pb-0 d-flex gap-3 align-items-center flex-wrap">
+      <span class="badge bg-success fs-6">{{ itens|selectattr('insumo_id')|list|length }} com match</span>
+      <span class="badge bg-warning text-dark fs-6">{{ itens|selectattr('obs')|list|length }} com observação</span>
+      <span class="badge bg-danger fs-6">{{ itens|rejectattr('insumo_id')|list|length }} sem match</span>
+      <div class="ms-auto d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="marcarTodos(true)">
+          <i class="bi bi-check-all me-1"></i>Marcar todos com match
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="marcarTodos(false)">
+          <i class="bi bi-x me-1"></i>Desmarcar todos
+        </button>
+      </div>
+    </div>
+
+    <form method="POST" id="formNF">
+    <div class="table-responsive">
+    <table class="table table-sm mb-0" style="font-size:.88rem">
+      <thead>
+        <tr style="background:#1a3a5c;color:#fff">
+          <th style="width:36px" class="text-center">✓</th>
+          <th style="width:30px" class="text-center">#</th>
+          <th>Descrição na Nota Fiscal</th>
+          <th style="width:80px" class="text-center">Qtd NF</th>
+          <th style="width:55px" class="text-center">Unid</th>
+          <th style="width:80px" class="text-center">Total R$</th>
+          <th style="width:18px"></th>
+          <th style="min-width:260px">Insumo no Sistema</th>
+          <th style="width:100px" class="text-center">Qtd Entrada</th>
+          <th style="min-width:180px">Observação</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for it in itens %}
+        {% set tem_match = it.insumo_id is not none %}
+        {% set tem_obs   = it.obs and it.obs|length > 0 %}
+        <tr class="{% if not tem_match %}table-danger{% elif tem_obs %}table-warning{% endif %}"
+            id="row-{{ it.id }}">
+
+          {# Checkbox incluir #}
+          <td class="text-center align-middle">
+            <input type="checkbox" name="incl_{{ it.id }}" id="incl_{{ it.id }}"
+                   class="form-check-input chk-item"
+                   {% if tem_match %}checked{% endif %}
+                   style="width:18px;height:18px;cursor:pointer">
+          </td>
+
+          {# N° #}
+          <td class="text-center align-middle text-muted">{{ loop.index }}</td>
+
+          {# Descrição NF #}
+          <td class="align-middle fw-semibold">{{ it.descricao_nf }}</td>
+
+          {# Qtd NF #}
+          <td class="text-center align-middle">{{ '%.3f'|format(it.qtd_nf)|replace('.000','') }}</td>
+
+          {# Unid NF #}
+          <td class="text-center align-middle">
+            <span class="badge bg-secondary">{{ it.unid_nf }}</span>
+          </td>
+
+          {# Total R$ #}
+          <td class="text-center align-middle">R$ {{ '%.2f'|format(it.total_item) }}</td>
+
+          {# Seta #}
+          <td class="text-center align-middle" style="color:#2e75b6;font-weight:bold">→</td>
+
+          {# Insumo select #}
+          <td class="align-middle">
+            <select name="ins_{{ it.id }}" class="form-select form-select-sm ins-select"
+                    data-item="{{ it.id }}"
+                    style="{% if not tem_match %}border-color:#dc3545{% endif %}">
+              <option value="">— não vincular —</option>
+              {% for ins in insumos %}
+              <option value="{{ ins.id }}"
+                {% if ins.id == it.insumo_id %}selected{% endif %}>
+                [{{ ins.id }}] {{ ins.nome }} ({{ ins.unidade_compra }})
+              </option>
+              {% endfor %}
+            </select>
+          </td>
+
+          {# Qtd entrada #}
+          <td class="align-middle">
+            <input type="number" name="qtd_{{ it.id }}"
+                   class="form-control form-control-sm text-end"
+                   value="{{ '%.3f'|format(it.qtd_entrada)|replace('.000','') }}"
+                   step="0.001" min="0"
+                   style="width:95px">
+          </td>
+
+          {# Observação #}
+          <td class="align-middle">
+            <input type="text" name="obs_{{ it.id }}"
+                   class="form-control form-control-sm"
+                   value="{{ it.obs or '' }}"
+                   placeholder="obs...">
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>{# table-responsive #}
+
+    <div class="p-3 d-flex justify-content-between align-items-center border-top">
+      <span class="text-muted small">
+        Ao confirmar, a coluna <strong>Estoque Central</strong> de cada insumo marcado será incrementada pela quantidade de entrada.
+      </span>
+      {% if nf.status != 'confirmada' %}
+      <button type="submit" class="btn btn-success px-4"
+              onclick="return confirm('Confirmar entrada no estoque para os itens marcados?')">
+        <i class="bi bi-box-arrow-in-down me-2"></i>Confirmar Entrada no Estoque
+      </button>
+      {% endif %}
+    </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function marcarTodos(val) {
+  document.querySelectorAll('.chk-item').forEach(c => {
+    // só marca itens que têm insumo selecionado
+    const row  = document.getElementById('row-' + c.id.replace('incl_',''));
+    const sel  = row.querySelector('.ins-select');
+    if (val && sel && sel.value) c.checked = true;
+    else if (!val) c.checked = false;
+  });
+}
+
+// Se o select for alterado para "não vincular", desmarca o checkbox
+document.querySelectorAll('.ins-select').forEach(sel => {
+  sel.addEventListener('change', function() {
+    const id  = this.dataset.item;
+    const chk = document.getElementById('incl_' + id);
+    if (!this.value) chk.checked = false;
+    else chk.checked = true;
+  });
+});
+</script>
+{% endblock %}

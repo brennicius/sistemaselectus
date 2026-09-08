@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Notas Fiscais{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-receipt me-2"></i>Entrada de Notas Fiscais</h1>
+  <p>Confirme os itens da nota e dê entrada no estoque central.</p>
+</div>
+
+{% if not nfs %}
+<div class="alert alert-info">Nenhuma NF cadastrada ainda.</div>
+{% else %}
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table mb-0">
+      <thead>
+        <tr>
+          <th>N° NF</th>
+          <th>Fornecedor</th>
+          <th>Data</th>
+          <th class="text-end">Total R$</th>
+          <th class="text-center">Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for nf in nfs %}
+        <tr>
+          <td class="fw-semibold">{{ nf.numero }} <span class="text-muted small">s.{{ nf.serie }}</span></td>
+          <td>{{ nf.fornecedor }}</td>
+          <td>{{ nf.data_emissao }}</td>
+          <td class="text-end">R$ {{ '%.2f'|format(nf.total) }}</td>
+          <td class="text-center">
+            {% if nf.status == 'confirmada' %}
+              <span class="badge bg-success">Confirmada</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">Pendente</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a href="{{ url_for('nf_confirmar', nf_id=nf.id) }}" class="btn btn-sm btn-primary">
+              <i class="bi bi-box-arrow-in-down me-1"></i>
+              {% if nf.status == 'confirmada' %}Ver{% else %}Confirmar{% endif %}
+            </a>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
