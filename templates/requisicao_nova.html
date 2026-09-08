@@ -106,9 +106,14 @@
   <!-- Coluna direita: itens selecionados -->
   <div class="col-md-7">
     <div class="card shadow-sm">
-      <div class="card-header fw-semibold bg-light d-flex justify-content-between">
+      <div class="card-header fw-semibold bg-light d-flex justify-content-between align-items-center">
         <span><i class="bi bi-list-check me-1"></i> Itens a enviar</span>
-        <span class="badge bg-primary" id="n-itens">0</span>
+        <div class="d-flex align-items-center gap-2">
+          <span class="text-muted small" id="revisados-label" style="display:none">
+            <span id="n-revisados">0</span>/<span id="n-total-itens">0</span> revisados
+          </span>
+          <span class="badge bg-primary" id="n-itens">0</span>
+        </div>
       </div>
       <div class="card-body p-0">
         <table class="table table-sm mb-0" id="tabela-itens">
@@ -118,12 +123,13 @@
               <th class="text-center">Unidade</th>
               <th class="text-end">Estoque Central</th>
               <th class="text-end">Qtd enviada</th>
+              <th class="text-center">OK</th>
               <th></th>
             </tr>
           </thead>
           <tbody id="tbody-itens">
             <tr id="linha-vazia">
-              <td colspan="5" class="text-center text-muted py-4">
+              <td colspan="6" class="text-center text-muted py-4">
                 <i class="bi bi-arrow-left-circle me-1"></i>Selecione insumos ao lado
               </td>
             </tr>
@@ -132,11 +138,16 @@
       </div>
     </div>
 
-    <div class="mt-3 d-flex gap-2 justify-content-end">
-      <a href="{{ url_for('requisicoes_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
-      <button type="submit" class="btn btn-primary" id="btn-submit" disabled>
-        <i class="bi bi-send me-1"></i>Enviar para Produção
+    <div class="mt-3 d-flex gap-2 justify-content-between align-items-center">
+      <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-marcar-todos" style="display:none" onclick="marcarTodos()">
+        <i class="bi bi-check-all me-1"></i>Marcar todos como OK
       </button>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('requisicoes_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-primary" id="btn-submit" disabled>
+          <i class="bi bi-send me-1"></i>Enviar para Produção
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -205,6 +216,11 @@ function addRow(id, nome, un, estoque, qtdEmb, unidEmb) {
     <td class="text-center"><span class="badge bg-info text-dark">${un}</span></td>
     <td class="text-end text-muted small" id="est-${id}">${estoqueDisplay}</td>
     <td class="text-end">${toggleHtml}</td>
+    <td class="text-center">
+      <button type="button" class="btn btn-sm btn-outline-secondary btn-ok" title="Marcar como revisado" style="padding:2px 8px">
+        <i class="bi bi-check2"></i>
+      </button>
+    </td>
     <td>
       <button type="button" class="btn btn-sm btn-outline-danger btn-remove" style="padding:2px 6px">
         <i class="bi bi-x"></i>
@@ -252,10 +268,26 @@ function addRow(id, nome, un, estoque, qtdEmb, unidEmb) {
     updateEstoque();
   }
 
+  // Botão OK — marca linha como revisada
+  tr.querySelector('.btn-ok').addEventListener('click', function() {
+    const jaOk = tr.dataset.ok === '1';
+    if (jaOk) {
+      tr.dataset.ok = '0';
+      tr.style.background = '';
+      this.classList.replace('btn-success', 'btn-outline-secondary');
+      this.innerHTML = '<i class="bi bi-check2"></i>';
+    } else {
+      tr.dataset.ok = '1';
+      tr.style.background = '#d1f5d3';
+      this.classList.replace('btn-outline-secondary', 'btn-success');
+      this.innerHTML = '<i class="bi bi-check2-all"></i>';
+    }
+    updateCount();
+  });
+
   tr.querySelector('.btn-remove').addEventListener('click', () => {
     selected.delete(id);
     tr.remove();
-    // Re-enable add button
     const addBtn = document.querySelector(`#lista-add [data-id="${id}"] .btn-add-item`);
     if (addBtn) {
       addBtn.disabled = false;
@@ -269,10 +301,35 @@ function addRow(id, nome, un, estoque, qtdEmb, unidEmb) {
   updateCount();
 }
 
+function marcarTodos() {
+  document.querySelectorAll('#tbody-itens tr[data-id]').forEach(tr => {
+    if (tr.dataset.ok !== '1') {
+      tr.dataset.ok = '1';
+      tr.style.background = '#d1f5d3';
+      const btn = tr.querySelector('.btn-ok');
+      if (btn) { btn.classList.replace('btn-outline-secondary','btn-success'); btn.innerHTML = '<i class="bi bi-check2-all"></i>'; }
+    }
+  });
+  updateCount();
+}
+
 function updateCount() {
   const n = selected.size;
   document.getElementById('n-itens').textContent = n;
-  document.getElementById('btn-submit').disabled = n === 0;
+  const revisados = document.querySelectorAll('#tbody-itens tr[data-ok="1"]').length;
+  document.getElementById('n-revisados').textContent = revisados;
+  document.getElementById('n-total-itens').textContent = n;
+  const labelEl = document.getElementById('revisados-label');
+  const btnMarcar = document.getElementById('btn-marcar-todos');
+  if (n > 0) {
+    labelEl.style.display = '';
+    btnMarcar.style.display = '';
+  } else {
+    labelEl.style.display = 'none';
+    btnMarcar.style.display = 'none';
+  }
+  // Enviar ativo quando todos revisados (ou nenhum item)
+  document.getElementById('btn-submit').disabled = n === 0 || revisados < n;
 }
 
 // Normaliza unidade para comparação (pct, un, lt, kg, cx, maco, bisnaga…)
