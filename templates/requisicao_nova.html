@@ -40,7 +40,9 @@
               {% for ins in insumos %}
               <tr data-nome="{{ ins.nome|lower }}" data-id="{{ ins.id }}"
                   data-nome-orig="{{ ins.nome }}" data-un="{{ ins.unidade_uso }}"
-                  data-estoque="{{ ins.estoque_central or 0 }}">
+                  data-estoque="{{ ins.estoque_central or 0 }}"
+                  data-qtd-emb="{{ ins.qtd_por_embalagem or 0 }}"
+                  data-unid-emb="{{ ins.unidade_compra or '' }}">
                 <td>{{ ins.nome }}</td>
                 <td class="text-center"><span class="badge bg-info text-dark">{{ ins.unidade_uso }}</span></td>
                 <td class="text-end text-muted small">{{ '%.1f'|format(ins.estoque_central or 0) }}</td>
@@ -113,33 +115,74 @@ document.querySelectorAll('.btn-add-item').forEach(btn => {
     const id = tr.dataset.id;
     if (selected.has(id)) return;
     selected.add(id);
-    addRow(id, tr.dataset.nomeOrig, tr.dataset.un, parseFloat(tr.dataset.estoque));
+    addRow(id, tr.dataset.nomeOrig, tr.dataset.un, parseFloat(tr.dataset.estoque),
+           parseFloat(tr.dataset.qtdEmb || 0), tr.dataset.unidEmb || '');
     this.disabled = true;
     this.classList.replace('btn-outline-success','btn-secondary');
     this.innerHTML = '<i class="bi bi-check"></i>';
   });
 });
 
-function addRow(id, nome, un, estoque) {
+function addRow(id, nome, un, estoque, qtdEmb, unidEmb) {
   document.getElementById('linha-vazia').style.display = 'none';
   const tbody = document.getElementById('tbody-itens');
   const tr = document.createElement('tr');
   tr.dataset.id = id;
+
+  // Toggle de unidade: base ou embalagem (só quando unidade_compra ≠ unidade_uso)
+  const temEmb = qtdEmb > 0 && unidEmb && unidEmb.toLowerCase() !== un.toLowerCase();
+  const toggleHtml = temEmb ? `
+    <div class="input-group input-group-sm">
+      <input type="number" class="form-control qtd-display" min="0.01" step="0.01" placeholder="0" style="width:70px">
+      <select class="form-select form-select-sm unid-select" style="max-width:90px">
+        <option value="base">${un}</option>
+        <option value="emb">${unidEmb}</option>
+      </select>
+    </div>
+    <input type="hidden" name="qtd_enviada" class="qtd-hidden">
+    <input type="hidden" name="insumo_id" value="${id}">
+    <div class="text-muted" style="font-size:.72rem;margin-top:2px" id="conv-${id}"></div>
+  ` : `
+    <input type="number" name="qtd_enviada" min="0.01" step="0.01"
+           class="form-control form-control-sm qtd-input" required placeholder="0" style="width:90px">
+    <input type="hidden" name="insumo_id" value="${id}">
+  `;
+
   tr.innerHTML = `
-    <td class="fw-semibold">${nome}
-      <input type="hidden" name="insumo_id" value="${id}">
-    </td>
+    <td class="fw-semibold">${nome}</td>
     <td class="text-center"><span class="badge bg-info text-dark">${un}</span></td>
     <td class="text-end text-muted small">${estoque.toFixed(1)}</td>
-    <td class="text-end">
-      <input type="number" name="qtd_enviada" min="0.01" step="0.01" class="form-control form-control-sm qtd-input" required placeholder="0">
-    </td>
+    <td class="text-end">${toggleHtml}</td>
     <td>
       <button type="button" class="btn btn-sm btn-outline-danger btn-remove" style="padding:2px 6px">
         <i class="bi bi-x"></i>
       </button>
     </td>`;
   tbody.appendChild(tr);
+
+  // Lógica do toggle embalagem ↔ base
+  if (temEmb) {
+    const display = tr.querySelector('.qtd-display');
+    const sel     = tr.querySelector('.unid-select');
+    const hidden  = tr.querySelector('.qtd-hidden');
+    const conv    = tr.querySelector(`#conv-${id}`);
+
+    function recalc() {
+      const v = parseFloat(display.value) || 0;
+      let baseVal;
+      if (sel.value === 'emb') {
+        baseVal = v * qtdEmb;
+        conv.textContent = v > 0 ? `= ${baseVal.toFixed(1)} ${un}` : '';
+      } else {
+        baseVal = v;
+        conv.textContent = (v > 0 && qtdEmb > 0) ? `= ${(v/qtdEmb).toFixed(2)} ${unidEmb}` : '';
+      }
+      hidden.value = baseVal > 0 ? baseVal : '';
+      hidden.required = true;
+    }
+    display.addEventListener('input', recalc);
+    sel.addEventListener('change', () => { display.value = ''; conv.textContent = ''; hidden.value = ''; recalc(); });
+  }
 
   tr.querySelector('.btn-remove').addEventListener('click', () => {
     selected.delete(id);

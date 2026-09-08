@@ -1221,7 +1221,7 @@ def requisicao_nova():
 
         if not itens:
             flash('Adicione ao menos um insumo com quantidade válida.', 'warning')
-            insumos = db.execute('SELECT id, nome, unidade_uso, estoque_central FROM insumos ORDER BY nome COLLATE NOCASE').fetchall()
+            insumos = db.execute('SELECT id, nome, unidade_uso, unidade_compra, estoque_central, qtd_por_embalagem FROM insumos ORDER BY nome COLLATE NOCASE').fetchall()
             db.close()
             return render_template('requisicao_nova.html', insumos=insumos, today=date.today().isoformat())
 
@@ -1241,7 +1241,7 @@ def requisicao_nova():
         flash(f'Requisição #{req_id} criada — {len(itens)} insumos enviados para produção.', 'success')
         return redirect(url_for('requisicao_ver', id=req_id))
 
-    insumos = db.execute('SELECT id, nome, unidade_uso, estoque_central FROM insumos ORDER BY nome COLLATE NOCASE').fetchall()
+    insumos = db.execute('SELECT id, nome, unidade_uso, unidade_compra, estoque_central, qtd_por_embalagem FROM insumos ORDER BY nome COLLATE NOCASE').fetchall()
     db.close()
     return render_template('requisicao_nova.html', insumos=insumos, today=date.today().isoformat())
 
