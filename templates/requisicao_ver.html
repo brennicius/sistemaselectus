@@ -22,6 +22,7 @@
     </h1>
     <p>
       Data: <strong>{{ req.data | replace('-','/') }}</strong>
+      · <span class="badge bg-primary">{{ itens|length }} itens</span>
       {% if req.observacao %} · {{ req.observacao }}{% endif %}
       {% if req.fechado_em %} · Fechada em {{ req.fechado_em[:16] }}{% endif %}
     </p>
