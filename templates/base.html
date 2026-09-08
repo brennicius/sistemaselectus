@@ -8,10 +8,17 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <style>
     :root {
+      {% if 'localhost' in request.host %}
+      --sidebar-bg: #7a5c00;
+      --sidebar-hover: #a07800;
+      --sidebar-active: #c49a00;
+      --accent: #c49a00;
+      {% else %}
       --sidebar-bg: #1a3a5c;
       --sidebar-hover: #264f7a;
       --sidebar-active: #2e75b6;
       --accent: #2e75b6;
+      {% endif %}
     }
     body { background: #f4f6f9; font-family: Arial, sans-serif; }
 
