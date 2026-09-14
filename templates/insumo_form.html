@@ -410,7 +410,7 @@ function updatePreview() {
 }
 
 // Attach listeners
-['qtd_emb','preco','fator','uc','ue_txt','uu_txt'].forEach(id => {
+['qtd_emb','preco','uc','ue_txt','uu_txt'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('input', updatePreview);
 });
