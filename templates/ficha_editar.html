@@ -98,7 +98,7 @@
                 {% endif %}
               </td>
               <td class="text-end font-monospace" id="qty-display-{{ it.ft_id }}">
-                {{ it.quantidade|int if it.quantidade == it.quantidade|int else it.quantidade|num_br(2) }}
+                {{ it.quantidade|int if it.quantidade == it.quantidade|int else it.quantidade|num_br(3) }}
               </td>
               <td class="text-center"><span class="badge bg-info text-dark">{{ it.unidade_uso }}</span></td>
               <td class="text-end font-monospace small">

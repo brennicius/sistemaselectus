@@ -75,7 +75,7 @@
             {% endif %}
           </td>
           <td class="text-end font-monospace">
-            {{ it.quantidade|int if it.quantidade == it.quantidade|int else it.quantidade|num_br(2) }}
+            {{ it.quantidade|int if it.quantidade == it.quantidade|int else it.quantidade|num_br(3) }}
             {% if it.aproveitamento and it.aproveitamento < 100 %}
             <br><span style="font-size:.65rem;color:#b45309" title="Qtd. a comprar com {{ 100 - it.aproveitamento|int }}% de perda">
               ↑ {{ it.qtd_compra|num_br(1) }} compra
