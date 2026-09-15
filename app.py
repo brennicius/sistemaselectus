@@ -2941,6 +2941,13 @@ def registro_arquivar(id):
     db.commit(); db.close()
     return jsonify(ok=True)
 
+@app.route('/registros/<int:id>/excluir', methods=['POST'])
+def registro_excluir(id):
+    db = get_db()
+    db.execute('DELETE FROM registros_producao WHERE id=?', (id,))
+    db.commit(); db.close()
+    return jsonify(ok=True)
+
 @app.route('/registros/<int:id>/lote', methods=['POST'])
 def registro_lote(id):
     lote = (request.json or {}).get('lote', '')

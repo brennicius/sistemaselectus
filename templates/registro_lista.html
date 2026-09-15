@@ -132,6 +132,10 @@
                 <i class="bi bi-archive me-1"></i>→ Histórico
               </button>
               {% endif %}
+              <button type="button" class="btn btn-sm btn-outline-danger btn-excluir"
+                      data-id="{{ r.id }}" title="Excluir registro">
+                <i class="bi bi-trash"></i>
+              </button>
             </div>
           </td>
         </tr>
@@ -157,6 +161,18 @@ if (selTodos) {
     document.querySelectorAll('.reg-check').forEach(c => c.checked = this.checked);
   });
 }
+
+// Excluir
+document.querySelectorAll('.btn-excluir').forEach(btn => {
+  btn.addEventListener('click', function() {
+    if (!confirm('Excluir este registro permanentemente? Esta ação não pode ser desfeita.')) return;
+    fetch(`/registros/${this.dataset.id}/excluir`, {method:'POST'})
+      .then(r => r.json()).then(d => {
+        if (d.ok) { this.closest('tr').remove(); }
+        else { alert(d.erro || 'Erro ao excluir.'); }
+      });
+  });
+});
 
 // Arquivar
 document.querySelectorAll('.btn-arquivar').forEach(btn => {
