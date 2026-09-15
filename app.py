@@ -1158,21 +1158,21 @@ def producao_exportar():
         return Border(left=s, right=s, top=s, bottom=s)
 
     # Título
-    ws.merge_cells('A1:I1')
+    ws.merge_cells('A1:J1')
     ws['A1'] = f'Lista de Compras — Mercado Selectus'
     ws['A1'].font = Font(bold=True, size=14, color=branco)
     ws['A1'].fill = cell_fill(cinza_header)
     ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
     ws.row_dimensions[1].height = 28
 
-    ws.merge_cells('A2:I2')
+    ws.merge_cells('A2:J2')
     ws['A2'] = f'Gerado em {datetime.now().strftime("%d/%m/%Y %H:%M")}'
     ws['A2'].font = Font(italic=True, size=10, color='666666')
     ws['A2'].alignment = Alignment(horizontal='center')
     ws.row_dimensions[2].height = 16
 
     # Cabeçalho
-    headers = ['#', 'Insumo', 'Qtd. Necessária', 'Unid. Uso', 'Em Estoque',
+    headers = ['#', 'Insumo', 'Fornecedor', 'Qtd. Necessária', 'Unid. Uso', 'Em Estoque',
                'Qtd. a Comprar', 'Unid. Compra', 'Preço / Unid. (R$)', 'Valor Previsto (R$)']
     for col, h in enumerate(headers, 1):
         c = ws.cell(row=4, column=col, value=h)
@@ -1192,6 +1192,7 @@ def producao_exportar():
         vals = [
             i,
             item['nome'],
+            item.get('fornecedor') or '—',
             round(item['qtd_necessaria'], 2),
             item['unidade_uso'],
             round(item['estoque_disponivel'], 2) if item['estoque_disponivel'] else '—',
@@ -1200,34 +1201,34 @@ def producao_exportar():
             item['preco_compra'] if item['preco_compra'] else '—',
             round(item['valor'], 2) if item['preco_compra'] and item['qtd_compra'] > 0 else '—',
         ]
-        aligns = ['center','left','right','center','right','right','center','right','right']
+        aligns = ['center','left','left','right','center','right','right','center','right','right']
         for col, (val, aln) in enumerate(zip(vals, aligns), 1):
             c = ws.cell(row=row, column=col, value=val)
             c.fill = fill
             c.alignment = Alignment(horizontal=aln, vertical='center')
             c.border = border_thin()
             c.font = Font(size=10)
-            if col in (3, 5, 6) and isinstance(val, (int, float)):
+            if col in (4, 6, 7) and isinstance(val, (int, float)):
                 c.number_format = '#,##0.00'
-            if col in (8, 9) and isinstance(val, float):
+            if col in (9, 10) and isinstance(val, float):
                 c.number_format = 'R$ #,##0.0000'
 
     # Rodapé total
     total_row = len(lista) + 5
-    ws.merge_cells(f'A{total_row}:H{total_row}')
+    ws.merge_cells(f'A{total_row}:I{total_row}')
     ws[f'A{total_row}'] = 'VALOR TOTAL PREVISTO DE COMPRAS'
     ws[f'A{total_row}'].font = Font(bold=True, color=branco, size=11)
     ws[f'A{total_row}'].fill = cell_fill(verde_escuro)
     ws[f'A{total_row}'].alignment = Alignment(horizontal='right', vertical='center')
-    ws[f'I{total_row}'] = round(custo_total, 2)
-    ws[f'I{total_row}'].font = Font(bold=True, color=branco, size=11)
-    ws[f'I{total_row}'].fill = cell_fill(verde_escuro)
-    ws[f'I{total_row}'].alignment = Alignment(horizontal='right', vertical='center')
-    ws[f'I{total_row}'].number_format = 'R$ #,##0.00'
+    ws[f'J{total_row}'] = round(custo_total, 2)
+    ws[f'J{total_row}'].font = Font(bold=True, color=branco, size=11)
+    ws[f'J{total_row}'].fill = cell_fill(verde_escuro)
+    ws[f'J{total_row}'].alignment = Alignment(horizontal='right', vertical='center')
+    ws[f'J{total_row}'].number_format = 'R$ #,##0.00'
     ws.row_dimensions[total_row].height = 24
 
     # Larguras das colunas
-    widths = [5, 40, 16, 12, 14, 16, 14, 20, 20]
+    widths = [5, 36, 20, 16, 12, 14, 16, 14, 20, 20]
     for col, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(col)].width = w
 
@@ -2451,19 +2452,19 @@ def registro_exportar(id):
         return Border(left=s, right=s, top=s, bottom=s)
 
     data_reg = reg['data'][8:10] + '/' + reg['data'][5:7] + '/' + reg['data'][0:4]
-    ws.merge_cells('A1:I1')
+    ws.merge_cells('A1:J1')
     ws['A1'] = f'Lista de Compras — Registro {data_reg} (Rodada {reg["rodada"]})'
     ws['A1'].font = Font(bold=True, size=14, color=branco)
     ws['A1'].fill = cell_fill(cinza_header)
     ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
     ws.row_dimensions[1].height = 28
-    ws.merge_cells('A2:I2')
+    ws.merge_cells('A2:J2')
     ws['A2'] = f'Gerado em {datetime.now().strftime("%d/%m/%Y %H:%M")}'
     ws['A2'].font = Font(italic=True, size=10, color='666666')
     ws['A2'].alignment = Alignment(horizontal='center')
     ws.row_dimensions[2].height = 16
 
-    headers = ['#', 'Insumo', 'Qtd. Necessária', 'Unid. Uso', 'Em Estoque',
+    headers = ['#', 'Insumo', 'Fornecedor', 'Qtd. Necessária', 'Unid. Uso', 'Em Estoque',
                'Qtd. a Comprar', 'Unid. Compra', 'Preço / Unid. (R$)', 'Valor Previsto (R$)']
     for col, h in enumerate(headers, 1):
         c = ws.cell(row=4, column=col, value=h)
@@ -2477,35 +2478,36 @@ def registro_exportar(id):
         row = i + 4
         fill = cell_fill(verde_claro) if i % 2 == 0 else cell_fill(branco)
         if item['qtd_compra'] == 0: fill = cell_fill('F1F8E9')
-        vals = [i, item['nome'], round(item['qtd_necessaria'], 2), item['unidade_uso'],
+        vals = [i, item['nome'], item.get('fornecedor') or '—',
+                round(item['qtd_necessaria'], 2), item['unidade_uso'],
                 round(item['estoque_disponivel'], 2) if item['estoque_disponivel'] else '—',
                 item['qtd_compra'] if item['qtd_compra'] > 0 else 'Coberto',
                 item['unidade_compra'],
                 item['preco_compra'] if item['preco_compra'] else '—',
                 round(item['valor'], 2) if item['preco_compra'] and item['qtd_compra'] > 0 else '—']
-        aligns = ['center','left','right','center','right','right','center','right','right']
+        aligns = ['center','left','left','right','center','right','right','center','right','right']
         for col, (val, aln) in enumerate(zip(vals, aligns), 1):
             c = ws.cell(row=row, column=col, value=val)
             c.fill = fill
             c.alignment = Alignment(horizontal=aln, vertical='center')
             c.border = border_thin()
             c.font = Font(size=10)
-            if col in (3, 5, 6) and isinstance(val, (int, float)): c.number_format = '#,##0.00'
-            if col in (8, 9) and isinstance(val, float): c.number_format = 'R$ #,##0.0000'
+            if col in (4, 6, 7) and isinstance(val, (int, float)): c.number_format = '#,##0.00'
+            if col in (9, 10) and isinstance(val, float): c.number_format = 'R$ #,##0.0000'
 
     total_row = len(lista) + 5
-    ws.merge_cells(f'A{total_row}:H{total_row}')
+    ws.merge_cells(f'A{total_row}:I{total_row}')
     ws[f'A{total_row}'] = 'VALOR TOTAL PREVISTO DE COMPRAS'
     ws[f'A{total_row}'].font = Font(bold=True, color=branco, size=11)
     ws[f'A{total_row}'].fill = cell_fill(verde_escuro)
     ws[f'A{total_row}'].alignment = Alignment(horizontal='right', vertical='center')
-    ws[f'I{total_row}'] = round(custo_total, 2)
-    ws[f'I{total_row}'].font = Font(bold=True, color=branco, size=11)
-    ws[f'I{total_row}'].fill = cell_fill(verde_escuro)
-    ws[f'I{total_row}'].alignment = Alignment(horizontal='right', vertical='center')
-    ws[f'I{total_row}'].number_format = 'R$ #,##0.00'
+    ws[f'J{total_row}'] = round(custo_total, 2)
+    ws[f'J{total_row}'].font = Font(bold=True, color=branco, size=11)
+    ws[f'J{total_row}'].fill = cell_fill(verde_escuro)
+    ws[f'J{total_row}'].alignment = Alignment(horizontal='right', vertical='center')
+    ws[f'J{total_row}'].number_format = 'R$ #,##0.00'
     ws.row_dimensions[total_row].height = 24
-    widths = [5, 40, 16, 12, 14, 16, 14, 20, 20]
+    widths = [5, 36, 20, 16, 12, 14, 16, 14, 20, 20]
     for col, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(col)].width = w
 
