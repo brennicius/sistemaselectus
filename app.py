@@ -987,8 +987,51 @@ def producao():
         resultado = {'lista': lista, 'custo_total': custo_total, 'sobra_total': sobra_total,
                      'falta_preco': any(i['preco_compra'] is None for i in lista)}
 
+    from datetime import date as _date
     cat_map = {nome: cls for nome, cls in CATEGORIAS}
-    return render_template('producao.html', prods=prods, qtds=qtds, resultado=resultado, custos=custos, categorias=CATEGORIAS, cat_map=cat_map)
+    return render_template('producao.html', prods=prods, qtds=qtds, resultado=resultado,
+                           custos=custos, categorias=CATEGORIAS, cat_map=cat_map,
+                           hoje=_date.today().isoformat())
+
+
+@app.route('/producao/salvar', methods=['POST'])
+def producao_salvar():
+    from datetime import date as _date
+    data      = request.form.get('data_producao') or _date.today().isoformat()
+    rodada    = request.form.get('rodada') or '1ª Rodada'
+    obs       = request.form.get('observacoes') or ''
+
+    db = get_db()
+    prods = db.execute('SELECT * FROM produtos ORDER BY nome').fetchall()
+
+    itens = []
+    for i, p in enumerate(prods):
+        try:
+            qty = int(float(request.form.get(f'qty_{p["id"]}', 0) or 0))
+        except:
+            qty = 0
+        if qty > 0:
+            itens.append((p['categoria'] or '', p['nome'], qty, i))
+
+    if not itens:
+        db.close()
+        flash('Informe ao menos uma quantidade antes de salvar.', 'warning')
+        return redirect(url_for('producao'))
+
+    cur = db.execute(
+        'INSERT INTO registros_producao (data, rodada, status, observacoes) VALUES (?,?,?,?)',
+        (data, rodada, 'planejado', obs)
+    )
+    reg_id = cur.lastrowid
+    for cat, nome, qty, ordem in itens:
+        db.execute(
+            'INSERT INTO registro_itens (registro_id, ordem, categoria, produto, qtd_planejada) VALUES (?,?,?,?,?)',
+            (reg_id, ordem, cat, nome, qty)
+        )
+    db.commit()
+    db.close()
+    flash(f'Programação salva para {data} — {rodada}!', 'success')
+    return redirect(url_for('registro_ver', id=reg_id))
 
 
 def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):

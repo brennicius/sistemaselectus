@@ -90,12 +90,67 @@
     </div>
   </div>
 
-  <div class="d-flex justify-content-end mb-4">
-    <button type="submit" class="btn btn-primary btn-lg px-5">
-      <i class="bi bi-calculator me-2"></i>Calcular Necessidade de Compras
-    </button>
+  <!-- Data + Rodada + Ações -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body py-3">
+      <div class="row g-3 align-items-end">
+        <div class="col-auto">
+          <label class="form-label small text-muted mb-1">Data da Produção</label>
+          <input type="date" name="data_producao" class="form-control"
+                 value="{{ hoje }}" required>
+        </div>
+        <div class="col-auto">
+          <label class="form-label small text-muted mb-1">Rodada</label>
+          <select name="rodada" class="form-select">
+            <option value="1ª Rodada">1ª Rodada</option>
+            <option value="2ª Rodada">2ª Rodada</option>
+            <option value="3ª Rodada">3ª Rodada</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <label class="form-label small text-muted mb-1">Observação (opcional)</label>
+          <input type="text" name="observacoes" class="form-control" placeholder="Ex: produção de sexta">
+        </div>
+        <div class="col d-flex gap-2 justify-content-end">
+          <button type="submit" class="btn btn-outline-primary btn-lg px-4">
+            <i class="bi bi-calculator me-2"></i>Calcular Compras
+          </button>
+          <button type="submit" form="form-salvar" class="btn btn-success btn-lg px-4">
+            <i class="bi bi-floppy me-2"></i>Salvar Programação
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </form>
+
+<!-- Form oculto para salvar — replica as qtds + data/rodada -->
+<form id="form-salvar" method="post" action="{{ url_for('producao_salvar') }}">
+  <div id="salvar-hidden-inputs"></div>
+</form>
+
+<script>
+// Sincroniza os inputs de qty + data/rodada para o form de salvar
+document.getElementById('form-salvar').addEventListener('formdata', function(e) {});
+document.querySelector('button[form="form-salvar"]').addEventListener('click', function() {
+  const container = document.getElementById('salvar-hidden-inputs');
+  container.innerHTML = '';
+  const mainForm = document.querySelector('form');
+  ['data_producao','rodada','observacoes'].forEach(name => {
+    const src = mainForm.querySelector('[name="'+name+'"]');
+    if (src) {
+      const h = document.createElement('input');
+      h.type = 'hidden'; h.name = name; h.value = src.value;
+      container.appendChild(h);
+    }
+  });
+  mainForm.querySelectorAll('input[name^="qty_"]').forEach(inp => {
+    const h = document.createElement('input');
+    h.type = 'hidden'; h.name = inp.name; h.value = inp.value || '0';
+    container.appendChild(h);
+  });
+});
+</script>
 
 <!-- Results -->
 {% if resultado %}
