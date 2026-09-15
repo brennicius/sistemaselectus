@@ -432,33 +432,49 @@ clearRevBtn.addEventListener('click', () => {
 });
 
 // Filtro Categoria
+function saveCatFilter() {
+  try { localStorage.setItem('fichas_cat_filter', JSON.stringify([...catAtivos])); } catch(e) {}
+}
+
+function activateCatBtn(btn) {
+  catAtivos.add(btn.dataset.cat);
+  btn.classList.remove('btn-outline-secondary');
+  btn.classList.add('btn-secondary');
+  btn.dataset.label = btn.dataset.label || btn.textContent.trim();
+  btn.innerHTML = '<i class="bi bi-check2 me-1"></i>' + btn.dataset.label;
+}
+
+function deactivateCatBtn(btn) {
+  catAtivos.delete(btn.dataset.cat);
+  btn.classList.remove('btn-secondary');
+  btn.classList.add('btn-outline-secondary');
+  if (btn.dataset.label) btn.textContent = btn.dataset.label;
+}
+
 document.querySelectorAll('.filter-cat-btn').forEach(btn => {
+  btn.dataset.label = btn.textContent.trim();
   btn.addEventListener('click', () => {
-    const cat = btn.dataset.cat;
-    if (catAtivos.has(cat)) {
-      catAtivos.delete(cat);
-      btn.classList.remove('btn-secondary');
-      btn.classList.add('btn-outline-secondary');
-      btn.innerHTML = btn.dataset.label || btn.textContent.replace(/✓ /,'');
-    } else {
-      catAtivos.add(cat);
-      btn.classList.remove('btn-outline-secondary');
-      btn.classList.add('btn-secondary');
-      btn.dataset.label = btn.textContent.trim();
-      btn.innerHTML = '<i class="bi bi-check2 me-1"></i>' + btn.dataset.label;
-    }
+    if (catAtivos.has(btn.dataset.cat)) { deactivateCatBtn(btn); } else { activateCatBtn(btn); }
+    saveCatFilter();
     applyVisible();
   });
 });
 filterCatClear.addEventListener('click', () => {
-  catAtivos.clear();
-  document.querySelectorAll('.filter-cat-btn').forEach(btn => {
-    btn.classList.remove('btn-secondary');
-    btn.classList.add('btn-outline-secondary');
-    if (btn.dataset.label) btn.textContent = btn.dataset.label;
-  });
+  document.querySelectorAll('.filter-cat-btn').forEach(deactivateCatBtn);
+  saveCatFilter();
   applyVisible();
 });
+
+// Restaurar filtro de categoria ao carregar
+try {
+  const saved = JSON.parse(localStorage.getItem('fichas_cat_filter') || '[]');
+  if (saved.length) {
+    document.querySelectorAll('.filter-cat-btn').forEach(btn => {
+      if (saved.includes(btn.dataset.cat)) activateCatBtn(btn);
+    });
+    applyVisible();
+  }
+} catch(e) {}
 
 buscaInput.addEventListener('input', applyVisible);
 buscaClear.addEventListener('click', () => { buscaInput.value = ''; applyVisible(); buscaInput.focus(); });
