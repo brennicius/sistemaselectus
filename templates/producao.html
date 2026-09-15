@@ -53,7 +53,14 @@
         <tbody>
           {% for p in prods %}
           <tr class="prod-row" data-cat="{{ p.categoria or '' }}">
-            <td class="fw-semibold">{{ p.nome }}</td>
+            <td class="fw-semibold">
+              {{ p.nome }}
+              {% if p.rendimento %}
+              <div class="text-muted fw-normal" style="font-size:.75rem;margin-top:2px">
+                rendimento mín.: {{ p.rendimento|int }} {{ p.unidade_rendimento or 'un' }}
+              </div>
+              {% endif %}
+            </td>
             <td>
               {% if p.categoria %}
               <span class="badge {{ cat_map.get(p.categoria, 'bg-secondary') }}" style="font-size:.72rem">{{ p.categoria }}</span>
