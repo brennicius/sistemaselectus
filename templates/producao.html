@@ -154,6 +154,7 @@
         <tr>
           <th style="color:#fff">#</th>
           <th style="color:#fff">Insumo</th>
+          <th style="color:#fff">Fornecedor</th>
           <th style="color:#fff" class="text-end">Qtd. Necessária</th>
           <th style="color:#fff" class="text-end">Em Estoque</th>
           <th style="color:#fff" class="text-center">Unid. Uso</th>
@@ -174,6 +175,7 @@
             <div class="text-muted fw-normal" style="font-size:.72rem;margin-top:1px">{{ item.pkg_info }}</div>
             {% endif %}
           </td>
+          <td class="small text-muted">{{ item.fornecedor or '—' }}</td>
           <td class="text-end font-monospace">{{ item.qtd_necessaria|num_br(2) }}</td>
           <td class="text-end font-monospace">
             {% if item.estoque_disponivel > 0 %}
@@ -216,13 +218,13 @@
       </tbody>
       <tfoot>
         <tr>
-          <td colspan="9" class="text-end fw-bold py-2 pe-2" style="background:#1a3a5c;color:#e2e8f0;font-size:.9rem;letter-spacing:.03em">VALOR TOTAL PREVISTO DE COMPRAS</td>
+          <td colspan="10" class="text-end fw-bold py-2 pe-2" style="background:#1a3a5c;color:#e2e8f0;font-size:.9rem;letter-spacing:.03em">VALOR TOTAL PREVISTO DE COMPRAS</td>
           <td class="text-end fw-bold py-2 font-monospace" style="background:#1a3a5c;color:#f59e0b;font-size:1.1rem">
             {% if resultado.custo_total %}{{ resultado.custo_total|brl(2) }}{% else %}<span style="color:#fbbf24">parcial</span>{% endif %}
           </td>
         </tr>
         <tr>
-          <td colspan="9" class="text-end fw-bold py-1 pe-2" style="background:#0f2540;color:#94a3b8;font-size:.82rem;letter-spacing:.03em">VALOR TOTAL ESTIMADO DE SOBRAS</td>
+          <td colspan="10" class="text-end fw-bold py-1 pe-2" style="background:#0f2540;color:#94a3b8;font-size:.82rem;letter-spacing:.03em">VALOR TOTAL ESTIMADO DE SOBRAS</td>
           <td class="text-end fw-bold py-1 font-monospace" style="background:#0f2540;color:#fbbf24;font-size:.95rem">
             {% if resultado.sobra_total %}{{ resultado.sobra_total|brl(2) }}{% else %}<span style="color:#475569">—</span>{% endif %}
           </td>

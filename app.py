@@ -1049,6 +1049,7 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
                i.unidade_compra, i.preco_compra, i.fator_conversao,
                i.qtd_por_embalagem, i.unid_embalagem,
                i.produto_vinculado_id,
+               COALESCE(i.fornecedor, '') as fornecedor,
                COALESCE(i.estoque_atual, 0) as estoque_atual,
                p2.rendimento AS rend_vinc
         FROM ficha_tecnica ft JOIN insumos i ON i.id=ft.insumo_id
@@ -1079,6 +1080,7 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
                                 'fator_conversao': r['fator_conversao'] or 1,
                                 'estoque_atual': r['estoque_atual'],
                                 'pkg_info': pkg_info,
+                                'fornecedor': r['fornecedor'] or '',
                                 'qtd_uso': 0.0, 'valor': 0.0}
             ins_map[iid]['qtd_uso'] += qtd_uso
             if r['preco_compra'] is not None:
