@@ -446,6 +446,7 @@
           <th style="color:#fff" class="text-center">Unid. Uso</th>
           <th style="color:#fff" class="text-end">Qtd. a Comprar</th>
           <th style="color:#fff" class="text-center">Unid. Compra</th>
+          <th style="color:#fff" class="text-center">Conteúdo / Embalagem</th>
           <th style="color:#fff" class="text-end">Preço / Unid.</th>
           <th style="color:#fff" class="text-end">Valor Previsto</th>
         </tr>
@@ -468,6 +469,15 @@
             {% else %}{{ item.qtd_compra|num_br(4) }}{% endif %}
           </td>
           <td class="text-center"><span class="badge bg-secondary">{{ item.unidade_compra }}</span></td>
+          <td class="text-center small">
+            {% if item.pkg_info %}
+              <span class="fw-semibold text-primary">{{ item.pkg_info }}</span>
+            {% else %}
+              <a href="{{ url_for('insumo_editar', id=item.id) }}" class="text-warning text-decoration-none" title="Informar conteúdo da embalagem">
+                <i class="bi bi-exclamation-triangle me-1"></i>Informar
+              </a>
+            {% endif %}
+          </td>
           <td class="text-end font-monospace small text-muted">
             {% if item.preco_compra %}{{ item.preco_compra|brl(4) }}{% else %}—{% endif %}
           </td>
@@ -482,7 +492,7 @@
       </tbody>
       <tfoot>
         <tr>
-          <td colspan="8" class="text-end fw-bold font-monospace" style="background:#375623 !important;color:#fff">VALOR TOTAL PREVISTO DE COMPRAS</td>
+          <td colspan="9" class="text-end fw-bold font-monospace" style="background:#375623 !important;color:#fff">VALOR TOTAL PREVISTO DE COMPRAS</td>
           <td class="text-end fw-bold font-monospace fs-6" style="background:#375623 !important;color:#fff">
             {% if not resultado.falta_preco %}{{ resultado.custo_total|brl(2) }}
             {% else %}<span class="text-warning">parcial</span>{% endif %}
