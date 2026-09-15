@@ -64,7 +64,7 @@
             <td class="text-muted small">{{ p.descricao or '—' }}</td>
             <td class="text-end font-monospace small">
               {% if custos[p.id].completo %}
-                {{ custos[p.id].custo|brl(4) }}
+                {{ (custos[p.id].custo / p.rendimento)|brl(4) if p.rendimento else custos[p.id].custo|brl(4) }}
               {% else %}
                 <span class="text-warning small">preços incompletos</span>
               {% endif %}
@@ -72,7 +72,7 @@
             <td class="text-center">
               <input type="number" name="qty_{{ p.id }}" class="form-control form-control-sm text-center qty-input"
                      min="0" step="1" value="{{ qtds[p.id]|int if qtds[p.id] else '' }}"
-                     placeholder="0" data-custo="{{ custos[p.id].custo if custos[p.id].completo else '' }}"
+                     placeholder="0" data-custo="{{ (custos[p.id].custo / p.rendimento) if custos[p.id].completo and p.rendimento else '' }}"
                      data-pid="{{ p.id }}">
             </td>
             <td class="text-end font-monospace" id="custo_total_{{ p.id }}">—</td>
