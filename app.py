@@ -1004,6 +1004,7 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
                COALESCE(i.aproveitamento, 100) AS aproveitamento,
                i.id ins_id, i.nome, i.unidade_uso,
                i.unidade_compra, i.preco_compra, i.fator_conversao,
+               i.qtd_por_embalagem, i.unid_embalagem,
                i.produto_vinculado_id,
                COALESCE(i.estoque_atual, 0) as estoque_atual,
                p2.rendimento AS rend_vinc
@@ -1024,11 +1025,17 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
             # divide pelo aproveitamento: se aprov=85%, precisa de qty/0.85 de ingrediente bruto
             qtd_uso = r['quantidade'] * scale / aprov
             if iid not in ins_map:
-                ins_map[iid] = {'nome': r['nome'], 'unidade_uso': r['unidade_uso'],
-                                'unidade_compra': r['unidade_compra'],
+                qtd_emb = r['qtd_por_embalagem']
+                uu      = r['unidade_uso'] or ''
+                uemb    = r['unid_embalagem'] or uu
+                uc      = r['unidade_compra'] or ''
+                pkg_info = (f"1 {uc} = {qtd_emb:,.0f} {uemb}") if qtd_emb else ''
+                ins_map[iid] = {'nome': r['nome'], 'unidade_uso': uu,
+                                'unidade_compra': uc,
                                 'preco_compra': r['preco_compra'],
                                 'fator_conversao': r['fator_conversao'] or 1,
                                 'estoque_atual': r['estoque_atual'],
+                                'pkg_info': pkg_info,
                                 'qtd_uso': 0.0, 'valor': 0.0}
             ins_map[iid]['qtd_uso'] += qtd_uso
             if r['preco_compra'] is not None:

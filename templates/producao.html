@@ -140,7 +140,12 @@
         {% for item in resultado.lista %}
         <tr class="{{ 'table-success' if item.qtd_compra == 0 else '' }}">
           <td class="text-muted small">{{ loop.index }}</td>
-          <td class="fw-semibold">{{ item.nome }}</td>
+          <td class="fw-semibold">
+            {{ item.nome }}
+            {% if item.pkg_info %}
+            <div class="text-muted fw-normal" style="font-size:.72rem;margin-top:1px">{{ item.pkg_info }}</div>
+            {% endif %}
+          </td>
           <td class="text-end font-monospace">{{ item.qtd_necessaria|num_br(2) }}</td>
           <td class="text-end font-monospace">
             {% if item.estoque_disponivel > 0 %}
