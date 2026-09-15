@@ -4160,6 +4160,30 @@ def sistema_exportar():
                      mimetype='application/octet-stream')
 
 
+@app.route('/debug/embalagens')
+def debug_embalagens():
+    db = get_db()
+    rows = db.execute('''SELECT nome, unidade_uso, unidade_compra,
+                                fator_conversao, qtd_por_embalagem, unid_embalagem
+                         FROM insumos ORDER BY nome LIMIT 50''').fetchall()
+    db.close()
+    lines = ['<pre style="font-family:monospace;font-size:12px">']
+    lines.append(f'{"NOME":<45} {"UC":<10} {"UU":<6} {"FATOR":>10} {"QTD_EMB":>10} {"UEMB":<8}')
+    lines.append('-'*100)
+    for r in rows:
+        fator = r['fator_conversao']
+        qtd_e = r['qtd_por_embalagem']
+        if qtd_e:
+            pkg = f"1 {r['unidade_compra']} = {float(qtd_e):,.0f} {r['unid_embalagem'] or r['unidade_uso']}"
+        elif fator and fator != 1:
+            pkg = f"1 {r['unidade_compra']} = {float(fator):,.0f} {r['unidade_uso']}"
+        else:
+            pkg = '(sem info)'
+        lines.append(f"{(r['nome'] or ''):<45} {(r['unidade_compra'] or ''):<10} {(r['unidade_uso'] or ''):<6} {(fator or 0):>10.1f} {(qtd_e or 0):>10.0f} → {pkg}")
+    lines.append('</pre>')
+    return '\n'.join(lines)
+
+
 @app.route('/sistema/importar', methods=['POST'])
 def sistema_importar():
     import sqlite3 as _sqlite3, shutil, tempfile
