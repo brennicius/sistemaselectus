@@ -1073,7 +1073,13 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
                 uu      = r['unidade_uso'] or ''
                 uemb    = r['unid_embalagem'] or uu
                 uc      = r['unidade_compra'] or ''
-                pkg_info = (f"1 {uc} = {qtd_emb:,.0f} {uemb}") if qtd_emb else ''
+                fator_c = r['fator_conversao'] or 1
+                if qtd_emb:
+                    pkg_info = f"1 {uc} = {qtd_emb:,.0f} {uemb}"
+                elif uc and uu and fator_c and fator_c != 1:
+                    pkg_info = f"1 {uc} = {fator_c:,.0f} {uu}"
+                else:
+                    pkg_info = ''
                 ins_map[iid] = {'nome': r['nome'], 'unidade_uso': uu,
                                 'unidade_compra': uc,
                                 'preco_compra': r['preco_compra'],
