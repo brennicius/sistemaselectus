@@ -1075,9 +1075,15 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
                 uc      = r['unidade_compra'] or ''
                 fator_c = r['fator_conversao'] or 1
                 if qtd_emb:
-                    pkg_info = f"1 {uc} = {qtd_emb:,.0f} {uemb}"
+                    # Mostra o conteúdo exatamente como foi cadastrado (ex.: 4,8 kg/balde),
+                    # sem arredondar embalagens fracionadas para inteiro.
+                    qtd_fmt = f"{float(qtd_emb):,.3f}".rstrip('0').rstrip('.')
+                    qtd_fmt = qtd_fmt.replace(',', 'X').replace('.', ',').replace('X', '.')
+                    pkg_info = f"{qtd_fmt} {uemb}/{uc}"
                 elif uc and uu and fator_c and fator_c != 1:
-                    pkg_info = f"1 {uc} = {fator_c:,.0f} {uu}"
+                    fator_fmt = f"{float(fator_c):,.3f}".rstrip('0').rstrip('.')
+                    fator_fmt = fator_fmt.replace(',', 'X').replace('.', ',').replace('X', '.')
+                    pkg_info = f"{fator_fmt} {uu}/{uc}"
                 else:
                     pkg_info = ''
                 ins_map[iid] = {'nome': r['nome'], 'unidade_uso': uu,
