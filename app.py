@@ -362,11 +362,13 @@ def _parse_insumo_form(d):
     else:
         aproveitamento = 100.0
 
+    user_fator = float(d.get('fator_conversao') or 0)
     if qtd_emb and unid_emb:
         cf = conv_factor(unid_emb, uu)
-        fator = qtd_emb * cf if cf else float(d.get('fator_conversao') or 1)
+        auto_fator = qtd_emb * cf if cf else None
+        fator = user_fator if user_fator > 0 else (auto_fator or 1)
     else:
-        fator = float(d.get('fator_conversao') or 1)
+        fator = user_fator if user_fator > 0 else 1
 
     return nome, uc, preco, uu, fator, qtd_emb, unid_emb, vinc, fornecedor, aproveitamento
 
