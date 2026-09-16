@@ -1074,6 +1074,7 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
                i.produto_vinculado_id,
                COALESCE(i.fornecedor, '') as fornecedor,
                COALESCE(i.estoque_atual, 0) as estoque_atual,
+               COALESCE(i.estoque_central, 0) as estoque_central,
                p2.rendimento AS rend_vinc
         FROM ficha_tecnica ft JOIN insumos i ON i.id=ft.insumo_id
         LEFT JOIN produtos p2 ON p2.id = i.produto_vinculado_id
@@ -1114,6 +1115,7 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
                                 'preco_compra': r['preco_compra'],
                                 'fator_conversao': r['fator_conversao'] or 1,
                                 'estoque_atual': r['estoque_atual'],
+                                'estoque_central': r['estoque_central'],
                                 'pkg_info': pkg_info,
                                 'fornecedor': r['fornecedor'] or '',
                                 'qtd_uso': 0.0, 'valor': 0.0}
