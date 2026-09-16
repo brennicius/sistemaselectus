@@ -17,6 +17,26 @@
   .selo-fp-nao_revisado { background:#f3f4f6; color:#6b7280; border:1px solid #d1d5db; }
   .selo-fp-em_revisao   { background:#fef9c3; color:#854d0e; border:1px solid #fde047; }
   .selo-fp-revisado     { background:#dcfce7; color:#166534; border:1px solid #86efac; }
+  /* Badge de categoria */
+  .badge-cat { font-size:.62rem; font-weight:700; letter-spacing:.03em; padding:2px 7px; border-radius:4px;
+               cursor:pointer; display:inline-block; margin-top:2px; border:1px solid transparent;
+               user-select:none; transition:opacity .15s; }
+  .badge-cat:hover { opacity:.8; }
+  .cat-select-inline { font-size:.72rem; padding:1px 4px; height:22px; margin-top:2px;
+                       border-radius:4px; border:1px solid #6366f1; outline:none; cursor:pointer; }
+  .bc-carnes     { background:#fde8e8; color:#9b1c1c; border-color:#f05252; }
+  .bc-atum       { background:#e0f2fe; color:#075985; border-color:#7dd3fc; }
+  .bc-confeit    { background:#fce7f3; color:#9d174d; border-color:#f9a8d4; }
+  .bc-descart    { background:#f3f4f6; color:#374151; border-color:#d1d5db; }
+  .bc-embalam    { background:#dbeafe; color:#1e3a8a; border-color:#93c5fd; }
+  .bc-etiquet    { background:#ede9fe; color:#4c1d95; border-color:#a78bfa; }
+  .bc-frutas     { background:#dcfce7; color:#14532d; border-color:#86efac; }
+  .bc-graos      { background:#fff7ed; color:#7c2d12; border-color:#fdba74; }
+  .bc-latic      { background:#ecfeff; color:#164e63; border-color:#67e8f9; }
+  .bc-molhos     { background:#fef9c3; color:#713f12; border-color:#fde047; }
+  .bc-molhos2    { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
+  .bc-paes       { background:#f0fdf4; color:#15803d; border-color:#4ade80; }
+  .bc-sem        { background:#f9fafb; color:#9ca3af; border-color:#e5e7eb; font-style:italic; }
   /* Observação */
   .obs-wrapper { position:relative; display:inline-block; }
   .obs-icon { font-size:.75rem; color:#6366f1; cursor:pointer; vertical-align:middle; margin-left:4px; }
@@ -109,6 +129,19 @@
   </div>
   <div class="d-flex flex-column">
     <span class="text-muted mb-1" style="font-size:.65rem">&nbsp;</span>
+    <div class="d-flex align-items-center gap-1">
+      <span class="text-muted small">Categoria:</span>
+      <select id="cat-filter" class="form-select form-select-sm" style="max-width:210px">
+        <option value="">Todas</option>
+        <option value="__sem_cat__">Sem categoria</option>
+        {% for c in categorias_lista %}
+        <option value="{{ c|lower }}">{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="d-flex flex-column">
+    <span class="text-muted mb-1" style="font-size:.65rem">&nbsp;</span>
     <button type="button" id="btn-ultimos" class="btn btn-sm btn-outline-primary" title="Mostrar apenas os últimos 30 insumos cadastrados">
       <i class="bi bi-clock-history me-1"></i>Últimos 30
     </button>
@@ -135,7 +168,7 @@
         {% for ins in insumos %}
         {% set mud = mudancas.get(ins.id) %}
         {% set fp_status = ins.status_revisao_fp or 'nao_revisado' %}
-        <tr class="{{ 'sem-preco' if ins.id in sem_preco_ids else '' }}" data-id="{{ ins.id }}" data-nome="{{ ins.nome|lower }}" data-custo="{{ ins.status_revisao_custo or 'nao_revisado' }}" data-nome-status="{{ ins.status_revisao_nome or 'nao_revisado' }}" data-fp="{{ fp_status }}" data-fornecedor="{{ (ins.fornecedor or '')|lower }}">
+        <tr class="{{ 'sem-preco' if ins.id in sem_preco_ids else '' }}" data-id="{{ ins.id }}" data-nome="{{ ins.nome|lower }}" data-custo="{{ ins.status_revisao_custo or 'nao_revisado' }}" data-nome-status="{{ ins.status_revisao_nome or 'nao_revisado' }}" data-fp="{{ fp_status }}" data-fornecedor="{{ (ins.fornecedor or '')|lower }}" data-categoria="{{ (ins.categoria or '')|lower }}">
           {% set rc = ins.status_revisao_custo or 'nao_revisado' %}
           {% set rn = ins.status_revisao_nome or 'nao_revisado' %}
           <td class="fw-semibold">
@@ -182,6 +215,20 @@
               <i class="bi bi-truck me-1"></i>{{ ins.fornecedor }}
             </span>
             {% endif %}
+            {%- set _cat = ins.categoria or '' -%}
+            {%- set _cls = {'Carnes e proteínas':'bc-carnes','Atum':'bc-atum','Confeitaria':'bc-confeit',
+                'Descartáveis':'bc-descart','Embalagens':'bc-embalam','Etiquetas':'bc-etiquet',
+                'Frutas, verduras e legumes':'bc-frutas','Grãos, cereais e massas':'bc-graos',
+                'Laticínios, Frios':'bc-latic','Molhos':'bc-molhos','Molhos e temperos':'bc-molhos2',
+                'Pães':'bc-paes'}.get(_cat, 'bc-sem') -%}
+            <span class="badge-cat {{ _cls }} cat-badge" data-id="{{ ins.id }}"
+                  title="Clique para alterar categoria">{{ _cat or '— categoria —' }}</span>
+            <select class="cat-select-inline cat-select d-none" data-id="{{ ins.id }}">
+              <option value="">— sem categoria —</option>
+              {% for c in categorias_lista %}
+              <option value="{{ c }}"{{ ' selected' if _cat == c else '' }}>{{ c }}</option>
+              {% endfor %}
+            </select>
           </td>
           <td class="text-center"><span class="badge bg-secondary">{{ ins.unidade_compra }}</span></td>
           <td class="text-end">
@@ -697,6 +744,7 @@ const buscaInput     = document.getElementById('busca-insumo');
 const buscaClear     = document.getElementById('busca-clear');
 const custoFilterClr = document.getElementById('custo-filter-clear');
 const fornFilter     = document.getElementById('forn-filter');
+const catFilter      = document.getElementById('cat-filter');
 const custoAtivos    = new Set();
 
 const CUSTO_ON = {
@@ -761,8 +809,10 @@ function applyVisible() {
     const okNome    = nomeAtivos.size  === 0 || nomeAtivos.has(tr.dataset.nomeStatus || 'nao_revisado');
     const okFp      = fpAtivos.size    === 0 || fpAtivos.has(tr.dataset.fp || 'nao_revisado');
     const okForn    = !forn || (forn === '__sem_fornecedor__' ? !tr.dataset.fornecedor : tr.dataset.fornecedor === forn);
+    const catVal    = catFilter ? catFilter.value : '';
+    const okCat     = !catVal || (catVal === '__sem_cat__' ? !tr.dataset.categoria : tr.dataset.categoria === catVal);
     const okUltimos = !ultimosAtivo || ultimosIds.has(parseInt(tr.dataset.id || '0'));
-    tr.style.display = (okBusca && okCusto && okNome && okFp && okForn && okUltimos) ? '' : 'none';
+    tr.style.display = (okBusca && okCusto && okNome && okFp && okForn && okCat && okUltimos) ? '' : 'none';
   });
   custoFilterClr.style.display = custoAtivos.size > 0 ? '' : 'none';
   if (nomeFilterClr) nomeFilterClr.style.display = nomeAtivos.size > 0 ? '' : 'none';
@@ -770,6 +820,7 @@ function applyVisible() {
 }
 
 fornFilter.addEventListener('change', applyVisible);
+if (catFilter) catFilter.addEventListener('change', applyVisible);
 
 function updateCustoBtn(btn) {
   const c = btn.dataset.custo;
@@ -825,6 +876,52 @@ buscaClear.addEventListener('click', () => { buscaInput.value = ''; applyVisible
     if (el) el.textContent = fc[s];
   });
 })();
+
+// ── Badge de Categoria ──
+const CAT_CLS_MAP = {
+  'carnes e proteínas': 'bc-carnes', 'atum': 'bc-atum', 'confeitaria': 'bc-confeit',
+  'descartáveis': 'bc-descart', 'embalagens': 'bc-embalam', 'etiquetas': 'bc-etiquet',
+  'frutas, verduras e legumes': 'bc-frutas', 'grãos, cereais e massas': 'bc-graos',
+  'laticínios, frios': 'bc-latic', 'molhos': 'bc-molhos', 'molhos e temperos': 'bc-molhos2',
+  'pães': 'bc-paes',
+};
+function catCls(val) { return CAT_CLS_MAP[(val||'').toLowerCase()] || 'bc-sem'; }
+
+document.querySelectorAll('.cat-badge').forEach(badge => {
+  badge.addEventListener('click', function() {
+    const sel = this.nextElementSibling;
+    this.classList.add('d-none');
+    sel.classList.remove('d-none');
+    sel.focus();
+  });
+});
+
+document.querySelectorAll('.cat-select').forEach(sel => {
+  sel.addEventListener('change', function() {
+    const id  = this.dataset.id;
+    const val = this.value;
+    fetch(`/insumos/${id}/categoria`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({categoria: val || null})
+    }).then(r => r.json()).then(d => {
+      if (!d.ok) return;
+      const badge = this.previousElementSibling;
+      badge.textContent  = val || '— categoria —';
+      badge.className    = `badge-cat ${catCls(val)} cat-badge`;
+      badge.classList.remove('d-none');
+      this.classList.add('d-none');
+      const tr = this.closest('tr');
+      if (tr) tr.dataset.categoria = val.toLowerCase();
+      applyVisible();
+    });
+  });
+  sel.addEventListener('blur', function() {
+    const badge = this.previousElementSibling;
+    badge.classList.remove('d-none');
+    this.classList.add('d-none');
+  });
+});
 
 // ── Popover "onde é usado" ──
 const usoCache = {};

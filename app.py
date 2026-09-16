@@ -345,7 +345,13 @@ def insumos_lista():
     mudancas = {r['insumo_id']: dict(r) for r in hist_rows}
     db.close()
     sem_preco_ids = {r['id'] for r in rows if not r['preco_compra'] and not r['produto_vinculado_id']}
-    return render_template('insumos_lista.html', insumos=rows, sem_preco_ids=sem_preco_ids, mudancas=mudancas)
+    categorias_lista = [
+        'Carnes e proteínas', 'Atum', 'Confeitaria', 'Descartáveis', 'Embalagens',
+        'Etiquetas', 'Frutas, verduras e legumes', 'Grãos, cereais e massas',
+        'Laticínios, Frios', 'Molhos', 'Molhos e temperos', 'Pães',
+    ]
+    return render_template('insumos_lista.html', insumos=rows, sem_preco_ids=sem_preco_ids,
+                           mudancas=mudancas, categorias_lista=categorias_lista)
 
 def _parse_insumo_form(d):
     nome  = d['nome'].strip()
@@ -488,6 +494,16 @@ def insumo_estoque_minimo(id):
     db.execute('UPDATE insumos SET estoque_minimo=? WHERE id=?', (v, id))
     db.commit(); db.close()
     return jsonify(ok=True)
+
+@app.route('/insumos/<int:id>/categoria', methods=['POST'])
+def insumo_categoria(id):
+    data = request.json or {}
+    cat = data.get('categoria') or None
+    db = get_db()
+    db.execute('UPDATE insumos SET categoria=? WHERE id=?', (cat, id))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
 
 @app.route('/insumos/<int:id>/uso')
 def insumo_uso(id):
