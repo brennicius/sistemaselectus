@@ -315,6 +315,20 @@ def custo_produto(produto_id, _visited=None):
             incompleto = True
     return total, not incompleto
 
+# ── Diagnóstico temporário ──────────────────────────────────
+@app.route('/debug-schema')
+def debug_schema():
+    db = get_db()
+    tables = {}
+    for t in ['requisicoes','requisicao_itens','insumos','registro_itens']:
+        try:
+            cols = [r[1] for r in db.execute(f'PRAGMA table_info({t})').fetchall()]
+            tables[t] = cols
+        except Exception as e:
+            tables[t] = str(e)
+    db.close()
+    return jsonify(tables)
+
 # ── Dashboard ───────────────────────────────────────────────
 @app.route('/')
 def index():
