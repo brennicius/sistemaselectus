@@ -318,14 +318,26 @@ def custo_produto(produto_id, _visited=None):
 # ── Diagnóstico temporário ──────────────────────────────────
 @app.route('/debug-schema')
 def debug_schema():
+    import traceback as _tb
     db = get_db()
     tables = {}
-    for t in ['requisicoes','requisicao_itens','insumos','registro_itens']:
+    all_tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+    tables['_all_tables'] = all_tables
+    for t in ['requisicoes','requisicao_itens','insumos','registro_itens','nf_entradas','nf_itens']:
         try:
             cols = [r[1] for r in db.execute(f'PRAGMA table_info({t})').fetchall()]
             tables[t] = cols
         except Exception as e:
             tables[t] = str(e)
+    # Simula o POST para capturar o erro
+    try:
+        db.execute('INSERT INTO requisicoes (data, status, observacao, nf_origem_id) VALUES (?,?,?,?)',
+                   ('2026-09-16', 'aberto', None, None))
+        req_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+        db.execute('DELETE FROM requisicoes WHERE id=?', (req_id,))
+        tables['_insert_test'] = 'OK'
+    except Exception as e:
+        tables['_insert_test'] = str(e)
     db.close()
     return jsonify(tables)
 
