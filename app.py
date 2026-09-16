@@ -231,6 +231,10 @@ def init_db():
         db.execute('ALTER TABLE insumos ADD COLUMN estoque_central REAL DEFAULT 0')
     except Exception:
         pass
+    try:
+        db.execute('ALTER TABLE requisicoes ADD COLUMN nf_origem_id INTEGER')
+    except Exception:
+        pass
     db.executescript('''
         CREATE TABLE IF NOT EXISTS requisicao_consumos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
