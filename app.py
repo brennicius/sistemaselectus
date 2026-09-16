@@ -110,7 +110,13 @@ def init_db():
     for col in ["status_revisao_custo TEXT DEFAULT 'nao_revisado'",
                 'data_revisao_custo TEXT',
                 "status_revisao_nome TEXT DEFAULT 'nao_revisado'",
-                'observacao TEXT']:
+                'observacao TEXT',
+                'categoria TEXT',
+                'aproveitamento REAL DEFAULT 100',
+                'fornecedor TEXT',
+                "status_revisao_fp TEXT DEFAULT 'nao_revisado'",
+                'estoque_atual REAL DEFAULT 0',
+                'estoque_minimo REAL DEFAULT 0']:
         try:
             db.execute(f'ALTER TABLE insumos ADD COLUMN {col}')
         except Exception:
