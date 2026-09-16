@@ -362,6 +362,7 @@ def _parse_insumo_form(d):
     unid_emb = d.get('unid_embalagem','').strip() or None
     vinc = int(d['produto_vinculado_id']) if d.get('produto_vinculado_id','').strip() else None
     fornecedor = d.get('fornecedor','').strip() or None
+    categoria  = d.get('categoria','').strip() or None
     perda_str = d.get('perda','').strip()
     if perda_str:
         aproveitamento = max(1.0, min(100.0, 100.0 - float(perda_str)))
@@ -376,7 +377,7 @@ def _parse_insumo_form(d):
     else:
         fator = user_fator if user_fator > 0 else 1
 
-    return nome, uc, preco, uu, fator, qtd_emb, unid_emb, vinc, fornecedor, aproveitamento
+    return nome, uc, preco, uu, fator, qtd_emb, unid_emb, vinc, fornecedor, aproveitamento, categoria
 
 @app.route('/insumos/conversao', methods=['POST'])
 def insumo_conv_preview():
@@ -402,13 +403,13 @@ def _get_produtos_para_vincular():
 @app.route('/insumos/novo', methods=['GET','POST'])
 def insumo_novo():
     if request.method == 'POST':
-        nome, uc, preco, uu, fator, qtd_emb, unid_emb, vinc, fornecedor, aproveitamento = _parse_insumo_form(request.form)
+        nome, uc, preco, uu, fator, qtd_emb, unid_emb, vinc, fornecedor, aproveitamento, categoria = _parse_insumo_form(request.form)
         db = get_db()
         db.execute('''INSERT INTO insumos
                       (nome,unidade_compra,preco_compra,unidade_uso,fator_conversao,
-                       qtd_por_embalagem,unid_embalagem,produto_vinculado_id,fornecedor,aproveitamento)
-                      VALUES(?,?,?,?,?,?,?,?,?,?)''',
-                   (nome, uc, preco, uu, fator, qtd_emb, unid_emb, vinc, fornecedor, aproveitamento))
+                       qtd_por_embalagem,unid_embalagem,produto_vinculado_id,fornecedor,aproveitamento,categoria)
+                      VALUES(?,?,?,?,?,?,?,?,?,?,?)''',
+                   (nome, uc, preco, uu, fator, qtd_emb, unid_emb, vinc, fornecedor, aproveitamento, categoria))
         db.commit(); db.close()
         flash(f'Insumo "{nome}" cadastrado.', 'success')
         return redirect(url_for('insumos_lista'))
@@ -420,15 +421,15 @@ def insumo_editar(id):
     db = get_db()
     ins = db.execute('SELECT * FROM insumos WHERE id=?', (id,)).fetchone()
     if request.method == 'POST':
-        nome, uc, preco, uu, fator, qtd_emb, unid_emb, vinc, fornecedor, aproveitamento = _parse_insumo_form(request.form)
+        nome, uc, preco, uu, fator, qtd_emb, unid_emb, vinc, fornecedor, aproveitamento, categoria = _parse_insumo_form(request.form)
         preco_antigo = ins['preco_compra']
         fator_antigo = ins['fator_conversao'] or 1
         db.execute('''UPDATE insumos
                       SET nome=?,unidade_compra=?,preco_compra=?,unidade_uso=?,
                           fator_conversao=?,qtd_por_embalagem=?,unid_embalagem=?,
-                          produto_vinculado_id=?,fornecedor=?,aproveitamento=?
+                          produto_vinculado_id=?,fornecedor=?,aproveitamento=?,categoria=?
                       WHERE id=?''',
-                   (nome, uc, preco, uu, fator, qtd_emb, unid_emb, vinc, fornecedor, aproveitamento, id))
+                   (nome, uc, preco, uu, fator, qtd_emb, unid_emb, vinc, fornecedor, aproveitamento, categoria, id))
         unit_ant = (preco_antigo or 0) / fator_antigo
         unit_novo = (preco or 0) / (fator or 1)
         if round(unit_ant, 6) != round(unit_novo, 6):
