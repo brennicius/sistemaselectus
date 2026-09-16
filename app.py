@@ -994,7 +994,7 @@ def producao():
         _inteiras_prod = {'un','und','unid','pct','pacote','cx','caixa','fardo','saco','bd','bandeja',
                           'dz','duzia','rl','rolo','lt','lata','sc','pt','pote','balde','galão','galao','garrafa','frasco','maço','maco','mc','bisnaga','bisn'}
         for iid, d in sorted(ins_map.items(), key=lambda x: x[1]['nome']):
-            estoque = d.get('estoque_atual') or 0.0
+            estoque = (d.get('estoque_atual') or 0.0) + (d.get('estoque_central') or 0.0)
             qtd_necessaria = max(0.0, d['qtd_uso'] - estoque)
             _qtd = qtd_necessaria / d['fator_conversao']
             if (d['unidade_compra'] or '').lower() in _inteiras_prod:
@@ -1143,7 +1143,7 @@ def _calcular_lista(prods, form, estoque_override=None):
         if estoque_override is not None:
             estoque = float(estoque_override.get(iid, 0.0))
         else:
-            estoque = d.get('estoque_atual') or 0.0
+            estoque = (d.get('estoque_atual') or 0.0) + (d.get('estoque_central') or 0.0)
         qtd_nec = max(0.0, d['qtd_uso'] - estoque)
         _qtd = qtd_nec / d['fator_conversao']
         if (d['unidade_compra'] or '').lower() in _inteiras:
