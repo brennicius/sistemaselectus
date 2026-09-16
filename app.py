@@ -257,6 +257,32 @@ def init_db():
             estoque_central_depois REAL,
             obs TEXT
         );
+        CREATE TABLE IF NOT EXISTS nf_entradas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            numero TEXT,
+            serie TEXT,
+            fornecedor TEXT,
+            cnpj TEXT,
+            data_emissao TEXT,
+            total REAL,
+            status TEXT DEFAULT 'pendente',
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS nf_itens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nf_id INTEGER NOT NULL,
+            descricao_nf TEXT,
+            qtd_nf REAL,
+            unid_nf TEXT,
+            vlr_unit REAL,
+            total_item REAL,
+            insumo_id INTEGER,
+            qtd_entrada REAL,
+            confirmado INTEGER DEFAULT 0,
+            obs TEXT,
+            FOREIGN KEY (nf_id) REFERENCES nf_entradas(id) ON DELETE CASCADE,
+            FOREIGN KEY (insumo_id) REFERENCES insumos(id)
+        );
     ''')
     db.commit()
     db.close()
