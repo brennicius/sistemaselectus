@@ -2090,8 +2090,17 @@ def alertas():
         FROM insumos
         ORDER BY nome COLLATE NOCASE
     ''').fetchall()
+    rows_f = db.execute('''
+        SELECT ft.insumo_id, p.nome
+        FROM ficha_tecnica ft
+        JOIN produtos p ON p.id = ft.produto_id
+        ORDER BY p.nome COLLATE NOCASE
+    ''').fetchall()
+    fichas_map = {}
+    for r in rows_f:
+        fichas_map.setdefault(r['insumo_id'], []).append(r['nome'])
     db.close()
-    return render_template('alertas.html', insumos=insumos)
+    return render_template('alertas.html', insumos=insumos, fichas_map=fichas_map)
 
 def count_alertas():
     try:

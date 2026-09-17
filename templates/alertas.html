@@ -17,23 +17,45 @@
   th.col-central { background: #375623; color: #fff; }
   .unit-select { font-size:.72rem; max-width:68px; padding:0 2px; height:28px; }
   .unit-select:focus { box-shadow: none; }
+  /* Tooltip fichas técnicas */
+  #ft-tooltip {
+    position: fixed;
+    z-index: 9999;
+    background: #1e2a3a;
+    color: #e8f0fe;
+    border: 1px solid #3a5276;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: .78rem;
+    line-height: 1.55;
+    max-width: 280px;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,.35);
+    opacity: 0;
+    transition: opacity .15s;
+  }
+  #ft-tooltip.show { opacity: 1; }
+  #ft-tooltip .tt-title { font-size: .68rem; color: #7eb3f5; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+  #ft-tooltip li { list-style: none; padding: 1px 0; }
+  #ft-tooltip li::before { content: "▸ "; color: #7eb3f5; }
+  .nome-insumo { cursor: default; }
+  .nome-insumo:hover { text-decoration: underline dotted rgba(100,140,200,.5); }
 </style>
 
-<div class="page-header d-flex justify-content-between align-items-start">
-  <div>
-    <h1><i class="bi bi-archive me-2"></i>Estoque</h1>
-    <p>Estoque atual de todos os insumos — edite o valor e clique no disquete para salvar</p>
-  </div>
-  <div class="d-flex gap-2 align-items-center">
-    <input type="text" id="busca-estoque" class="form-control form-control-sm" placeholder="Buscar…" style="max-width:220px" autocomplete="off">
-    <select id="filtro-status" class="form-select form-select-sm" style="max-width:160px">
-      <option value="">Todos</option>
-      <option value="zerado">Sem estoque</option>
-      <option value="baixo">Estoque baixo</option>
-      <option value="ok">OK</option>
-      <option value="sem_minimo">Sem mínimo</option>
-    </select>
-  </div>
+<div class="page-header">
+  <h1><i class="bi bi-archive me-2"></i>Estoque</h1>
+  <p>Estoque atual de todos os insumos — edite o valor e clique no disquete para salvar</p>
+</div>
+
+<div class="mb-2 d-flex align-items-center gap-2">
+  <input type="text" id="busca-estoque" class="form-control form-control-sm" placeholder="Buscar…" style="max-width:220px" autocomplete="off">
+  <select id="filtro-status" class="form-select form-select-sm" style="max-width:160px">
+    <option value="">Todos</option>
+    <option value="zerado">Sem estoque</option>
+    <option value="baixo">Estoque baixo</option>
+    <option value="ok">OK</option>
+    <option value="sem_minimo">Sem mínimo</option>
+  </select>
 </div>
 
 <div class="mb-2 d-flex align-items-center gap-2 flex-wrap">
@@ -107,8 +129,8 @@
         <tr data-nome="{{ ins.nome|lower }}" data-status="{{ status }}"
             data-cozinha="{{ cozinha }}" data-central="{{ central }}" data-total="{{ total_est }}" data-minimo="{{ minimo }}"
             class="{{ 'alerta-baixo' if status == 'baixo' else ('alerta-zero' if status == 'zerado' else '') }}">
-          <td class="fw-semibold">
-            {{ ins.nome }}
+          <td class="fw-semibold" {% if fichas_map.get(ins.id) %}data-fichas='{{ fichas_map.get(ins.id)|tojson }}'{% endif %}>
+            <span class="nome-insumo">{{ ins.nome }}</span>
             {% if ins.fornecedor %}
             <span class="d-block" style="font-size:.7rem;color:#6c757d">{{ ins.fornecedor }}</span>
             {% endif %}
@@ -204,6 +226,11 @@
   &nbsp;·&nbsp; Status calculado sobre <strong>Cozinha + Central</strong> vs. mínimo.
 </div>
 
+<!-- Tooltip fichas técnicas -->
+<div id="ft-tooltip" role="tooltip" aria-hidden="true">
+  <div class="tt-title">Usado nas fichas técnicas</div>
+  <ul id="ft-list"></ul>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -345,5 +372,42 @@ document.querySelectorAll('.btn-save').forEach(btn => {
     });
   });
 });
+
+// ── Tooltip fichas técnicas ──
+(function() {
+  const tip  = document.getElementById('ft-tooltip');
+  const list = document.getElementById('ft-list');
+  let hideTimer;
+
+  function showTip(td, e) {
+    const fichas = JSON.parse(td.dataset.fichas || 'null');
+    if (!fichas || !fichas.length) return;
+    clearTimeout(hideTimer);
+    list.innerHTML = fichas.map(f => `<li>${f}</li>`).join('');
+    tip.classList.add('show');
+    moveTip(e);
+  }
+
+  function moveTip(e) {
+    const pad = 14;
+    let x = e.clientX + pad, y = e.clientY + pad;
+    const tw = tip.offsetWidth  || 200;
+    const th = tip.offsetHeight || 100;
+    if (x + tw > window.innerWidth  - 8) x = e.clientX - tw - pad;
+    if (y + th > window.innerHeight - 8) y = e.clientY - th - pad;
+    tip.style.left = x + 'px';
+    tip.style.top  = y + 'px';
+  }
+
+  function hideTip() {
+    hideTimer = setTimeout(() => tip.classList.remove('show'), 80);
+  }
+
+  document.querySelectorAll('#tabela-estoque tbody td[data-fichas]').forEach(td => {
+    td.addEventListener('mouseenter', e => showTip(td, e));
+    td.addEventListener('mousemove',  e => moveTip(e));
+    td.addEventListener('mouseleave', hideTip);
+  });
+})();
 </script>
 {% endblock %}
