@@ -67,11 +67,16 @@
           </td>
           <td class="text-center text-nowrap">{{ l.data_vencimento or '—' }}</td>
           <td class="text-center">
-            {% if l.pago %}
-              <span class="badge bg-success"><i class="bi bi-check-lg"></i> Pago</span>
-            {% else %}
-              <span class="badge bg-danger">Pendente</span>
-            {% endif %}
+            <form method="POST" action="{{ url_for('ep_toggle_pago', id=l.id) }}" class="d-inline">
+              <button type="submit" class="btn btn-sm {{ 'btn-success' if l.pago else 'btn-danger' }}"
+                      style="min-width:90px">
+                {% if l.pago %}
+                  <i class="bi bi-check-lg me-1"></i>Pago
+                {% else %}
+                  Pendente
+                {% endif %}
+              </button>
+            </form>
           </td>
           <td class="text-center">
             {% if l.confirmado_fin %}

@@ -3354,6 +3354,15 @@ def ep_confirmar(id):
     return redirect(url_for('ep_lista'))
 
 
+@app.route('/entrada-produtos/<int:id>/toggle-pago', methods=['POST'])
+def ep_toggle_pago(id):
+    db = get_db()
+    db.execute('UPDATE ep_lancamentos SET pago = 1 - pago WHERE id=?', (id,))
+    db.commit()
+    db.close()
+    return redirect(url_for('ep_lista'))
+
+
 @app.route('/entrada-produtos/<int:id>/desconfirmar', methods=['POST'])
 def ep_desconfirmar(id):
     db = get_db()
