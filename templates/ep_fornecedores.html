@@ -63,7 +63,11 @@
                   <span class="badge bg-secondary">Inativo</span>
                 {% endif %}
               </td>
-              <td class="text-end">
+              <td class="text-end" style="white-space:nowrap">
+                <button type="button" class="btn btn-sm btn-outline-primary me-1"
+                        data-bs-toggle="modal" data-bs-target="#modalRenomear{{ f.id }}">
+                  <i class="bi bi-pencil"></i> Editar
+                </button>
                 <form method="POST" action="{{ url_for('ep_fornecedor_toggle', id=f.id) }}" class="d-inline">
                   <button type="submit" class="btn btn-sm {{ 'btn-outline-warning' if f.ativo else 'btn-outline-success' }}">
                     {% if f.ativo %}
@@ -83,4 +87,28 @@
     </div>
   </div>
 </div>
+
+{# Modais de renomeação #}
+{% for f in fornecedores %}
+<div class="modal fade" id="modalRenomear{{ f.id }}" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <form method="POST" action="{{ url_for('ep_fornecedor_renomear', id=f.id) }}">
+      <div class="modal-content">
+        <div class="modal-header" style="background:#1a3a5c">
+          <h6 class="modal-title text-white"><i class="bi bi-pencil me-2"></i>Editar Fornecedor</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label fw-semibold">Novo nome</label>
+          <input type="text" name="nome" class="form-control" value="{{ f.nome }}" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
 {% endblock %}

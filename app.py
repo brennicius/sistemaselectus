@@ -3391,6 +3391,21 @@ def ep_fornecedor_toggle(id):
     return redirect(url_for('ep_fornecedores'))
 
 
+@app.route('/entrada-produtos/fornecedores/<int:id>/renomear', methods=['POST'])
+def ep_fornecedor_renomear(id):
+    nome = request.form.get('nome', '').strip()
+    if nome:
+        db = get_db()
+        try:
+            db.execute('UPDATE ep_fornecedores SET nome=? WHERE id=?', (nome, id))
+            db.commit()
+            flash(f'Fornecedor renomeado para "{nome}".', 'success')
+        except Exception:
+            flash('Já existe um fornecedor com esse nome.', 'warning')
+        db.close()
+    return redirect(url_for('ep_fornecedores'))
+
+
 @app.route('/cafe')
 def cafe_lista():
     db = get_db()
