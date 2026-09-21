@@ -1789,75 +1789,75 @@ def _parse_danfe(pdf_bytes):
                'data_emissao': data_emissao, 'total': total}
 
     # ── Products ──
-    UNITS = {'UND','UN','KG','KGS','LT','LTA','PCT','MCO','CX','CXA','BDJ',
-             'SC','FD','G','ML','L','BISNAGA','MACO','BALDE','FRD'}
+    def _br_float(s):
+        try:
+            return float(str(s or '').strip().replace('.', '').replace(',', '.'))
+        except Exception:
+            return None
+
+    def _clean_unit(s):
+        # Remove conteúdo após \n (e.g. 'UND\n9' → 'UND') e dígitos finais ('KG9' → 'KG')
+        s = str(s or '').split('\n')[0].strip().upper()
+        s = re.sub(r'\d+$', '', s).strip()
+        return s or 'UND'
+
     items = []
 
-    # Try table rows first
+    # ── Método 1: tabela estruturada padrão DANFE (13 colunas) ──
+    # Colunas fixas: [CodProd, Desc, CodBarras, NCM, CST, CFOP, UNID, QUANT, VlrUnit, VlrTotal, ...]
+    _cod_prod_re = re.compile(r'^[A-Z]{1,3}\d{3,}', re.IGNORECASE)
+
+    def _is_danfe_table(table):
+        """Retorna True se a tabela parece ser a tabela de itens do DANFE."""
+        if not table or len(table) < 1:
+            return False
+        row0 = [str(c or '') for c in table[0]]
+        if len(row0) != 13:
+            return False
+        # Caso 1: linha de cabeçalho com 'DESCRI' ou 'PRODUTO' (página 1)
+        header_txt = ' '.join(row0).upper()
+        if 'DESCRI' in header_txt or 'PRODUTO' in header_txt:
+            return True
+        # Caso 2: linha de dados sem cabeçalho (páginas 2+) — col[0] é código de produto
+        if _cod_prod_re.match(row0[0].split('\n')[0]):
+            return True
+        return False
+
+    def _is_header_row(row):
+        """True se a linha é o cabeçalho (não contém quantidade numérica na col 7)."""
+        cells = [str(c or '').strip() for c in row]
+        return len(cells) >= 8 and _br_float(cells[7]) is None
+
     for table in tables:
-        for row in (table or []):
-            if not row:
+        if not _is_danfe_table(table):
+            continue
+        for row in table:
+            if not row or len(row) < 10:
+                continue
+            if _is_header_row(row):
                 continue
             cells = [str(c or '').strip() for c in row]
-            # row must have at least 5 non-empty cells and one that matches a UNIT
-            non_empty = [c for c in cells if c]
-            if len(non_empty) < 4:
+            desc = cells[1].split('\n')[0].strip()
+            if not desc or len(desc) < 3:
                 continue
-            # Find unit cell
-            unit_idx = None
-            for i, c in enumerate(cells):
-                if c.upper() in UNITS:
-                    unit_idx = i
-                    break
-            if unit_idx is None:
+            unid     = _clean_unit(cells[6])
+            qtd      = _br_float(cells[7])
+            vlr_unit = _br_float(cells[8])
+            total    = _br_float(cells[9])
+            if not qtd or qtd <= 0:
                 continue
-            # Qty should be just before unit
-            qty_val = None
-            for i in range(unit_idx - 1, max(unit_idx - 4, -1), -1):
-                try:
-                    qty_val = float(cells[i].replace('.', '').replace(',', '.'))
-                    break
-                except Exception:
-                    continue
-            if qty_val is None or qty_val <= 0:
-                continue
-            # Description: find the longest alphabetic cell before the qty
-            desc = ''
-            for i in range(min(unit_idx, len(cells))):
-                c = cells[i]
-                if len(c) > len(desc) and re.search(r'[A-Za-z]{3}', c):
-                    desc = c
-            if not desc or len(desc) < 4:
-                continue
-            # Total: last numeric cell after unit
-            total_item = 0.0
-            for c in reversed(cells[unit_idx:]):
-                try:
-                    v = float(c.replace('.', '').replace(',', '.'))
-                    if v > 0:
-                        total_item = v
-                        break
-                except Exception:
-                    continue
-            # Unit price: second-to-last numeric after unit
-            vlr_unit = 0.0
-            nums_after = []
-            for c in cells[unit_idx:]:
-                try:
-                    v = float(c.replace('.', '').replace(',', '.'))
-                    if v > 0:
-                        nums_after.append(v)
-                except Exception:
-                    pass
-            if len(nums_after) >= 2:
-                vlr_unit = nums_after[0]
-                total_item = nums_after[-1]
-            items.append({'descricao': desc, 'qtd': qty_val,
-                          'unid': cells[unit_idx].upper(),
-                          'vlr_unit': vlr_unit, 'total': total_item})
+            items.append({
+                'descricao': desc,
+                'qtd': qtd,
+                'unid': unid,
+                'vlr_unit': vlr_unit or 0.0,
+                'total': total or 0.0,
+            })
 
-    # Fallback: regex on raw text
+    # ── Método 2: fallback por regex no texto bruto ──
     if not items:
+        UNITS = {'UND','UN','KG','KGS','LT','LTA','PCT','MCO','CX','CXA','BDJ',
+                 'SC','FD','G','ML','L','BISNAGA','MACO','BALDE','FRD'}
         pat = re.compile(
             r'^[\s\d]{0,6}([A-Z][A-Z0-9/\.\s\-]{4,50}?)\s+'
             r'(\d+[,\.]\d+)\s+'
@@ -1912,6 +1912,27 @@ def _match_insumo_nf(descricao_nf, insumos):
     if best_ratio >= 0.55:
         return best_id, f'Checar: similaridade {best_ratio:.0%} com "{best_nome}"'
     return None, 'Sem match — vincular manualmente'
+
+
+@app.route('/nf/debug-pdf', methods=['POST'])
+def nf_debug_pdf():
+    """Diagnóstico: mostra texto e tabelas extraídos do PDF."""
+    import pdfplumber, io, json
+    arq = request.files.get('pdf')
+    if not arq:
+        return jsonify({'erro': 'sem arquivo'})
+    pdf_bytes = arq.read()
+    result = {'pages': []}
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        for i, page in enumerate(pdf.pages):
+            txt = page.extract_text() or ''
+            tbls = page.extract_tables() or []
+            result['pages'].append({
+                'page': i+1,
+                'text_lines': txt.split('\n')[:80],
+                'tables': tbls[:5]
+            })
+    return jsonify(result)
 
 
 @app.route('/nf/importar', methods=['POST'])
