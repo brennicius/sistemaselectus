@@ -75,9 +75,17 @@
           </td>
           <td class="text-center">
             {% if l.confirmado_fin %}
-              <span class="badge bg-success" title="Confirmado em {{ l.confirmado_fin_em }}">
-                <i class="bi bi-check2-all"></i> Confirmado
-              </span>
+              <div class="d-flex align-items-center gap-1 justify-content-center">
+                <span class="badge bg-success" title="Confirmado em {{ l.confirmado_fin_em }}">
+                  <i class="bi bi-check2-all"></i> Confirmado
+                </span>
+                <form method="POST" action="{{ url_for('ep_desconfirmar', id=l.id) }}" class="d-inline">
+                  <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Desfazer confirmação"
+                          onclick="return confirm('Desfazer confirmação do financeiro?')">
+                    <i class="bi bi-x-lg" style="font-size:.7rem"></i>
+                  </button>
+                </form>
+              </div>
             {% else %}
               <form method="POST" action="{{ url_for('ep_confirmar', id=l.id) }}" class="d-inline">
                 <button type="submit" class="btn btn-sm btn-outline-success">

@@ -3354,6 +3354,16 @@ def ep_confirmar(id):
     return redirect(url_for('ep_lista'))
 
 
+@app.route('/entrada-produtos/<int:id>/desconfirmar', methods=['POST'])
+def ep_desconfirmar(id):
+    db = get_db()
+    db.execute('UPDATE ep_lancamentos SET confirmado_fin=0, confirmado_fin_em=NULL WHERE id=?', (id,))
+    db.commit()
+    db.close()
+    flash('Confirmação desfeita.', 'warning')
+    return redirect(url_for('ep_lista'))
+
+
 @app.route('/entrada-produtos/<int:id>/excluir', methods=['POST'])
 def ep_excluir(id):
     db = get_db()
