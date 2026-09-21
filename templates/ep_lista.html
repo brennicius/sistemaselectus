@@ -57,7 +57,7 @@
           <td class="text-nowrap">{{ l.data_entrada }}</td>
           <td class="fw-semibold">{{ l.fornecedor_nome }}</td>
           <td class="text-muted small">{{ l.numero_nf or '—' }}</td>
-          <td class="text-end fw-semibold">R$ {{ '%.2f'|format(l.valor) }}</td>
+          <td class="text-end fw-semibold">R$ {{ '{:,.2f}'.format(l.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
           <td class="text-center">
             {% if l.tipo_pagamento == 'vista' %}
               <span class="badge bg-info text-dark">À Vista</span>
