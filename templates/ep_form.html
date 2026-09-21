@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar Lançamento' if lancamento else 'Novo Lançamento' }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>
+    <i class="bi bi-box-arrow-in-down me-2"></i>
+    {{ 'Editar Lançamento' if lancamento else 'Novo Lançamento' }}
+  </h1>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }} py-2">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<div class="card shadow-sm" style="max-width:640px">
+  <div class="card-body">
+    <form method="POST">
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Fornecedor <span class="text-danger">*</span></label>
+        <div class="d-flex gap-2">
+          <select name="fornecedor_id" class="form-select" required>
+            <option value="">Selecione...</option>
+            {% for f in fornecedores %}
+            <option value="{{ f.id }}" {{ 'selected' if lancamento and lancamento.fornecedor_id == f.id }}>
+              {{ f.nome }}
+            </option>
+            {% endfor %}
+          </select>
+          <a href="{{ url_for('ep_fornecedores') }}" class="btn btn-outline-secondary" title="Gerenciar fornecedores">
+            <i class="bi bi-building"></i>
+          </a>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold">Data de Entrada <span class="text-danger">*</span></label>
+          <input type="date" name="data_entrada" class="form-control" required
+                 value="{{ lancamento.data_entrada if lancamento else '' }}">
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold">Número da NF</label>
+          <input type="text" name="numero_nf" class="form-control" placeholder="Ex: 001234"
+                 value="{{ lancamento.numero_nf or '' if lancamento else '' }}">
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Valor (R$) <span class="text-danger">*</span></label>
+        <input type="text" name="valor" class="form-control" placeholder="0,00" required
+               value="{{ '%.2f'|format(lancamento.valor) if lancamento else '' }}">
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Forma de Pagamento <span class="text-danger">*</span></label>
+        <div class="d-flex gap-3 mt-1">
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="tipo_pagamento" id="pag_prazo" value="prazo"
+                   {{ 'checked' if not lancamento or lancamento.tipo_pagamento == 'prazo' }}
+                   onchange="toggleVenc()">
+            <label class="form-check-label" for="pag_prazo">À Prazo</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="tipo_pagamento" id="pag_vista" value="vista"
+                   {{ 'checked' if lancamento and lancamento.tipo_pagamento == 'vista' }}
+                   onchange="toggleVenc()">
+            <label class="form-check-label" for="pag_vista">À Vista</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="mb-3" id="div_vencimento">
+        <label class="form-label fw-semibold">Data de Vencimento</label>
+        <input type="date" name="data_vencimento" class="form-control"
+               value="{{ lancamento.data_vencimento or '' if lancamento else '' }}">
+      </div>
+
+      <div class="mb-3">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" name="pago" id="pago"
+                 {{ 'checked' if lancamento and lancamento.pago }}>
+          <label class="form-check-label fw-semibold" for="pago">Já foi pago</label>
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="form-label fw-semibold">Observações</label>
+        <textarea name="obs" class="form-control" rows="2" placeholder="Informações adicionais...">{{ lancamento.obs or '' if lancamento else '' }}</textarea>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1"></i>{{ 'Salvar' if lancamento else 'Registrar Lançamento' }}
+        </button>
+        <a href="{{ url_for('ep_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleVenc() {
+  const vista = document.getElementById('pag_vista').checked;
+  document.getElementById('div_vencimento').style.display = vista ? 'none' : '';
+}
+toggleVenc();
+</script>
+{% endblock %}

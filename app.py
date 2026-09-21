@@ -283,6 +283,26 @@ def init_db():
             FOREIGN KEY (nf_id) REFERENCES nf_entradas(id) ON DELETE CASCADE,
             FOREIGN KEY (insumo_id) REFERENCES insumos(id)
         );
+        CREATE TABLE IF NOT EXISTS ep_fornecedores (
+            id   INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL UNIQUE,
+            ativo INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE TABLE IF NOT EXISTS ep_lancamentos (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            fornecedor_id       INTEGER NOT NULL,
+            data_entrada        TEXT NOT NULL,
+            numero_nf           TEXT,
+            valor               REAL NOT NULL,
+            tipo_pagamento      TEXT NOT NULL DEFAULT 'prazo',
+            data_vencimento     TEXT,
+            pago                INTEGER NOT NULL DEFAULT 0,
+            confirmado_fin      INTEGER NOT NULL DEFAULT 0,
+            confirmado_fin_em   TEXT,
+            obs                 TEXT,
+            criado_em           TEXT DEFAULT (datetime('now','localtime')),
+            FOREIGN KEY (fornecedor_id) REFERENCES ep_fornecedores(id)
+        );
     ''')
     db.commit()
     db.close()
@@ -3232,6 +3252,144 @@ def _consumo_insumos_periodo(db, pdv, desde, ate=None):
                     for ins in comp_map[col]:
                         insumo_g[ins['nome']] = insumo_g.get(ins['nome'], 0) + delta * ins['gram']
     return {nome: round(g / 1000, 4) for nome, g in insumo_g.items()}
+
+
+# ── Entrada Produtos ──────────────────────────────────────────────────────────
+
+@app.route('/entrada-produtos')
+def ep_lista():
+    db = get_db()
+    lancamentos = db.execute('''
+        SELECT l.*, f.nome AS fornecedor_nome
+        FROM ep_lancamentos l
+        JOIN ep_fornecedores f ON f.id = l.fornecedor_id
+        ORDER BY l.data_entrada DESC, l.id DESC
+    ''').fetchall()
+    pendentes = sum(1 for r in lancamentos if not r['confirmado_fin'])
+    db.close()
+    return render_template('ep_lista.html', lancamentos=lancamentos, pendentes=pendentes)
+
+
+@app.route('/entrada-produtos/novo', methods=['GET', 'POST'])
+def ep_novo():
+    db = get_db()
+    fornecedores = db.execute("SELECT * FROM ep_fornecedores WHERE ativo=1 ORDER BY nome COLLATE NOCASE").fetchall()
+    if request.method == 'POST':
+        forn_id  = request.form.get('fornecedor_id')
+        data_e   = request.form.get('data_entrada')
+        num_nf   = request.form.get('numero_nf', '').strip()
+        valor    = request.form.get('valor', '').replace(',', '.')
+        tipo_pag = request.form.get('tipo_pagamento', 'prazo')
+        data_venc = request.form.get('data_vencimento') or None
+        pago     = 1 if request.form.get('pago') else 0
+        obs      = request.form.get('obs', '').strip()
+        try:
+            valor = float(valor)
+        except ValueError:
+            flash('Valor inválido.', 'danger')
+            db.close()
+            return render_template('ep_form.html', fornecedores=fornecedores, lancamento=None)
+        db.execute('''
+            INSERT INTO ep_lancamentos
+              (fornecedor_id, data_entrada, numero_nf, valor, tipo_pagamento, data_vencimento, pago, obs)
+            VALUES (?,?,?,?,?,?,?,?)
+        ''', (forn_id, data_e, num_nf, valor, tipo_pag, data_venc, pago, obs))
+        db.commit()
+        db.close()
+        flash('Lançamento registrado com sucesso.', 'success')
+        return redirect(url_for('ep_lista'))
+    db.close()
+    return render_template('ep_form.html', fornecedores=fornecedores, lancamento=None)
+
+
+@app.route('/entrada-produtos/<int:id>/editar', methods=['GET', 'POST'])
+def ep_editar(id):
+    db = get_db()
+    lancamento = db.execute('SELECT * FROM ep_lancamentos WHERE id=?', (id,)).fetchone()
+    fornecedores = db.execute("SELECT * FROM ep_fornecedores WHERE ativo=1 ORDER BY nome COLLATE NOCASE").fetchall()
+    if not lancamento:
+        db.close()
+        flash('Lançamento não encontrado.', 'danger')
+        return redirect(url_for('ep_lista'))
+    if request.method == 'POST':
+        forn_id   = request.form.get('fornecedor_id')
+        data_e    = request.form.get('data_entrada')
+        num_nf    = request.form.get('numero_nf', '').strip()
+        valor     = request.form.get('valor', '').replace(',', '.')
+        tipo_pag  = request.form.get('tipo_pagamento', 'prazo')
+        data_venc = request.form.get('data_vencimento') or None
+        pago      = 1 if request.form.get('pago') else 0
+        obs       = request.form.get('obs', '').strip()
+        try:
+            valor = float(valor)
+        except ValueError:
+            flash('Valor inválido.', 'danger')
+            db.close()
+            return render_template('ep_form.html', fornecedores=fornecedores, lancamento=lancamento)
+        db.execute('''
+            UPDATE ep_lancamentos SET
+              fornecedor_id=?, data_entrada=?, numero_nf=?, valor=?,
+              tipo_pagamento=?, data_vencimento=?, pago=?, obs=?
+            WHERE id=?
+        ''', (forn_id, data_e, num_nf, valor, tipo_pag, data_venc, pago, obs, id))
+        db.commit()
+        db.close()
+        flash('Lançamento atualizado.', 'success')
+        return redirect(url_for('ep_lista'))
+    db.close()
+    return render_template('ep_form.html', fornecedores=fornecedores, lancamento=lancamento)
+
+
+@app.route('/entrada-produtos/<int:id>/confirmar', methods=['POST'])
+def ep_confirmar(id):
+    from datetime import datetime as _dt
+    db = get_db()
+    db.execute('''
+        UPDATE ep_lancamentos SET confirmado_fin=1, confirmado_fin_em=?
+        WHERE id=?
+    ''', (_dt.now().strftime('%Y-%m-%d %H:%M:%S'), id))
+    db.commit()
+    db.close()
+    flash('Lançamento confirmado pelo financeiro.', 'success')
+    return redirect(url_for('ep_lista'))
+
+
+@app.route('/entrada-produtos/<int:id>/excluir', methods=['POST'])
+def ep_excluir(id):
+    db = get_db()
+    db.execute('DELETE FROM ep_lancamentos WHERE id=?', (id,))
+    db.commit()
+    db.close()
+    flash('Lançamento excluído.', 'success')
+    return redirect(url_for('ep_lista'))
+
+
+@app.route('/entrada-produtos/fornecedores', methods=['GET', 'POST'])
+def ep_fornecedores():
+    db = get_db()
+    if request.method == 'POST':
+        nome = request.form.get('nome', '').strip()
+        if nome:
+            try:
+                db.execute('INSERT INTO ep_fornecedores (nome) VALUES (?)', (nome,))
+                db.commit()
+                flash(f'Fornecedor "{nome}" cadastrado.', 'success')
+            except Exception:
+                flash(f'Fornecedor "{nome}" já existe.', 'warning')
+        return redirect(url_for('ep_fornecedores'))
+    fornecedores = db.execute('SELECT * FROM ep_fornecedores ORDER BY nome COLLATE NOCASE').fetchall()
+    db.close()
+    return render_template('ep_fornecedores.html', fornecedores=fornecedores)
+
+
+@app.route('/entrada-produtos/fornecedores/<int:id>/toggle', methods=['POST'])
+def ep_fornecedor_toggle(id):
+    db = get_db()
+    db.execute('UPDATE ep_fornecedores SET ativo = 1 - ativo WHERE id=?', (id,))
+    db.commit()
+    db.close()
+    return redirect(url_for('ep_fornecedores'))
+
 
 @app.route('/cafe')
 def cafe_lista():

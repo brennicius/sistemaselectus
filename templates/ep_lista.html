@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Entrada Produtos{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+  <div>
+    <h1><i class="bi bi-box-arrow-in-down me-2"></i>Entrada de Produtos</h1>
+    <p class="mb-0">Registro de notas fiscais para o financeiro.</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('ep_fornecedores') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-building me-1"></i>Fornecedores
+    </a>
+    <a href="{{ url_for('ep_novo') }}" class="btn btn-primary">
+      <i class="bi bi-plus-lg me-1"></i>Novo Lançamento
+    </a>
+  </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }} alert-dismissible fade show py-2">{{ msg }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  {% endfor %}
+{% endwith %}
+
+{% if pendentes > 0 %}
+<div class="alert alert-warning d-flex align-items-center gap-2 py-2">
+  <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+  <span><strong>{{ pendentes }}</strong> lançamento{{ 's' if pendentes > 1 }} aguardando confirmação do financeiro.</span>
+</div>
+{% endif %}
+
+{% if not lancamentos %}
+<div class="alert alert-info">Nenhum lançamento registrado ainda.</div>
+{% else %}
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Data Entrada</th>
+          <th>Fornecedor</th>
+          <th>Nº NF</th>
+          <th class="text-end">Valor (R$)</th>
+          <th class="text-center">Pagamento</th>
+          <th class="text-center">Vencimento</th>
+          <th class="text-center">Pago</th>
+          <th class="text-center">Financeiro</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in lancamentos %}
+        <tr class="{{ 'table-success' if l.confirmado_fin else '' }}">
+          <td class="text-nowrap">{{ l.data_entrada }}</td>
+          <td class="fw-semibold">{{ l.fornecedor_nome }}</td>
+          <td class="text-muted small">{{ l.numero_nf or '—' }}</td>
+          <td class="text-end fw-semibold">R$ {{ '%.2f'|format(l.valor) }}</td>
+          <td class="text-center">
+            {% if l.tipo_pagamento == 'vista' %}
+              <span class="badge bg-info text-dark">À Vista</span>
+            {% else %}
+              <span class="badge bg-secondary">À Prazo</span>
+            {% endif %}
+          </td>
+          <td class="text-center text-nowrap">{{ l.data_vencimento or '—' }}</td>
+          <td class="text-center">
+            {% if l.pago %}
+              <span class="badge bg-success"><i class="bi bi-check-lg"></i> Pago</span>
+            {% else %}
+              <span class="badge bg-danger">Pendente</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if l.confirmado_fin %}
+              <span class="badge bg-success" title="Confirmado em {{ l.confirmado_fin_em }}">
+                <i class="bi bi-check2-all"></i> Confirmado
+              </span>
+            {% else %}
+              <form method="POST" action="{{ url_for('ep_confirmar', id=l.id) }}" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-outline-success">
+                  <i class="bi bi-check2-all me-1"></i>Confirmar
+                </button>
+              </form>
+            {% endif %}
+          </td>
+          <td class="text-end text-nowrap">
+            <a href="{{ url_for('ep_editar', id=l.id) }}" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <form method="POST" action="{{ url_for('ep_excluir', id=l.id) }}" class="d-inline"
+                  onsubmit="return confirm('Excluir este lançamento?')">
+              <button type="submit" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash3"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% if l.obs %}
+        <tr class="{{ 'table-success' if l.confirmado_fin else 'table-light' }}">
+          <td colspan="9" class="py-1 ps-4 small text-muted fst-italic">
+            <i class="bi bi-chat-left-text me-1"></i>{{ l.obs }}
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
