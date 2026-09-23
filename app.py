@@ -3725,6 +3725,7 @@ def ep_fornecedores():
     db = get_db()
     if request.method == 'POST':
         nome = request.form.get('nome', '').strip()
+        next_url = request.form.get('next') or url_for('ep_fornecedores')
         if nome:
             try:
                 db.execute('INSERT INTO ep_fornecedores (nome) VALUES (?)', (nome,))
@@ -3732,7 +3733,7 @@ def ep_fornecedores():
                 flash(f'Fornecedor "{nome}" cadastrado.', 'success')
             except Exception:
                 flash(f'Fornecedor "{nome}" já existe.', 'warning')
-        return redirect(url_for('ep_fornecedores'))
+        return redirect(next_url)
     fornecedores = db.execute('SELECT * FROM ep_fornecedores ORDER BY nome COLLATE NOCASE').fetchall()
     db.close()
     return render_template('ep_fornecedores.html', fornecedores=fornecedores)
@@ -3744,12 +3745,14 @@ def ep_fornecedor_toggle(id):
     db.execute('UPDATE ep_fornecedores SET ativo = 1 - ativo WHERE id=?', (id,))
     db.commit()
     db.close()
-    return redirect(url_for('ep_fornecedores'))
+    next_url = request.form.get('next') or url_for('ep_fornecedores')
+    return redirect(next_url)
 
 
 @app.route('/entrada-produtos/fornecedores/<int:id>/renomear', methods=['POST'])
 def ep_fornecedor_renomear(id):
     nome = request.form.get('nome', '').strip()
+    next_url = request.form.get('next') or url_for('ep_fornecedores')
     if nome:
         db = get_db()
         try:
@@ -3759,7 +3762,29 @@ def ep_fornecedor_renomear(id):
         except Exception:
             flash('Já existe um fornecedor com esse nome.', 'warning')
         db.close()
-    return redirect(url_for('ep_fornecedores'))
+    return redirect(next_url)
+
+
+@app.route('/entrada-produtos/fornecedores/<int:id>/excluir', methods=['POST'])
+def ep_fornecedor_excluir(id):
+    db = get_db()
+    em_uso = db.execute(
+        'SELECT COUNT(*) FROM ep_lancamentos WHERE fornecedor_id=? UNION ALL SELECT COUNT(*) FROM pedidos WHERE fornecedor_id=?',
+        (id, id)
+    ).fetchall()
+    total_uso = sum(r[0] for r in em_uso)
+    next_url = request.form.get('next') or url_for('ep_fornecedores')
+    if total_uso:
+        flash('Fornecedor possui lançamentos ou pedidos — não pode ser excluído.', 'danger')
+    else:
+        nome = db.execute('SELECT nome FROM ep_fornecedores WHERE id=?', (id,)).fetchone()
+        if nome:
+            db.execute('UPDATE insumos SET ep_fornecedor_id=NULL WHERE ep_fornecedor_id=?', (id,))
+            db.execute('DELETE FROM ep_fornecedores WHERE id=?', (id,))
+            db.commit()
+            flash(f'Fornecedor "{nome["nome"]}" excluído.', 'success')
+    db.close()
+    return redirect(next_url)
 
 
 @app.route('/cafe')
