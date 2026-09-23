@@ -381,7 +381,7 @@ def debug_schema():
     tables = {}
     all_tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
     tables['_all_tables'] = all_tables
-    for t in ['requisicoes','requisicao_itens','insumos','registro_itens','nf_entradas','nf_itens']:
+    for t in ['requisicoes','requisicao_itens','insumos','registro_itens','nf_entradas','nf_itens','pedidos','ep_fornecedores','ep_lancamentos']:
         try:
             cols = [r[1] for r in db.execute(f'PRAGMA table_info({t})').fetchall()]
             tables[t] = cols
@@ -396,6 +396,14 @@ def debug_schema():
         tables['_insert_test'] = 'OK'
     except Exception as e:
         tables['_insert_test'] = str(e)
+    # Testa query de pedidos
+    try:
+        rows = db.execute('''SELECT p.*, f.nome AS fornecedor_nome
+            FROM pedidos p JOIN ep_fornecedores f ON f.id = p.fornecedor_id
+            ORDER BY p.status ASC, p.data_prevista ASC''').fetchall()
+        tables['_pedidos_query'] = f'OK — {len(rows)} rows'
+    except Exception as e:
+        tables['_pedidos_query'] = str(e)
     db.close()
     return jsonify(tables)
 
