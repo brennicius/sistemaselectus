@@ -47,6 +47,7 @@
           <th class="text-center">Pagamento</th>
           <th class="text-center">Vencimento</th>
           <th class="text-center">Pago</th>
+          <th class="text-center">Pedido</th>
           <th class="text-center">Financeiro</th>
           <th></th>
         </tr>
@@ -77,6 +78,16 @@
                 {% endif %}
               </button>
             </form>
+          </td>
+          <td class="text-center">
+            {% if l.pedido_id %}
+              <a href="{{ url_for('pedidos_lista') }}" class="badge bg-warning text-dark text-decoration-none"
+                 title="Pedido vinculado{{ ' · Entrega: ' + l.ped_data if l.ped_data else '' }}">
+                <i class="bi bi-cart3 me-1"></i>#{{ l.pedido_id }}
+              </a>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
           </td>
           <td class="text-center">
             {% if l.confirmado_fin %}
@@ -113,7 +124,7 @@
         </tr>
         {% if l.obs %}
         <tr class="{{ 'table-success' if l.confirmado_fin else 'table-light' }}">
-          <td colspan="9" class="py-1 ps-4 small text-muted fst-italic">
+          <td colspan="10" class="py-1 ps-4 small text-muted fst-italic">
             <i class="bi bi-chat-left-text me-1"></i>{{ l.obs }}
           </td>
         </tr>

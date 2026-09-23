@@ -317,6 +317,12 @@ def init_db():
         );
     ''')
     db.commit()
+    # migration: adiciona pedido_id se ainda não existir
+    try:
+        db.execute('ALTER TABLE ep_lancamentos ADD COLUMN pedido_id INTEGER REFERENCES pedidos(id)')
+        db.commit()
+    except Exception:
+        pass
     db.close()
 
 def _recalcular_historico_fichas(db, insumo_id):
@@ -3400,13 +3406,29 @@ def pedidos_excluir(id):
 
 # ── Entrada Produtos ──────────────────────────────────────────────────────────
 
+@app.route('/api/pedidos-abertos/<int:forn_id>')
+def api_pedidos_abertos(forn_id):
+    from flask import jsonify
+    db = get_db()
+    rows = db.execute('''
+        SELECT id, data_prevista, valor_previsto, obs
+        FROM pedidos
+        WHERE fornecedor_id=? AND status='aberto'
+        ORDER BY data_prevista ASC, id DESC
+    ''', (forn_id,)).fetchall()
+    db.close()
+    return jsonify([dict(r) for r in rows])
+
+
 @app.route('/entrada-produtos')
 def ep_lista():
     db = get_db()
     lancamentos = db.execute('''
-        SELECT l.*, f.nome AS fornecedor_nome
+        SELECT l.*, f.nome AS fornecedor_nome,
+               p.data_prevista AS ped_data, p.valor_previsto AS ped_valor
         FROM ep_lancamentos l
         JOIN ep_fornecedores f ON f.id = l.fornecedor_id
+        LEFT JOIN pedidos p ON p.id = l.pedido_id
         ORDER BY l.data_entrada DESC, l.id DESC
     ''').fetchall()
     pendentes = sum(1 for r in lancamentos if not r['confirmado_fin'])
@@ -3416,17 +3438,19 @@ def ep_lista():
 
 @app.route('/entrada-produtos/novo', methods=['GET', 'POST'])
 def ep_novo():
+    from datetime import datetime as _dt
     db = get_db()
     fornecedores = db.execute("SELECT * FROM ep_fornecedores WHERE ativo=1 ORDER BY nome COLLATE NOCASE").fetchall()
     if request.method == 'POST':
-        forn_id  = request.form.get('fornecedor_id')
-        data_e   = request.form.get('data_entrada')
-        num_nf   = request.form.get('numero_nf', '').strip()
-        valor    = request.form.get('valor', '').replace(',', '.')
-        tipo_pag = request.form.get('tipo_pagamento', 'prazo')
+        forn_id   = request.form.get('fornecedor_id')
+        data_e    = request.form.get('data_entrada')
+        num_nf    = request.form.get('numero_nf', '').strip()
+        valor     = request.form.get('valor', '').replace(',', '.')
+        tipo_pag  = request.form.get('tipo_pagamento', 'prazo')
         data_venc = request.form.get('data_vencimento') or None
-        pago     = 1 if request.form.get('pago') else 0
-        obs      = request.form.get('obs', '').strip()
+        pago      = 1 if request.form.get('pago') else 0
+        obs       = request.form.get('obs', '').strip()
+        pedido_id = request.form.get('pedido_id') or None
         try:
             valor = float(valor)
         except ValueError:
@@ -3435,12 +3459,17 @@ def ep_novo():
             return render_template('ep_form.html', fornecedores=fornecedores, lancamento=None)
         db.execute('''
             INSERT INTO ep_lancamentos
-              (fornecedor_id, data_entrada, numero_nf, valor, tipo_pagamento, data_vencimento, pago, obs)
-            VALUES (?,?,?,?,?,?,?,?)
-        ''', (forn_id, data_e, num_nf, valor, tipo_pag, data_venc, pago, obs))
+              (fornecedor_id, data_entrada, numero_nf, valor, tipo_pagamento, data_vencimento, pago, obs, pedido_id)
+            VALUES (?,?,?,?,?,?,?,?,?)
+        ''', (forn_id, data_e, num_nf, valor, tipo_pag, data_venc, pago, obs, pedido_id))
+        if pedido_id:
+            db.execute('''
+                UPDATE pedidos SET status='recebido', recebido_por='Entrada Produtos', recebido_em=?
+                WHERE id=? AND status='aberto'
+            ''', (_dt.now().strftime('%Y-%m-%d %H:%M'), pedido_id))
         db.commit()
         db.close()
-        flash('Lançamento registrado com sucesso.', 'success')
+        flash('Lançamento registrado com sucesso.' + (' Pedido dado como recebido.' if pedido_id else ''), 'success')
         return redirect(url_for('ep_lista'))
     db.close()
     return render_template('ep_form.html', fornecedores=fornecedores, lancamento=None)

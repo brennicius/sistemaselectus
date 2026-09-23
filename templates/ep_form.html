@@ -22,7 +22,7 @@
       <div class="mb-3">
         <label class="form-label fw-semibold">Fornecedor <span class="text-danger">*</span></label>
         <div class="d-flex gap-2">
-          <select name="fornecedor_id" class="form-select" required>
+          <select name="fornecedor_id" id="sel_fornecedor" class="form-select" required onchange="carregarPedidos()">
             <option value="">Selecione...</option>
             {% for f in fornecedores %}
             <option value="{{ f.id }}" {{ 'selected' if lancamento and lancamento.fornecedor_id == f.id }}>
@@ -34,6 +34,16 @@
             <i class="bi bi-building"></i>
           </a>
         </div>
+      </div>
+
+      <div class="mb-3" id="div_pedido" style="display:none">
+        <label class="form-label fw-semibold">
+          <i class="bi bi-cart3 me-1 text-warning"></i>Vincular a Pedido em Aberto
+        </label>
+        <select name="pedido_id" id="sel_pedido" class="form-select">
+          <option value="">— Nenhum pedido vinculado —</option>
+        </select>
+        <div class="form-text">Ao vincular, o pedido será marcado automaticamente como recebido.</div>
       </div>
 
       <div class="row g-3 mb-3">
@@ -111,5 +121,28 @@ function toggleVenc() {
   document.getElementById('div_vencimento').style.display = vista ? 'none' : '';
 }
 toggleVenc();
+
+async function carregarPedidos() {
+  const fornId = document.getElementById('sel_fornecedor').value;
+  const divPedido = document.getElementById('div_pedido');
+  const sel = document.getElementById('sel_pedido');
+  sel.innerHTML = '<option value="">— Nenhum pedido vinculado —</option>';
+  if (!fornId) { divPedido.style.display = 'none'; return; }
+  const res = await fetch(`/api/pedidos-abertos/${fornId}`);
+  const pedidos = await res.json();
+  if (pedidos.length === 0) { divPedido.style.display = 'none'; return; }
+  pedidos.forEach(p => {
+    const label = [
+      p.data_prevista ? `Entrega: ${p.data_prevista}` : null,
+      p.valor_previsto ? `R$ ${p.valor_previsto.toFixed(2).replace('.', ',')}` : null,
+      p.obs ? p.obs.substring(0, 40) : null
+    ].filter(Boolean).join(' · ');
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = label || `Pedido #${p.id}`;
+    sel.appendChild(opt);
+  });
+  divPedido.style.display = '';
+}
 </script>
 {% endblock %}
