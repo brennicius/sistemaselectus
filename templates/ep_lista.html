@@ -150,10 +150,10 @@
             {% elif vencida %}
               <span class="fw-semibold text-danger">{{ l.data_vencimento | data_br }} <i class="bi bi-exclamation-circle"></i></span>
               <form method="POST" action="{{ url_for('ep_set_prevista', id=l.id) }}"
-                    class="d-flex gap-1 mt-1" title="Agendar nova data">
-                <input type="date" name="data_prevista_pgto" class="form-control form-control-sm" style="width:140px" required>
-                <button type="submit" class="btn btn-sm btn-outline-primary px-2" title="Confirmar">
-                  <i class="bi bi-calendar-plus"></i>
+                    class="d-flex gap-1 mt-1">
+                <input type="date" name="data_prevista_pgto" class="form-control form-control-sm" style="width:150px" required>
+                <button type="submit" class="btn btn-sm btn-primary">
+                  <i class="bi bi-floppy me-1"></i>Salvar
                 </button>
               </form>
             {% else %}
