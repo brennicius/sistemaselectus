@@ -2167,9 +2167,12 @@ def count_alertas():
 
 @app.context_processor
 def inject_alertas():
-    db = get_db()
-    n_ped = db.execute("SELECT COUNT(*) FROM pedidos WHERE status='aberto'").fetchone()[0]
-    db.close()
+    try:
+        db = get_db()
+        n_ped = db.execute("SELECT COUNT(*) FROM pedidos WHERE status='aberto'").fetchone()[0]
+        db.close()
+    except Exception:
+        n_ped = 0
     return dict(n_alertas=count_alertas(), n_pedidos_abertos=n_ped)
 
 # ── Previsão de Produção ─────────────────────────────────────
