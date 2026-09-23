@@ -3284,6 +3284,7 @@ def _consumo_insumos_periodo(db, pdv, desde, ate=None):
 
 @app.route('/pedidos')
 def pedidos_lista():
+    from datetime import datetime as _dt
     db = get_db()
     pedidos = db.execute('''
         SELECT p.*, f.nome AS fornecedor_nome
@@ -3293,7 +3294,9 @@ def pedidos_lista():
     ''').fetchall()
     em_aberto = sum(1 for p in pedidos if p['status'] == 'aberto')
     db.close()
-    return render_template('pedidos_lista.html', pedidos=pedidos, em_aberto=em_aberto)
+    now = _dt.now()
+    return render_template('pedidos_lista.html', pedidos=pedidos, em_aberto=em_aberto,
+                           now_date=now.strftime('%Y-%m-%d'), now_time=now.strftime('%H:%M'))
 
 
 @app.route('/pedidos/novo', methods=['GET', 'POST'])
@@ -3357,10 +3360,18 @@ def pedidos_editar(id):
 def pedidos_receber(id):
     from datetime import datetime as _dt
     recebido_por = request.form.get('recebido_por', '').strip()
+    data_rec = request.form.get('data_recebimento', '').strip()
+    hora_rec = request.form.get('hora_recebimento', '').strip()
+    if data_rec and hora_rec:
+        recebido_em = f"{data_rec} {hora_rec}"
+    elif data_rec:
+        recebido_em = data_rec
+    else:
+        recebido_em = _dt.now().strftime('%Y-%m-%d %H:%M')
     db = get_db()
     db.execute('''
         UPDATE pedidos SET status='recebido', recebido_por=?, recebido_em=? WHERE id=?
-    ''', (recebido_por, _dt.now().strftime('%Y-%m-%d %H:%M'), id))
+    ''', (recebido_por, recebido_em, id))
     db.commit()
     db.close()
     flash('Pedido marcado como recebido.', 'success')

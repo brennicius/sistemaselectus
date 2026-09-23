@@ -67,7 +67,9 @@
           <td>
             {% if p.recebido_por %}
               <span class="small">{{ p.recebido_por }}</span>
-              <span class="text-muted small d-block">{{ p.recebido_em }}</span>
+              <span class="text-muted small d-block">
+                {{ p.recebido_em.replace('-', '/') if p.recebido_em else '' }}
+              </span>
             {% else %}
               <span class="text-muted">—</span>
             {% endif %}
@@ -126,8 +128,22 @@
         </div>
         <div class="modal-body">
           <p class="small text-muted mb-3">Pedido: <strong>{{ p.fornecedor_nome }}</strong></p>
-          <label class="form-label fw-semibold">Quem recebeu? <span class="text-danger">*</span></label>
-          <input type="text" name="recebido_por" class="form-control" placeholder="Nome do responsável" required autofocus>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Quem recebeu? <span class="text-danger">*</span></label>
+            <input type="text" name="recebido_por" class="form-control" placeholder="Nome do responsável" required autofocus>
+          </div>
+          <div class="row g-2">
+            <div class="col-7">
+              <label class="form-label fw-semibold">Data <span class="text-danger">*</span></label>
+              <input type="date" name="data_recebimento" class="form-control"
+                     value="{{ now_date }}" required>
+            </div>
+            <div class="col-5">
+              <label class="form-label fw-semibold">Horário <span class="text-danger">*</span></label>
+              <input type="time" name="hora_recebimento" class="form-control"
+                     value="{{ now_time }}" required>
+            </div>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
