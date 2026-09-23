@@ -3483,77 +3483,6 @@ def pedidos_excluir(id):
     return redirect(url_for('pedidos_lista'))
 
 
-# ── Fornecedores (catálogo de insumos por fornecedor) ────────────────────────
-
-@app.route('/fornecedores')
-def fornecedores_lista():
-    db = get_db()
-    # garante coluna ep_fornecedor_id
-    try:
-        db.execute('ALTER TABLE insumos ADD COLUMN ep_fornecedor_id INTEGER REFERENCES ep_fornecedores(id)')
-        db.commit()
-    except Exception:
-        pass
-    fornecedores = db.execute('''
-        SELECT f.*, COUNT(i.id) AS total_insumos
-        FROM ep_fornecedores f
-        LEFT JOIN insumos i ON i.ep_fornecedor_id = f.id
-        GROUP BY f.id
-        ORDER BY f.nome COLLATE NOCASE
-    ''').fetchall()
-    db.close()
-    return render_template('fornecedores_lista.html', fornecedores=fornecedores)
-
-
-@app.route('/fornecedores/<int:forn_id>')
-def fornecedor_detalhe(forn_id):
-    db = get_db()
-    forn = db.execute('SELECT * FROM ep_fornecedores WHERE id=?', (forn_id,)).fetchone()
-    if not forn:
-        db.close()
-        return 'Fornecedor não encontrado', 404
-    insumos = db.execute('''
-        SELECT * FROM insumos WHERE ep_fornecedor_id=? ORDER BY nome COLLATE NOCASE
-    ''', (forn_id,)).fetchall()
-    db.close()
-    return render_template('fornecedor_detalhe.html', forn=forn, insumos=insumos)
-
-
-@app.route('/fornecedores/<int:forn_id>/insumo/novo', methods=['GET', 'POST'])
-def fornecedor_insumo_novo(forn_id):
-    db = get_db()
-    forn = db.execute('SELECT * FROM ep_fornecedores WHERE id=?', (forn_id,)).fetchone()
-    if not forn:
-        db.close()
-        return 'Fornecedor não encontrado', 404
-    if request.method == 'POST':
-        nome     = request.form.get('nome', '').strip()
-        uc       = request.form.get('unidade_compra', '').strip()
-        preco    = request.form.get('preco_compra', '').replace(',', '.').strip()
-        uu       = request.form.get('unidade_uso', '').strip()
-        qtd_emb  = request.form.get('qtd_por_embalagem', '').replace(',', '.').strip()
-        categoria = request.form.get('categoria', '').strip()
-        try:
-            preco_f = float(preco) if preco else None
-        except ValueError:
-            preco_f = None
-        try:
-            qtd_emb_f = float(qtd_emb) if qtd_emb else None
-        except ValueError:
-            qtd_emb_f = None
-        db.execute('''
-            INSERT INTO insumos (nome, unidade_compra, preco_compra, unidade_uso,
-                                 qtd_por_embalagem, fornecedor, ep_fornecedor_id, categoria)
-            VALUES (?,?,?,?,?,?,?,?)
-        ''', (nome, uc, preco_f, uu, qtd_emb_f, forn['nome'], forn_id, categoria or None))
-        db.commit()
-        db.close()
-        flash(f'Insumo "{nome}" cadastrado para {forn["nome"]}.', 'success')
-        return redirect(url_for('fornecedor_detalhe', forn_id=forn_id))
-    db.close()
-    return render_template('fornecedor_insumo_form.html', forn=forn)
-
-
 # ── Entrada Produtos ──────────────────────────────────────────────────────────
 
 @app.route('/api/pedidos-abertos/<int:forn_id>')
@@ -3765,26 +3694,6 @@ def ep_fornecedor_renomear(id):
     return redirect(next_url)
 
 
-@app.route('/entrada-produtos/fornecedores/<int:id>/excluir', methods=['POST'])
-def ep_fornecedor_excluir(id):
-    db = get_db()
-    em_uso = db.execute(
-        'SELECT COUNT(*) FROM ep_lancamentos WHERE fornecedor_id=? UNION ALL SELECT COUNT(*) FROM pedidos WHERE fornecedor_id=?',
-        (id, id)
-    ).fetchall()
-    total_uso = sum(r[0] for r in em_uso)
-    next_url = request.form.get('next') or url_for('ep_fornecedores')
-    if total_uso:
-        flash('Fornecedor possui lançamentos ou pedidos — não pode ser excluído.', 'danger')
-    else:
-        nome = db.execute('SELECT nome FROM ep_fornecedores WHERE id=?', (id,)).fetchone()
-        if nome:
-            db.execute('UPDATE insumos SET ep_fornecedor_id=NULL WHERE ep_fornecedor_id=?', (id,))
-            db.execute('DELETE FROM ep_fornecedores WHERE id=?', (id,))
-            db.commit()
-            flash(f'Fornecedor "{nome["nome"]}" excluído.', 'success')
-    db.close()
-    return redirect(next_url)
 
 
 @app.route('/cafe')
