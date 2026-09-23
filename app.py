@@ -3423,14 +3423,28 @@ def api_pedidos_abertos(forn_id):
 @app.route('/entrada-produtos')
 def ep_lista():
     db = get_db()
-    lancamentos = db.execute('''
-        SELECT l.*, f.nome AS fornecedor_nome,
-               p.data_prevista AS ped_data, p.valor_previsto AS ped_valor
-        FROM ep_lancamentos l
-        JOIN ep_fornecedores f ON f.id = l.fornecedor_id
-        LEFT JOIN pedidos p ON p.id = l.pedido_id
-        ORDER BY l.data_entrada DESC, l.id DESC
-    ''').fetchall()
+    # garante que a coluna pedido_id existe (migration segura)
+    try:
+        db.execute('ALTER TABLE ep_lancamentos ADD COLUMN pedido_id INTEGER REFERENCES pedidos(id)')
+        db.commit()
+    except Exception:
+        pass
+    try:
+        lancamentos = db.execute('''
+            SELECT l.*, f.nome AS fornecedor_nome,
+                   p.data_prevista AS ped_data, p.valor_previsto AS ped_valor
+            FROM ep_lancamentos l
+            JOIN ep_fornecedores f ON f.id = l.fornecedor_id
+            LEFT JOIN pedidos p ON p.id = l.pedido_id
+            ORDER BY l.data_entrada DESC, l.id DESC
+        ''').fetchall()
+    except Exception:
+        lancamentos = db.execute('''
+            SELECT l.*, f.nome AS fornecedor_nome
+            FROM ep_lancamentos l
+            JOIN ep_fornecedores f ON f.id = l.fornecedor_id
+            ORDER BY l.data_entrada DESC, l.id DESC
+        ''').fetchall()
     pendentes = sum(1 for r in lancamentos if not r['confirmado_fin'])
     db.close()
     return render_template('ep_lista.html', lancamentos=lancamentos, pendentes=pendentes)
