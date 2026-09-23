@@ -5328,15 +5328,24 @@ def fluxo_caixa():
         return render_template('fluxo_login.html')
 
     db = get_db()
-    # garante colunas mesmo em DB importado sem migrações
-    for col_sql in [
+    # garante tabelas/colunas mesmo em DB importado sem migrações
+    for sql in [
         'ALTER TABLE ep_lancamentos ADD COLUMN data_prevista_pgto TEXT',
+        'CREATE TABLE IF NOT EXISTS fluxo_clientes (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, ativo INTEGER NOT NULL DEFAULT 1)',
         'CREATE TABLE IF NOT EXISTS fluxo_entradas (id INTEGER PRIMARY KEY AUTOINCREMENT, data TEXT NOT NULL, descricao TEXT, valor REAL NOT NULL, criado_em TEXT DEFAULT (datetime(\'now\',\'localtime\')))',
+        'ALTER TABLE fluxo_entradas ADD COLUMN cliente_id INTEGER REFERENCES fluxo_clientes(id)',
+        'CREATE TABLE IF NOT EXISTS fluxo_categorias (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL CHECK(tipo IN (\'custo\',\'despesa\')), nome TEXT NOT NULL, ativo INTEGER NOT NULL DEFAULT 1)',
+        'CREATE TABLE IF NOT EXISTS fluxo_saidas (id INTEGER PRIMARY KEY AUTOINCREMENT, data TEXT NOT NULL, descricao TEXT, valor REAL NOT NULL, categoria_id INTEGER REFERENCES fluxo_categorias(id), criado_em TEXT DEFAULT (datetime(\'now\',\'localtime\')))',
     ]:
         try:
-            db.execute(col_sql); db.commit()
+            db.execute(sql); db.commit()
         except Exception:
             pass
+    # clientes padrão
+    for nome in ['Cris', 'Amaro', 'Izabel', 'Portugues']:
+        if not db.execute('SELECT 1 FROM fluxo_clientes WHERE nome=?', (nome,)).fetchone():
+            db.execute('INSERT INTO fluxo_clientes (nome) VALUES (?)', (nome,))
+    db.commit()
 
     hoje = str(_date.today())
 
