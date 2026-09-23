@@ -83,10 +83,13 @@
         </div>
       </div>
 
-      <div class="mb-3" id="div_vencimento">
-        <label class="form-label fw-semibold">Data de Vencimento</label>
-        <input type="date" name="data_vencimento" class="form-control"
-               value="{{ lancamento.data_vencimento or '' if lancamento else '' }}">
+      <div id="div_vencimento">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Nº de Parcelas</label>
+          <input type="number" name="parcelas" id="inp_parcelas" class="form-control" min="1" max="24"
+                 value="{{ 1 }}" style="max-width:120px" oninput="gerarParcelas()">
+        </div>
+        <div id="div_datas_parcelas"></div>
       </div>
 
       <div class="mb-3">
@@ -119,7 +122,47 @@
 function toggleVenc() {
   const vista = document.getElementById('pag_vista').checked;
   document.getElementById('div_vencimento').style.display = vista ? 'none' : '';
+  if (!vista) gerarParcelas();
 }
+
+function gerarParcelas() {
+  const n = parseInt(document.getElementById('inp_parcelas').value) || 1;
+  const container = document.getElementById('div_datas_parcelas');
+  container.innerHTML = '';
+
+  if (n === 1) {
+    container.innerHTML = `
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Data de Vencimento</label>
+        <input type="date" name="data_vencimento_0" class="form-control" style="max-width:220px">
+      </div>`;
+    return;
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'card border-warning mb-3';
+  wrapper.innerHTML = `<div class="card-header fw-semibold text-warning-emphasis bg-warning-subtle py-2">
+    <i class="bi bi-calendar-range me-1"></i>Datas de Vencimento das Parcelas
+  </div>`;
+  const body = document.createElement('div');
+  body.className = 'card-body py-2';
+
+  for (let i = 0; i < n; i++) {
+    const row = document.createElement('div');
+    row.className = 'row g-2 align-items-center mb-2';
+    row.innerHTML = `
+      <div class="col-auto">
+        <span class="badge bg-secondary" style="min-width:80px">Parcela ${i+1}/${n}</span>
+      </div>
+      <div class="col-auto">
+        <input type="date" name="data_vencimento_${i}" class="form-control form-control-sm" style="width:180px" required>
+      </div>`;
+    body.appendChild(row);
+  }
+  wrapper.appendChild(body);
+  container.appendChild(wrapper);
+}
+
 toggleVenc();
 
 async function carregarPedidos() {

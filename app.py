@@ -3541,21 +3541,35 @@ def ep_novo():
         num_nf    = request.form.get('numero_nf', '').strip()
         valor     = request.form.get('valor', '').replace(',', '.')
         tipo_pag  = request.form.get('tipo_pagamento', 'prazo')
-        data_venc = request.form.get('data_vencimento') or None
         pago      = 1 if request.form.get('pago') else 0
         obs       = request.form.get('obs', '').strip()
         pedido_id = request.form.get('pedido_id') or None
+        parcelas  = int(request.form.get('parcelas') or 1)
         try:
             valor = float(valor)
         except ValueError:
             flash('Valor inválido.', 'danger')
             db.close()
             return render_template('ep_form.html', fornecedores=fornecedores, lancamento=None)
-        db.execute('''
-            INSERT INTO ep_lancamentos
-              (fornecedor_id, data_entrada, numero_nf, valor, tipo_pagamento, data_vencimento, pago, obs, pedido_id)
-            VALUES (?,?,?,?,?,?,?,?,?)
-        ''', (forn_id, data_e, num_nf, valor, tipo_pag, data_venc, pago, obs, pedido_id))
+
+        if tipo_pag == 'prazo' and parcelas > 1:
+            valor_parcela = round(valor / parcelas, 2)
+            for i in range(parcelas):
+                data_venc_i = request.form.get(f'data_vencimento_{i}') or None
+                obs_parcela = f'Parcela {i+1}/{parcelas}' + (f' — {obs}' if obs else '')
+                db.execute('''
+                    INSERT INTO ep_lancamentos
+                      (fornecedor_id, data_entrada, numero_nf, valor, tipo_pagamento, data_vencimento, pago, obs, pedido_id)
+                    VALUES (?,?,?,?,?,?,?,?,?)
+                ''', (forn_id, data_e, num_nf, valor_parcela, tipo_pag, data_venc_i, pago, obs_parcela, pedido_id if i == 0 else None))
+        else:
+            data_venc = request.form.get('data_vencimento_0') or None
+            db.execute('''
+                INSERT INTO ep_lancamentos
+                  (fornecedor_id, data_entrada, numero_nf, valor, tipo_pagamento, data_vencimento, pago, obs, pedido_id)
+                VALUES (?,?,?,?,?,?,?,?,?)
+            ''', (forn_id, data_e, num_nf, valor, tipo_pag, data_venc, pago, obs, pedido_id))
+
         if pedido_id:
             db.execute('''
                 UPDATE pedidos SET status='recebido', recebido_por='Entrada Produtos', recebido_em=?
@@ -3563,7 +3577,8 @@ def ep_novo():
             ''', (_dt.now().strftime('%Y-%m-%d %H:%M'), pedido_id))
         db.commit()
         db.close()
-        flash('Lançamento registrado com sucesso.' + (' Pedido dado como recebido.' if pedido_id else ''), 'success')
+        msg = f'{parcelas} parcelas registradas.' if parcelas > 1 else 'Lançamento registrado com sucesso.'
+        flash(msg + (' Pedido dado como recebido.' if pedido_id else ''), 'success')
         return redirect(url_for('ep_lista'))
     db.close()
     return render_template('ep_form.html', fornecedores=fornecedores, lancamento=None)
