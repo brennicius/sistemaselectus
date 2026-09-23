@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Clientes — Fluxo de Caixa{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <h1><i class="bi bi-people me-2"></i>Clientes</h1>
+    <p class="mb-0">Cadastro de clientes para o Fluxo de Caixa.</p>
+  </div>
+  <a href="{{ url_for('fluxo_caixa') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Voltar ao Fluxo
+  </a>
+</div>
+
+<div class="row g-3" style="max-width:600px">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold" style="background:#1a3a5c;color:#fff">
+        <i class="bi bi-plus-circle me-2"></i>Novo Cliente
+      </div>
+      <div class="card-body">
+        <form method="POST" class="d-flex gap-2">
+          <input type="hidden" name="acao" value="add">
+          <input type="text" name="nome" class="form-control" placeholder="Nome do cliente" required>
+          <button type="submit" class="btn btn-primary px-4">Adicionar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold" style="background:#1a3a5c;color:#fff">
+        <i class="bi bi-list-ul me-2"></i>Clientes Cadastrados
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0 align-middle">
+          <thead class="table-dark">
+            <tr><th>Nome</th><th class="text-center">Status</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for c in clientes %}
+            <tr>
+              <td class="fw-semibold">{{ c.nome }}</td>
+              <td class="text-center">
+                <form method="POST" class="d-inline">
+                  <input type="hidden" name="acao" value="toggle">
+                  <input type="hidden" name="id" value="{{ c.id }}">
+                  <button type="submit" class="btn btn-sm {{ 'btn-success' if c.ativo else 'btn-secondary' }}">
+                    {{ 'Ativo' if c.ativo else 'Inativo' }}
+                  </button>
+                </form>
+              </td>
+              <td class="text-end">
+                <form method="POST" class="d-inline"
+                      onsubmit="return confirm('Excluir {{ c.nome }}?')">
+                  <input type="hidden" name="acao" value="excluir">
+                  <input type="hidden" name="id" value="{{ c.id }}">
+                  <button type="submit" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-trash3"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-muted text-center py-3">Nenhum cliente cadastrado.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

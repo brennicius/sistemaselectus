@@ -5,40 +5,57 @@
 <style>
   tr.row-vencida td { background-color: #ffe5cc !important; }
   .matriz-table th, .matriz-table td { white-space: nowrap; font-size: .82rem; }
-  .matriz-table td.val-saida  { color: #dc3545; font-weight: 600; }
-  .matriz-table td.val-entrada{ color: #198754; font-weight: 600; }
+  .matriz-table td.val-saida   { color: #dc3545; font-weight: 600; }
+  .matriz-table td.val-entrada { color: #198754; font-weight: 600; }
   .matriz-table td.val-saldo-pos { color: #198754; font-weight: 700; }
   .matriz-table td.val-saldo-neg { color: #dc3545; font-weight: 700; }
   .matriz-table .col-total { background: #f8f9fa; font-weight: 700; }
 </style>
 
+{# ── Cabeçalho ── #}
 <div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
   <div>
     <h1><i class="bi bi-cash-coin me-2"></i>Fluxo de Caixa</h1>
-    <p class="mb-0">Visão financeira dos lançamentos de entrada de produtos.</p>
+    <p class="mb-0">Visão financeira completa.</p>
   </div>
-  <form method="POST" action="{{ url_for('fluxo_logout') }}">
-    <button type="submit" class="btn btn-outline-secondary btn-sm">
-      <i class="bi bi-lock me-1"></i>Sair
-    </button>
-  </form>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{{ url_for('fluxo_clientes') }}" class="btn btn-outline-info btn-sm">
+      <i class="bi bi-people me-1"></i>Clientes
+    </a>
+    <a href="{{ url_for('fluxo_categorias') }}" class="btn btn-outline-warning btn-sm">
+      <i class="bi bi-tags me-1"></i>Categorias
+    </a>
+    <form method="POST" action="{{ url_for('fluxo_logout') }}" class="d-inline">
+      <button type="submit" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-lock me-1"></i>Sair
+      </button>
+    </form>
+  </div>
 </div>
 
-{# ── Cards de resumo ── #}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }} py-2 small alert-dismissible fade show">
+      {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  {% endfor %}
+{% endwith %}
+
+{# ── Cards resumo EP ── #}
 <div class="row g-3 mb-4">
   <div class="col-6 col-md-3">
     <div class="card shadow-sm border-0 h-100" style="background:#1a3a5c;color:#fff">
       <div class="card-body">
-        <div class="small text-white-50 mb-1">Total Geral</div>
-        <div style="font-size:1.6rem;font-weight:700">R$ {{ '{:,.2f}'.format(total_geral).replace(',','X').replace('.',',').replace('X','.') }}</div>
+        <div class="small text-white-50 mb-1">Total Geral NF</div>
+        <div style="font-size:1.5rem;font-weight:700">R$ {{ '{:,.2f}'.format(total_geral).replace(',','X').replace('.',',').replace('X','.') }}</div>
       </div>
     </div>
   </div>
   <div class="col-6 col-md-3">
     <div class="card shadow-sm border-0 h-100" style="background:#198754;color:#fff">
       <div class="card-body">
-        <div class="small text-white-50 mb-1">Total Pago</div>
-        <div style="font-size:1.6rem;font-weight:700">R$ {{ '{:,.2f}'.format(total_pago).replace(',','X').replace('.',',').replace('X','.') }}</div>
+        <div class="small text-white-50 mb-1">Pago</div>
+        <div style="font-size:1.5rem;font-weight:700">R$ {{ '{:,.2f}'.format(total_pago).replace(',','X').replace('.',',').replace('X','.') }}</div>
       </div>
     </div>
   </div>
@@ -46,7 +63,7 @@
     <div class="card shadow-sm border-0 h-100" style="background:#ffc107;color:#000">
       <div class="card-body">
         <div class="small mb-1" style="opacity:.7">Pendente</div>
-        <div style="font-size:1.6rem;font-weight:700">R$ {{ '{:,.2f}'.format(total_pendente).replace(',','X').replace('.',',').replace('X','.') }}</div>
+        <div style="font-size:1.5rem;font-weight:700">R$ {{ '{:,.2f}'.format(total_pendente).replace(',','X').replace('.',',').replace('X','.') }}</div>
       </div>
     </div>
   </div>
@@ -54,32 +71,27 @@
     <div class="card shadow-sm border-0 h-100" style="background:#dc3545;color:#fff">
       <div class="card-body">
         <div class="small text-white-50 mb-1">Vencido (sem previsão)</div>
-        <div style="font-size:1.6rem;font-weight:700">R$ {{ '{:,.2f}'.format(total_vencido).replace(',','X').replace('.',',').replace('X','.') }}</div>
+        <div style="font-size:1.5rem;font-weight:700">R$ {{ '{:,.2f}'.format(total_vencido).replace(',','X').replace('.',',').replace('X','.') }}</div>
       </div>
     </div>
   </div>
 </div>
 
-{# ── Tabela de lançamentos ── #}
+{# ── Tabela de lançamentos EP ── #}
 {% if lancamentos %}
 <div class="card shadow-sm mb-4">
   <div class="card-header fw-semibold" style="background:#1a3a5c;color:#fff">
-    <i class="bi bi-list-ul me-2"></i>Todos os Lançamentos
+    <i class="bi bi-list-ul me-2"></i>Lançamentos de Entrada de Produtos (NF)
   </div>
   <div class="card-body p-0">
     <div class="table-responsive">
       <table class="table table-hover mb-0 align-middle">
         <thead class="table-dark">
           <tr>
-            <th>Data Entrada</th>
-            <th>Fornecedor</th>
-            <th>Nº NF</th>
-            <th class="text-end">Valor (R$)</th>
-            <th class="text-center">Pagamento</th>
-            <th class="text-center">Vencimento</th>
-            <th class="text-center">Previsto</th>
-            <th class="text-center">Status</th>
-            <th class="text-center">Financeiro</th>
+            <th>Data Entrada</th><th>Fornecedor</th><th>Nº NF</th>
+            <th class="text-end">Valor</th><th class="text-center">Pagamento</th>
+            <th class="text-center">Vencimento</th><th class="text-center">Previsto</th>
+            <th class="text-center">Status</th><th class="text-center">Financeiro</th>
           </tr>
         </thead>
         <tbody>
@@ -92,43 +104,30 @@
             <td class="text-muted small">{{ l.numero_nf or '—' }}</td>
             <td class="text-end fw-semibold">R$ {{ '{:,.2f}'.format(l.valor).replace(',','X').replace('.',',').replace('X','.') }}</td>
             <td class="text-center">
-              {% if l.tipo_pagamento == 'vista' %}
-                <span class="badge bg-info text-dark">À Vista</span>
-              {% else %}
-                <span class="badge bg-secondary">À Prazo</span>
-              {% endif %}
+              <span class="badge {{ 'bg-info text-dark' if l.tipo_pagamento == 'vista' else 'bg-secondary' }}">
+                {{ 'À Vista' if l.tipo_pagamento == 'vista' else 'À Prazo' }}
+              </span>
             </td>
             <td class="text-center text-nowrap">{{ l.data_vencimento | data_br }}</td>
             <td class="text-center text-nowrap">
               {% if l['data_prevista_pgto'] %}
                 <span class="badge bg-primary">{{ l['data_prevista_pgto'] | data_br }}</span>
-              {% else %}
-                <span class="text-muted">—</span>
-              {% endif %}
+              {% else %}—{% endif %}
             </td>
             <td class="text-center">
-              {% if l.pago %}
-                <span class="badge bg-success"><i class="bi bi-check-lg me-1"></i>Pago</span>
-              {% elif vencida %}
-                <span class="badge bg-danger">Vencido</span>
-              {% else %}
-                <span class="badge bg-warning text-dark">Pendente</span>
-              {% endif %}
+              {% if l.pago %}<span class="badge bg-success">Pago</span>
+              {% elif vencida %}<span class="badge bg-danger">Vencido</span>
+              {% else %}<span class="badge bg-warning text-dark">Pendente</span>{% endif %}
             </td>
             <td class="text-center">
-              {% if l.confirmado_fin %}
-                <span class="badge bg-success"><i class="bi bi-check2-all"></i> Conf.</span>
-              {% else %}
-                <span class="badge bg-light text-muted border">Não conf.</span>
-              {% endif %}
+              {% if l.confirmado_fin %}<span class="badge bg-success"><i class="bi bi-check2-all"></i> Conf.</span>
+              {% else %}<span class="badge bg-light text-muted border">Não conf.</span>{% endif %}
             </td>
           </tr>
           {% if l.obs %}
-          <tr class="{{ 'table-success' if l.confirmado_fin and l.pago else ('table-warning' if l.confirmado_fin else 'table-light') }}">
-            <td colspan="9" class="py-1 ps-4 small text-muted fst-italic">
-              <i class="bi bi-chat-left-text me-1"></i>{{ l.obs }}
-            </td>
-          </tr>
+          <tr><td colspan="9" class="py-1 ps-4 small text-muted fst-italic">
+            <i class="bi bi-chat-left-text me-1"></i>{{ l.obs }}
+          </td></tr>
           {% endif %}
           {% endfor %}
         </tbody>
@@ -138,11 +137,11 @@
 </div>
 {% endif %}
 
-{# ── Matriz Fluxo de Caixa ── #}
+{# ── Matriz de Fluxo ── #}
 <div id="matriz" class="card shadow-sm mb-4">
   <div class="card-header d-flex justify-content-between align-items-center" style="background:#1a3a5c;color:#fff">
     <span class="fw-semibold"><i class="bi bi-table me-2"></i>Matriz de Fluxo</span>
-    <small class="text-white-50">Saídas por fornecedor × data prevista | Entradas de clientes</small>
+    <small class="text-white-50">Saídas (NF pendentes) × data prevista | Entradas de clientes</small>
   </div>
   <div class="card-body p-0">
     {% if not datas_matriz %}
@@ -153,57 +152,40 @@
         <thead class="table-dark">
           <tr>
             <th style="min-width:180px">Fornecedor / Entrada</th>
-            {% for d in datas_matriz %}
-            <th class="text-center">{{ d | data_br }}</th>
-            {% endfor %}
+            {% for d in datas_matriz %}<th class="text-center">{{ d | data_br }}</th>{% endfor %}
             <th class="text-center col-total">Total</th>
           </tr>
         </thead>
         <tbody>
-          {# Linha de Entradas (receitas de clientes) #}
           <tr style="background:#d1e7dd">
             <td class="fw-semibold text-success"><i class="bi bi-arrow-down-circle me-1"></i>Entradas (clientes)</td>
             {% set total_ent = namespace(v=0) %}
             {% for d in datas_matriz %}
               {% set v = entradas_por_data.get(d, 0) %}
               {% set total_ent.v = total_ent.v + v %}
-              <td class="text-end val-entrada">
-                {% if v %} R$ {{ '{:,.2f}'.format(v).replace(',','X').replace('.',',').replace('X','.') }}{% else %}—{% endif %}
-              </td>
+              <td class="text-end val-entrada">{% if v %}R$ {{ '{:,.2f}'.format(v).replace(',','X').replace('.',',').replace('X','.') }}{% else %}—{% endif %}</td>
             {% endfor %}
-            <td class="text-end col-total val-entrada">
-              R$ {{ '{:,.2f}'.format(total_ent.v).replace(',','X').replace('.',',').replace('X','.') }}
-            </td>
+            <td class="text-end col-total val-entrada">R$ {{ '{:,.2f}'.format(total_ent.v).replace(',','X').replace('.',',').replace('X','.') }}</td>
           </tr>
-
-          {# Linhas de saídas por fornecedor #}
           {% for forn in fornecedores_matriz %}
           {% set total_forn = namespace(v=0) %}
           <tr>
             <td class="fw-semibold"><i class="bi bi-arrow-up-circle me-1 text-danger"></i>{{ forn }}</td>
             {% for d in datas_matriz %}
-              {% set v = saidas.get(forn, {}).get(d, 0) %}
+              {% set v = saidas_matriz.get(forn, {}).get(d, 0) %}
               {% set total_forn.v = total_forn.v + v %}
-              <td class="text-end val-saida">
-                {% if v %} R$ {{ '{:,.2f}'.format(v).replace(',','X').replace('.',',').replace('X','.') }}{% else %}—{% endif %}
-              </td>
+              <td class="text-end val-saida">{% if v %}R$ {{ '{:,.2f}'.format(v).replace(',','X').replace('.',',').replace('X','.') }}{% else %}—{% endif %}</td>
             {% endfor %}
-            <td class="text-end col-total val-saida">
-              R$ {{ '{:,.2f}'.format(total_forn.v).replace(',','X').replace('.',',').replace('X','.') }}
-            </td>
+            <td class="text-end col-total val-saida">R$ {{ '{:,.2f}'.format(total_forn.v).replace(',','X').replace('.',',').replace('X','.') }}</td>
           </tr>
           {% endfor %}
-
-          {# Linha de Saldo por data #}
           <tr style="background:#f8f9fa;border-top:2px solid #dee2e6">
             <td class="fw-bold">Saldo do Dia</td>
             {% set total_saldo = namespace(v=0) %}
             {% for d in datas_matriz %}
               {% set ent = entradas_por_data.get(d, 0) %}
               {% set sai = namespace(v=0) %}
-              {% for forn in fornecedores_matriz %}
-                {% set sai.v = sai.v + saidas.get(forn, {}).get(d, 0) %}
-              {% endfor %}
+              {% for forn in fornecedores_matriz %}{% set sai.v = sai.v + saidas_matriz.get(forn, {}).get(d, 0) %}{% endfor %}
               {% set saldo = ent - sai.v %}
               {% set total_saldo.v = total_saldo.v + saldo %}
               <td class="text-end fw-bold {{ 'val-saldo-pos' if saldo >= 0 else 'val-saldo-neg' }}">
@@ -221,74 +203,202 @@
   </div>
 </div>
 
-{# ── Lançar Entrada Manual ── #}
-<div class="card shadow-sm mb-4" style="max-width:560px">
-  <div class="card-header fw-semibold" style="background:#198754;color:#fff">
-    <i class="bi bi-plus-circle me-2"></i>Lançar Entrada de Clientes
-  </div>
-  <div class="card-body">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% for cat, msg in messages %}
-        <div class="alert alert-{{ cat }} py-2 small">{{ msg }}</div>
-      {% endfor %}
-    {% endwith %}
-    <form method="POST" action="{{ url_for('fluxo_entrada_add') }}">
-      <div class="row g-2 align-items-end">
-        <div class="col-sm-4">
-          <label class="form-label small fw-semibold mb-1">Data <span class="text-danger">*</span></label>
-          <input type="date" name="data" class="form-control form-control-sm" required>
-        </div>
-        <div class="col-sm-4">
-          <label class="form-label small fw-semibold mb-1">Valor (R$) <span class="text-danger">*</span></label>
-          <input type="text" name="valor" class="form-control form-control-sm" placeholder="0,00" required>
-        </div>
-        <div class="col-sm-4">
-          <label class="form-label small fw-semibold mb-1">Descrição</label>
-          <input type="text" name="descricao" class="form-control form-control-sm" placeholder="Ex: Receita PDV">
-        </div>
-        <div class="col-auto">
-          <button type="submit" class="btn btn-success btn-sm">
-            <i class="bi bi-check-lg me-1"></i>Adicionar
-          </button>
-        </div>
+{# ── Entradas de Clientes ── #}
+<div class="row g-3 mb-4">
+  <div class="col-lg-5">
+    <div class="card shadow-sm h-100">
+      <div class="card-header fw-semibold" style="background:#198754;color:#fff">
+        <i class="bi bi-plus-circle me-2"></i>Lançar Entrada de Clientes
       </div>
-    </form>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('fluxo_entrada_add') }}">
+          <div class="mb-2">
+            <label class="form-label small fw-semibold mb-1">Cliente</label>
+            <select name="cliente_id" class="form-select form-select-sm">
+              <option value="">— Selecione —</option>
+              {% for c in clientes %}
+              <option value="{{ c.id }}">{{ c.nome }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <label class="form-label small fw-semibold mb-1">Data <span class="text-danger">*</span></label>
+              <input type="date" name="data" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold mb-1">Valor (R$) <span class="text-danger">*</span></label>
+              <input type="text" name="valor" class="form-control form-control-sm" placeholder="0,00" required>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold mb-1">Descrição</label>
+            <input type="text" name="descricao" class="form-control form-control-sm" placeholder="Ex: Receita PDV">
+          </div>
+          <button type="submit" class="btn btn-success btn-sm w-100">
+            <i class="bi bi-check-lg me-1"></i>Adicionar Entrada
+          </button>
+        </form>
+      </div>
+    </div>
   </div>
+
+  {% if entradas_db %}
+  <div class="col-lg-7">
+    <div class="card shadow-sm h-100">
+      <div class="card-header fw-semibold py-2" style="background:#1a3a5c;color:#fff">
+        <i class="bi bi-clock-history me-2"></i>Entradas Lançadas
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0 align-middle">
+          <thead class="table-dark">
+            <tr><th>Data</th><th>Cliente</th><th>Descrição</th><th class="text-end">Valor</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for e in entradas_db %}
+            <tr>
+              <td class="text-nowrap">{{ e.data | data_br }}</td>
+              <td class="small fw-semibold">{{ e.cliente_nome or '—' }}</td>
+              <td class="text-muted small">{{ e.descricao or '—' }}</td>
+              <td class="text-end fw-semibold text-success">R$ {{ '{:,.2f}'.format(e.valor).replace(',','X').replace('.',',').replace('X','.') }}</td>
+              <td>
+                <form method="POST" action="{{ url_for('fluxo_entrada_excluir', id=e.id) }}"
+                      onsubmit="return confirm('Remover?')">
+                  <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1">
+                    <i class="bi bi-trash3" style="font-size:.75rem"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 </div>
 
-{# Histórico de entradas manuais #}
-{% if entradas_db %}
-<div class="card shadow-sm mb-4" style="max-width:560px">
-  <div class="card-header fw-semibold py-2" style="background:#1a3a5c;color:#fff">
-    <i class="bi bi-clock-history me-2"></i>Entradas Lançadas
+{# ── Custos e Despesas ── #}
+<div id="saidas" class="row g-3 mb-4">
+  <div class="col-lg-5">
+    <div class="card shadow-sm h-100">
+      <div class="card-header fw-semibold" style="background:#dc3545;color:#fff">
+        <i class="bi bi-plus-circle me-2"></i>Lançar Custo / Despesa
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('fluxo_saida_add') }}">
+          <div class="mb-2">
+            <label class="form-label small fw-semibold mb-1">Categoria <span class="text-danger">*</span></label>
+            <select name="categoria_id" class="form-select form-select-sm" required>
+              <option value="">— Selecione —</option>
+              {% set custos = categorias | selectattr('tipo','equalto','custo') | list %}
+              {% set despesas = categorias | selectattr('tipo','equalto','despesa') | list %}
+              {% if custos %}
+              <optgroup label="── Custos ──">
+                {% for c in custos %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
+              </optgroup>
+              {% endif %}
+              {% if despesas %}
+              <optgroup label="── Despesas ──">
+                {% for c in despesas %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
+              </optgroup>
+              {% endif %}
+            </select>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <label class="form-label small fw-semibold mb-1">Data <span class="text-danger">*</span></label>
+              <input type="date" name="data" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold mb-1">Valor (R$) <span class="text-danger">*</span></label>
+              <input type="text" name="valor" class="form-control form-control-sm" placeholder="0,00" required>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold mb-1">Descrição</label>
+            <input type="text" name="descricao" class="form-control form-control-sm" placeholder="Detalhe opcional">
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-danger btn-sm flex-grow-1">
+              <i class="bi bi-check-lg me-1"></i>Registrar
+            </button>
+            <a href="{{ url_for('fluxo_categorias') }}" class="btn btn-outline-secondary btn-sm" title="Gerenciar categorias">
+              <i class="bi bi-tags"></i>
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
-  <div class="card-body p-0">
-    <table class="table table-sm mb-0 align-middle">
-      <thead class="table-dark">
-        <tr><th>Data</th><th>Descrição</th><th class="text-end">Valor</th><th></th></tr>
-      </thead>
-      <tbody>
-        {% for e in entradas_db %}
-        <tr>
-          <td class="text-nowrap">{{ e.data | data_br }}</td>
-          <td class="text-muted small">{{ e.descricao or '—' }}</td>
-          <td class="text-end fw-semibold text-success">
-            R$ {{ '{:,.2f}'.format(e.valor).replace(',','X').replace('.',',').replace('X','.') }}
-          </td>
-          <td class="text-end">
-            <form method="POST" action="{{ url_for('fluxo_entrada_excluir', id=e.id) }}" class="d-inline"
-                  onsubmit="return confirm('Remover esta entrada?')">
-              <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1">
-                <i class="bi bi-trash3" style="font-size:.75rem"></i>
-              </button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+
+  {% if grupos %}
+  <div class="col-lg-7">
+    <div class="card shadow-sm h-100">
+      <div class="card-header fw-semibold" style="background:#1a3a5c;color:#fff">
+        <i class="bi bi-bar-chart me-2"></i>Custos e Despesas por Categoria
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0 align-middle">
+          <thead class="table-dark">
+            <tr><th>Data</th><th>Descrição</th><th class="text-end">Valor</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for (tipo, cat_nome), rows in grupos.items() %}
+            <tr style="background:{{ '#fff0f0' if tipo == 'custo' else '#fffbe6' }}">
+              <td colspan="3" class="fw-bold py-2 px-3">
+                <span class="badge {{ 'bg-danger' if tipo == 'custo' else 'bg-warning text-dark' }} me-2">
+                  {{ 'Custo' if tipo == 'custo' else 'Despesa' }}
+                </span>
+                {{ cat_nome }}
+                <span class="ms-2 text-muted fw-normal small">
+                  Total: <strong>R$ {{ '{:,.2f}'.format(totais_grupo[(tipo, cat_nome)]).replace(',','X').replace('.',',').replace('X','.') }}</strong>
+                </span>
+              </td>
+              <td></td>
+            </tr>
+            {% for r in rows %}
+            <tr>
+              <td class="text-nowrap ps-4">{{ r.data | data_br }}</td>
+              <td class="text-muted small">{{ r.descricao or '—' }}</td>
+              <td class="text-end fw-semibold {{ 'text-danger' if tipo == 'custo' else 'text-warning' }}">
+                R$ {{ '{:,.2f}'.format(r.valor).replace(',','X').replace('.',',').replace('X','.') }}
+              </td>
+              <td>
+                <form method="POST" action="{{ url_for('fluxo_saida_excluir', id=r.id) }}"
+                      onsubmit="return confirm('Excluir?')">
+                  <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1">
+                    <i class="bi bi-trash3" style="font-size:.75rem"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+          </tbody>
+          <tfoot style="background:#f8f9fa">
+            <tr>
+              <td colspan="2" class="fw-bold text-danger">Total Custos</td>
+              <td class="text-end fw-bold text-danger">R$ {{ '{:,.2f}'.format(total_custos).replace(',','X').replace('.',',').replace('X','.') }}</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td colspan="2" class="fw-bold" style="color:#856404">Total Despesas</td>
+              <td class="text-end fw-bold" style="color:#856404">R$ {{ '{:,.2f}'.format(total_despesas).replace(',','X').replace('.',',').replace('X','.') }}</td>
+              <td></td>
+            </tr>
+            <tr style="border-top:2px solid #dee2e6">
+              <td colspan="2" class="fw-bold">Total Geral C+D</td>
+              <td class="text-end fw-bold">R$ {{ '{:,.2f}'.format(total_custos+total_despesas).replace(',','X').replace('.',',').replace('X','.') }}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
   </div>
+  {% endif %}
 </div>
-{% endif %}
 
 {% endblock %}

@@ -348,16 +348,47 @@ def init_db():
         db.commit()
     except Exception:
         pass
-    # tabela de entradas manuais do fluxo de caixa
-    db.execute('''
+    # tabelas do fluxo de caixa
+    db.executescript('''
+        CREATE TABLE IF NOT EXISTS fluxo_clientes (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome      TEXT NOT NULL,
+            ativo     INTEGER NOT NULL DEFAULT 1
+        );
         CREATE TABLE IF NOT EXISTS fluxo_entradas (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            data        TEXT NOT NULL,
-            descricao   TEXT,
-            valor       REAL NOT NULL,
-            criado_em   TEXT DEFAULT (datetime('now','localtime'))
-        )
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            data       TEXT NOT NULL,
+            descricao  TEXT,
+            valor      REAL NOT NULL,
+            cliente_id INTEGER REFERENCES fluxo_clientes(id),
+            criado_em  TEXT DEFAULT (datetime('now','localtime'))
+        );
+        CREATE TABLE IF NOT EXISTS fluxo_categorias (
+            id    INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo  TEXT NOT NULL CHECK(tipo IN ('custo','despesa')),
+            nome  TEXT NOT NULL,
+            ativo INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE TABLE IF NOT EXISTS fluxo_saidas (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            data         TEXT NOT NULL,
+            descricao    TEXT,
+            valor        REAL NOT NULL,
+            categoria_id INTEGER REFERENCES fluxo_categorias(id),
+            criado_em    TEXT DEFAULT (datetime('now','localtime'))
+        );
     ''')
+    # migration: cliente_id em fluxo_entradas
+    try:
+        db.execute('ALTER TABLE fluxo_entradas ADD COLUMN cliente_id INTEGER REFERENCES fluxo_clientes(id)')
+        db.commit()
+    except Exception:
+        pass
+    # clientes padrão
+    for nome in ['Cris', 'Amaro', 'Izabel', 'Portugues']:
+        exists = db.execute('SELECT 1 FROM fluxo_clientes WHERE nome=?', (nome,)).fetchone()
+        if not exists:
+            db.execute('INSERT INTO fluxo_clientes (nome) VALUES (?)', (nome,))
     db.commit()
     db.close()
 
@@ -5135,6 +5166,96 @@ def descartes_excluir(id):
     return redirect(url_for('descartes_lista'))
 
 
+# ── Fluxo: Clientes ──────────────────────────────────────────────────────────
+
+@app.route('/fluxo-caixa/clientes', methods=['GET', 'POST'])
+def fluxo_clientes():
+    from flask import session
+    if not session.get('fluxo_auth'):
+        return redirect(url_for('fluxo_caixa'))
+    db = get_db()
+    if request.method == 'POST':
+        acao = request.form.get('acao')
+        if acao == 'add':
+            nome = request.form.get('nome', '').strip()
+            if nome:
+                db.execute('INSERT INTO fluxo_clientes (nome) VALUES (?)', (nome,))
+                db.commit()
+        elif acao == 'toggle':
+            db.execute('UPDATE fluxo_clientes SET ativo=1-ativo WHERE id=?', (request.form.get('id'),))
+            db.commit()
+        elif acao == 'excluir':
+            db.execute('DELETE FROM fluxo_clientes WHERE id=?', (request.form.get('id'),))
+            db.commit()
+        db.close()
+        return redirect(url_for('fluxo_clientes'))
+    clientes = db.execute('SELECT * FROM fluxo_clientes ORDER BY nome COLLATE NOCASE').fetchall()
+    db.close()
+    return render_template('fluxo_clientes.html', clientes=clientes)
+
+# ── Fluxo: Categorias ────────────────────────────────────────────────────────
+
+@app.route('/fluxo-caixa/categorias', methods=['GET', 'POST'])
+def fluxo_categorias():
+    from flask import session
+    if not session.get('fluxo_auth'):
+        return redirect(url_for('fluxo_caixa'))
+    db = get_db()
+    if request.method == 'POST':
+        acao = request.form.get('acao')
+        if acao == 'add':
+            nome = request.form.get('nome', '').strip()
+            tipo = request.form.get('tipo', 'custo')
+            if nome and tipo in ('custo', 'despesa'):
+                db.execute('INSERT INTO fluxo_categorias (tipo, nome) VALUES (?,?)', (tipo, nome))
+                db.commit()
+        elif acao == 'toggle':
+            db.execute('UPDATE fluxo_categorias SET ativo=1-ativo WHERE id=?', (request.form.get('id'),))
+            db.commit()
+        elif acao == 'excluir':
+            db.execute('DELETE FROM fluxo_categorias WHERE id=?', (request.form.get('id'),))
+            db.commit()
+        db.close()
+        return redirect(url_for('fluxo_categorias'))
+    categorias = db.execute("SELECT * FROM fluxo_categorias ORDER BY tipo, nome COLLATE NOCASE").fetchall()
+    db.close()
+    return render_template('fluxo_categorias.html', categorias=categorias)
+
+# ── Fluxo: Lançar Saída (Custo/Despesa) ──────────────────────────────────────
+
+@app.route('/fluxo-caixa/saida', methods=['POST'])
+def fluxo_saida_add():
+    from flask import session
+    if not session.get('fluxo_auth'):
+        return redirect(url_for('fluxo_caixa'))
+    data  = request.form.get('data')
+    desc  = request.form.get('descricao', '').strip()
+    valor = request.form.get('valor', '').replace(',', '.')
+    cat_id = request.form.get('categoria_id') or None
+    try:
+        valor = float(valor)
+    except ValueError:
+        flash('Valor inválido.', 'danger')
+        return redirect(url_for('fluxo_caixa') + '#saidas')
+    db = get_db()
+    db.execute('INSERT INTO fluxo_saidas (data, descricao, valor, categoria_id) VALUES (?,?,?,?)',
+               (data, desc, valor, cat_id))
+    db.commit()
+    db.close()
+    flash('Lançamento registrado.', 'success')
+    return redirect(url_for('fluxo_caixa') + '#saidas')
+
+@app.route('/fluxo-caixa/saida/<int:id>/excluir', methods=['POST'])
+def fluxo_saida_excluir(id):
+    from flask import session
+    if not session.get('fluxo_auth'):
+        return redirect(url_for('fluxo_caixa'))
+    db = get_db()
+    db.execute('DELETE FROM fluxo_saidas WHERE id=?', (id,))
+    db.commit()
+    db.close()
+    return redirect(url_for('fluxo_caixa') + '#saidas')
+
 # ── Data prevista de pagamento (EP) ──────────────────────────────────────────
 
 @app.route('/entrada-produtos/<int:id>/prevista', methods=['POST'])
@@ -5177,8 +5298,10 @@ def fluxo_entrada_add():
     except ValueError:
         flash('Valor inválido.', 'danger')
         return redirect(url_for('fluxo_caixa'))
+    cliente_id = request.form.get('cliente_id') or None
     db = get_db()
-    db.execute('INSERT INTO fluxo_entradas (data, descricao, valor) VALUES (?,?,?)', (data, desc, valor))
+    db.execute('INSERT INTO fluxo_entradas (data, descricao, valor, cliente_id) VALUES (?,?,?,?)',
+               (data, desc, valor, cliente_id))
     db.commit()
     db.close()
     flash('Entrada registrada.', 'success')
@@ -5245,11 +5368,37 @@ def fluxo_caixa():
         saidas[l['fornecedor_nome']][data_ef] += l['valor']
         datas_set.add(data_ef)
 
-    entradas_db = db.execute('SELECT * FROM fluxo_entradas ORDER BY data, id').fetchall()
+    entradas_db = db.execute('''
+        SELECT e.*, c.nome AS cliente_nome
+        FROM fluxo_entradas e
+        LEFT JOIN fluxo_clientes c ON c.id = e.cliente_id
+        ORDER BY e.data, e.id
+    ''').fetchall()
     entradas_por_data = defaultdict(float)
     for e in entradas_db:
         datas_set.add(e['data'])
         entradas_por_data[e['data']] += e['valor']
+
+    # saídas (custos e despesas)
+    saidas_db = db.execute('''
+        SELECT s.*, cat.nome AS cat_nome, cat.tipo AS cat_tipo
+        FROM fluxo_saidas s
+        LEFT JOIN fluxo_categorias cat ON cat.id = s.categoria_id
+        ORDER BY s.data DESC, s.id DESC
+    ''').fetchall()
+
+    # agrupamento por categoria
+    from collections import OrderedDict
+    grupos = OrderedDict()  # {(tipo, cat_nome): [rows]}
+    for s in saidas_db:
+        key = (s['cat_tipo'] or 'custo', s['cat_nome'] or 'Sem categoria')
+        grupos.setdefault(key, []).append(s)
+    totais_grupo = {k: sum(r['valor'] for r in v) for k, v in grupos.items()}
+    total_custos   = sum(r['valor'] for r in saidas_db if r['cat_tipo'] == 'custo')
+    total_despesas = sum(r['valor'] for r in saidas_db if r['cat_tipo'] == 'despesa')
+
+    clientes   = db.execute('SELECT * FROM fluxo_clientes WHERE ativo=1 ORDER BY nome COLLATE NOCASE').fetchall()
+    categorias = db.execute("SELECT * FROM fluxo_categorias WHERE ativo=1 ORDER BY tipo, nome COLLATE NOCASE").fetchall()
 
     datas_matriz = sorted(datas_set)
     fornecedores_matriz = sorted(saidas.keys())
@@ -5264,9 +5413,16 @@ def fluxo_caixa():
         hoje=hoje,
         datas_matriz=datas_matriz,
         fornecedores_matriz=fornecedores_matriz,
-        saidas=dict(saidas),
+        saidas_matriz=dict(saidas),
         entradas_por_data=dict(entradas_por_data),
-        entradas_db=entradas_db)
+        entradas_db=entradas_db,
+        saidas_db=saidas_db,
+        grupos=grupos,
+        totais_grupo=totais_grupo,
+        total_custos=total_custos,
+        total_despesas=total_despesas,
+        clientes=clientes,
+        categorias=categorias)
 
 # ─────────────────────────────────────────────────────────────────────────────
 

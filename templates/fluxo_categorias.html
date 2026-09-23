@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Categorias — Fluxo de Caixa{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <h1><i class="bi bi-tags me-2"></i>Categorias de Custos e Despesas</h1>
+    <p class="mb-0">Categorias para agrupamento de lançamentos no Fluxo de Caixa.</p>
+  </div>
+  <a href="{{ url_for('fluxo_caixa') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Voltar ao Fluxo
+  </a>
+</div>
+
+<div class="row g-3" style="max-width:700px">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold" style="background:#1a3a5c;color:#fff">
+        <i class="bi bi-plus-circle me-2"></i>Nova Categoria
+      </div>
+      <div class="card-body">
+        <form method="POST" class="row g-2">
+          <input type="hidden" name="acao" value="add">
+          <div class="col-sm-4">
+            <select name="tipo" class="form-select" required>
+              <option value="custo">Custo</option>
+              <option value="despesa">Despesa</option>
+            </select>
+          </div>
+          <div class="col-sm-6">
+            <input type="text" name="nome" class="form-control" placeholder="Nome da categoria" required>
+          </div>
+          <div class="col-sm-2">
+            <button type="submit" class="btn btn-primary w-100">Adicionar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {% for tipo_label, tipo_key, cor in [('Custos','custo','danger'), ('Despesas','despesa','warning')] %}
+  {% set lista = categorias | selectattr('tipo', 'equalto', tipo_key) | list %}
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold bg-{{ cor }} {{ 'text-dark' if cor == 'warning' else 'text-white' }}">
+        <i class="bi bi-tag me-2"></i>{{ tipo_label }}
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0 align-middle">
+          <thead class="table-dark">
+            <tr><th>Categoria</th><th class="text-center">Status</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for c in lista %}
+            <tr>
+              <td class="fw-semibold">{{ c.nome }}</td>
+              <td class="text-center">
+                <form method="POST" class="d-inline">
+                  <input type="hidden" name="acao" value="toggle">
+                  <input type="hidden" name="id" value="{{ c.id }}">
+                  <button type="submit" class="btn btn-sm {{ 'btn-success' if c.ativo else 'btn-secondary' }}">
+                    {{ 'Ativa' if c.ativo else 'Inativa' }}
+                  </button>
+                </form>
+              </td>
+              <td class="text-end">
+                <form method="POST" class="d-inline"
+                      onsubmit="return confirm('Excluir {{ c.nome }}?')">
+                  <input type="hidden" name="acao" value="excluir">
+                  <input type="hidden" name="id" value="{{ c.id }}">
+                  <button type="submit" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-trash3"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-muted text-center py-3">Nenhuma categoria de {{ tipo_label | lower }}.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
