@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Lançamento de Pedidos{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+  <div>
+    <h1><i class="bi bi-cart3 me-2"></i>Lançamento de Pedidos</h1>
+    <p class="mb-0">Pedidos feitos a fornecedores — acompanhe o status de recebimento.</p>
+  </div>
+  <a href="{{ url_for('pedidos_novo') }}" class="btn btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>Novo Pedido
+  </a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }} alert-dismissible fade show py-2">{{ msg }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  {% endfor %}
+{% endwith %}
+
+{% if em_aberto > 0 %}
+<div class="alert alert-warning d-flex align-items-center gap-2 py-2">
+  <i class="bi bi-clock-history fs-5"></i>
+  <span><strong>{{ em_aberto }}</strong> pedido{{ 's' if em_aberto > 1 }} em aberto aguardando recebimento.</span>
+</div>
+{% endif %}
+
+{% if not pedidos %}
+<div class="alert alert-info">Nenhum pedido lançado ainda.</div>
+{% else %}
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Fornecedor</th>
+          <th class="text-end">Valor Previsto</th>
+          <th class="text-center">Entrega Prevista</th>
+          <th class="text-center">Status</th>
+          <th>Recebido por</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in pedidos %}
+        <tr class="{{ 'table-success' if p.status == 'recebido' else '' }}">
+          <td class="fw-semibold">{{ p.fornecedor_nome }}</td>
+          <td class="text-end">
+            {% if p.valor_previsto %}
+              R$ {{ '{:,.2f}'.format(p.valor_previsto).replace(',','X').replace('.',',').replace('X','.') }}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-center text-nowrap">
+            {{ p.data_prevista or '—' }}
+          </td>
+          <td class="text-center">
+            {% if p.status == 'recebido' %}
+              <span class="badge bg-success"><i class="bi bi-check2-all me-1"></i>Recebido</span>
+            {% else %}
+              <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Em aberto</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if p.recebido_por %}
+              <span class="small">{{ p.recebido_por }}</span>
+              <span class="text-muted small d-block">{{ p.recebido_em }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-end text-nowrap">
+            {% if p.status == 'aberto' %}
+              <button type="button" class="btn btn-sm btn-success me-1"
+                      data-bs-toggle="modal" data-bs-target="#modalReceber{{ p.id }}">
+                <i class="bi bi-box-seam me-1"></i>Receber
+              </button>
+            {% else %}
+              <form method="POST" action="{{ url_for('pedidos_reabrir', id=p.id) }}" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-outline-warning me-1"
+                        onclick="return confirm('Reabrir este pedido?')">
+                  <i class="bi bi-arrow-counterclockwise"></i>
+                </button>
+              </form>
+            {% endif %}
+            <a href="{{ url_for('pedidos_editar', id=p.id) }}" class="btn btn-sm btn-outline-secondary me-1">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <form method="POST" action="{{ url_for('pedidos_excluir', id=p.id) }}" class="d-inline"
+                  onsubmit="return confirm('Excluir este pedido?')">
+              <button type="submit" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash3"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% if p.obs %}
+        <tr class="{{ 'table-success' if p.status == 'recebido' else 'table-light' }}">
+          <td colspan="6" class="py-1 ps-4 small text-muted fst-italic">
+            <i class="bi bi-chat-left-text me-1"></i>{{ p.obs }}
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# Modais de recebimento #}
+{% for p in pedidos %}
+{% if p.status == 'aberto' %}
+<div class="modal fade" id="modalReceber{{ p.id }}" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <form method="POST" action="{{ url_for('pedidos_receber', id=p.id) }}">
+      <div class="modal-content">
+        <div class="modal-header" style="background:#1a3a5c">
+          <h6 class="modal-title text-white">
+            <i class="bi bi-box-seam me-2"></i>Confirmar Recebimento
+          </h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-muted mb-3">Pedido: <strong>{{ p.fornecedor_nome }}</strong></p>
+          <label class="form-label fw-semibold">Quem recebeu? <span class="text-danger">*</span></label>
+          <input type="text" name="recebido_por" class="form-control" placeholder="Nome do responsável" required autofocus>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success btn-sm">
+            <i class="bi bi-check-lg me-1"></i>Confirmar Recebimento
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endblock %}

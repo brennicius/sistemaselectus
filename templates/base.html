@@ -131,6 +131,10 @@
     <a href="{{ url_for('ep_lista') }}" class="{{ 'active' if 'ep_' in request.endpoint }}">
       <i class="bi bi-box-arrow-in-down"></i> Entrada Produtos
     </a>
+    <a href="{{ url_for('pedidos_lista') }}" class="{{ 'active' if 'pedidos' in request.endpoint }}" style="justify-content:space-between">
+      <span><i class="bi bi-cart3 me-2"></i>Lançamento de Pedidos</span>
+      {% if n_pedidos_abertos > 0 %}<span class="badge bg-warning text-dark">{{ n_pedidos_abertos }}</span>{% endif %}
+    </a>
     <a href="{{ url_for('alertas') }}" class="{{ 'active' if request.endpoint == 'alertas' }}" style="justify-content:space-between">
       <span><i class="bi bi-archive me-2"></i>Estoque</span>
       {% if n_alertas > 0 %}<span class="badge bg-danger">{{ n_alertas }}</span>{% endif %}

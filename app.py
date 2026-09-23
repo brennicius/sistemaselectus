@@ -288,6 +288,18 @@ def init_db():
             nome TEXT NOT NULL UNIQUE,
             ativo INTEGER NOT NULL DEFAULT 1
         );
+        CREATE TABLE IF NOT EXISTS pedidos (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            fornecedor_id       INTEGER NOT NULL,
+            valor_previsto      REAL,
+            data_prevista       TEXT,
+            status              TEXT NOT NULL DEFAULT 'aberto',
+            recebido_por        TEXT,
+            recebido_em         TEXT,
+            obs                 TEXT,
+            criado_em           TEXT DEFAULT (datetime('now','localtime')),
+            FOREIGN KEY (fornecedor_id) REFERENCES ep_fornecedores(id)
+        );
         CREATE TABLE IF NOT EXISTS ep_lancamentos (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
             fornecedor_id       INTEGER NOT NULL,
@@ -2155,7 +2167,10 @@ def count_alertas():
 
 @app.context_processor
 def inject_alertas():
-    return dict(n_alertas=count_alertas())
+    db = get_db()
+    n_ped = db.execute("SELECT COUNT(*) FROM pedidos WHERE status='aberto'").fetchone()[0]
+    db.close()
+    return dict(n_alertas=count_alertas(), n_pedidos_abertos=n_ped)
 
 # ── Previsão de Produção ─────────────────────────────────────
 def _norm_reg_name(s):
@@ -3252,6 +3267,113 @@ def _consumo_insumos_periodo(db, pdv, desde, ate=None):
                     for ins in comp_map[col]:
                         insumo_g[ins['nome']] = insumo_g.get(ins['nome'], 0) + delta * ins['gram']
     return {nome: round(g / 1000, 4) for nome, g in insumo_g.items()}
+
+
+# ── Lançamento de Pedidos ────────────────────────────────────────────────────
+
+@app.route('/pedidos')
+def pedidos_lista():
+    db = get_db()
+    pedidos = db.execute('''
+        SELECT p.*, f.nome AS fornecedor_nome
+        FROM pedidos p
+        JOIN ep_fornecedores f ON f.id = p.fornecedor_id
+        ORDER BY p.status ASC, p.data_prevista ASC, p.id DESC
+    ''').fetchall()
+    em_aberto = sum(1 for p in pedidos if p['status'] == 'aberto')
+    db.close()
+    return render_template('pedidos_lista.html', pedidos=pedidos, em_aberto=em_aberto)
+
+
+@app.route('/pedidos/novo', methods=['GET', 'POST'])
+def pedidos_novo():
+    db = get_db()
+    fornecedores = db.execute("SELECT * FROM ep_fornecedores WHERE ativo=1 ORDER BY nome COLLATE NOCASE").fetchall()
+    if request.method == 'POST':
+        forn_id       = request.form.get('fornecedor_id')
+        valor_prev    = request.form.get('valor_previsto', '').replace(',', '.') or None
+        data_prev     = request.form.get('data_prevista') or None
+        obs           = request.form.get('obs', '').strip()
+        if valor_prev:
+            try:
+                valor_prev = float(valor_prev)
+            except ValueError:
+                valor_prev = None
+        db.execute(
+            'INSERT INTO pedidos (fornecedor_id, valor_previsto, data_prevista, obs) VALUES (?,?,?,?)',
+            (forn_id, valor_prev, data_prev, obs)
+        )
+        db.commit()
+        db.close()
+        flash('Pedido lançado com sucesso.', 'success')
+        return redirect(url_for('pedidos_lista'))
+    db.close()
+    return render_template('pedidos_form.html', fornecedores=fornecedores, pedido=None)
+
+
+@app.route('/pedidos/<int:id>/editar', methods=['GET', 'POST'])
+def pedidos_editar(id):
+    db = get_db()
+    pedido = db.execute('SELECT * FROM pedidos WHERE id=?', (id,)).fetchone()
+    fornecedores = db.execute("SELECT * FROM ep_fornecedores WHERE ativo=1 ORDER BY nome COLLATE NOCASE").fetchall()
+    if not pedido:
+        db.close()
+        flash('Pedido não encontrado.', 'danger')
+        return redirect(url_for('pedidos_lista'))
+    if request.method == 'POST':
+        forn_id    = request.form.get('fornecedor_id')
+        valor_prev = request.form.get('valor_previsto', '').replace(',', '.') or None
+        data_prev  = request.form.get('data_prevista') or None
+        obs        = request.form.get('obs', '').strip()
+        if valor_prev:
+            try:
+                valor_prev = float(valor_prev)
+            except ValueError:
+                valor_prev = None
+        db.execute(
+            'UPDATE pedidos SET fornecedor_id=?, valor_previsto=?, data_prevista=?, obs=? WHERE id=?',
+            (forn_id, valor_prev, data_prev, obs, id)
+        )
+        db.commit()
+        db.close()
+        flash('Pedido atualizado.', 'success')
+        return redirect(url_for('pedidos_lista'))
+    db.close()
+    return render_template('pedidos_form.html', fornecedores=fornecedores, pedido=pedido)
+
+
+@app.route('/pedidos/<int:id>/receber', methods=['POST'])
+def pedidos_receber(id):
+    from datetime import datetime as _dt
+    recebido_por = request.form.get('recebido_por', '').strip()
+    db = get_db()
+    db.execute('''
+        UPDATE pedidos SET status='recebido', recebido_por=?, recebido_em=? WHERE id=?
+    ''', (recebido_por, _dt.now().strftime('%Y-%m-%d %H:%M'), id))
+    db.commit()
+    db.close()
+    flash('Pedido marcado como recebido.', 'success')
+    return redirect(url_for('pedidos_lista'))
+
+
+@app.route('/pedidos/<int:id>/reabrir', methods=['POST'])
+def pedidos_reabrir(id):
+    db = get_db()
+    db.execute("UPDATE pedidos SET status='aberto', recebido_por=NULL, recebido_em=NULL WHERE id=?", (id,))
+    db.commit()
+    db.close()
+    flash('Pedido reaberto.', 'warning')
+    return redirect(url_for('pedidos_lista'))
+
+
+@app.route('/pedidos/<int:id>/excluir', methods=['POST'])
+def pedidos_excluir(id):
+    db = get_db()
+    db.execute('DELETE FROM pedidos WHERE id=?', (id,))
+    db.commit()
+    db.close()
+    flash('Pedido excluído.', 'success')
+    return redirect(url_for('pedidos_lista'))
 
 
 # ── Entrada Produtos ──────────────────────────────────────────────────────────

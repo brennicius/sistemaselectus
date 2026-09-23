@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar Pedido' if pedido else 'Novo Pedido' }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>
+    <i class="bi bi-cart3 me-2"></i>
+    {{ 'Editar Pedido' if pedido else 'Novo Pedido' }}
+  </h1>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }} py-2">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<div class="card shadow-sm" style="max-width:560px">
+  <div class="card-body">
+    <form method="POST">
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Fornecedor <span class="text-danger">*</span></label>
+        <div class="d-flex gap-2">
+          <select name="fornecedor_id" class="form-select" required>
+            <option value="">Selecione...</option>
+            {% for f in fornecedores %}
+            <option value="{{ f.id }}" {{ 'selected' if pedido and pedido.fornecedor_id == f.id }}>
+              {{ f.nome }}
+            </option>
+            {% endfor %}
+          </select>
+          <a href="{{ url_for('ep_fornecedores') }}" class="btn btn-outline-secondary" title="Gerenciar fornecedores">
+            <i class="bi bi-building"></i>
+          </a>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold">Valor Previsto (R$)</label>
+          <input type="text" name="valor_previsto" class="form-control" placeholder="0,00"
+                 value="{{ '%.2f'|format(pedido.valor_previsto) if pedido and pedido.valor_previsto else '' }}">
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold">Data Prevista de Entrega</label>
+          <input type="date" name="data_prevista" class="form-control"
+                 value="{{ pedido.data_prevista or '' if pedido else '' }}">
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="form-label fw-semibold">Observações</label>
+        <textarea name="obs" class="form-control" rows="2" placeholder="Itens do pedido, condições, etc.">{{ pedido.obs or '' if pedido else '' }}</textarea>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1"></i>{{ 'Salvar' if pedido else 'Lançar Pedido' }}
+        </button>
+        <a href="{{ url_for('pedidos_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+
+    </form>
+  </div>
+</div>
+{% endblock %}
