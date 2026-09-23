@@ -342,6 +342,23 @@ def init_db():
         db.commit()
     except Exception:
         pass
+    # migration: data_prevista_pgto em ep_lancamentos
+    try:
+        db.execute('ALTER TABLE ep_lancamentos ADD COLUMN data_prevista_pgto TEXT')
+        db.commit()
+    except Exception:
+        pass
+    # tabela de entradas manuais do fluxo de caixa
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS fluxo_entradas (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            data        TEXT NOT NULL,
+            descricao   TEXT,
+            valor       REAL NOT NULL,
+            criado_em   TEXT DEFAULT (datetime('now','localtime'))
+        )
+    ''')
+    db.commit()
     db.close()
 
 def _recalcular_historico_fichas(db, insumo_id):
@@ -5114,6 +5131,17 @@ def descartes_excluir(id):
     return redirect(url_for('descartes_lista'))
 
 
+# ── Data prevista de pagamento (EP) ──────────────────────────────────────────
+
+@app.route('/entrada-produtos/<int:id>/prevista', methods=['POST'])
+def ep_set_prevista(id):
+    data = request.form.get('data_prevista_pgto') or None
+    db = get_db()
+    db.execute('UPDATE ep_lancamentos SET data_prevista_pgto=? WHERE id=?', (data, id))
+    db.commit()
+    db.close()
+    return redirect(url_for('ep_lista'))
+
 # ── Fluxo de Caixa ───────────────────────────────────────────────────────────
 
 @app.route('/fluxo-caixa/login', methods=['POST'])
@@ -5132,10 +5160,42 @@ def fluxo_logout():
     session.pop('fluxo_auth', None)
     return redirect(url_for('index'))
 
+@app.route('/fluxo-caixa/entrada', methods=['POST'])
+def fluxo_entrada_add():
+    from flask import session
+    if not session.get('fluxo_auth'):
+        return redirect(url_for('fluxo_caixa'))
+    data  = request.form.get('data')
+    desc  = request.form.get('descricao', '').strip()
+    valor = request.form.get('valor', '').replace(',', '.')
+    try:
+        valor = float(valor)
+    except ValueError:
+        flash('Valor inválido.', 'danger')
+        return redirect(url_for('fluxo_caixa'))
+    db = get_db()
+    db.execute('INSERT INTO fluxo_entradas (data, descricao, valor) VALUES (?,?,?)', (data, desc, valor))
+    db.commit()
+    db.close()
+    flash('Entrada registrada.', 'success')
+    return redirect(url_for('fluxo_caixa') + '#matriz')
+
+@app.route('/fluxo-caixa/entrada/<int:id>/excluir', methods=['POST'])
+def fluxo_entrada_excluir(id):
+    from flask import session
+    if not session.get('fluxo_auth'):
+        return redirect(url_for('fluxo_caixa'))
+    db = get_db()
+    db.execute('DELETE FROM fluxo_entradas WHERE id=?', (id,))
+    db.commit()
+    db.close()
+    return redirect(url_for('fluxo_caixa') + '#matriz')
+
 @app.route('/fluxo-caixa')
 def fluxo_caixa():
     from flask import session
     from datetime import date as _date
+    from collections import defaultdict
     autenticado = session.get('fluxo_auth', False)
     if not autenticado:
         return render_template('fluxo_login.html')
@@ -5150,12 +5210,35 @@ def fluxo_caixa():
         ORDER BY l.data_entrada DESC, l.id DESC
     ''').fetchall()
 
-    total_geral   = sum(l['valor'] for l in lancamentos)
-    total_pago    = sum(l['valor'] for l in lancamentos if l['pago'])
-    total_pendente= sum(l['valor'] for l in lancamentos if not l['pago'])
-    total_vencido = sum(l['valor'] for l in lancamentos
-                        if not l['pago'] and l['tipo_pagamento'] == 'prazo'
-                        and l['data_vencimento'] and l['data_vencimento'] < hoje)
+    total_geral    = sum(l['valor'] for l in lancamentos)
+    total_pago     = sum(l['valor'] for l in lancamentos if l['pago'])
+    total_pendente = sum(l['valor'] for l in lancamentos if not l['pago'])
+    total_vencido  = sum(l['valor'] for l in lancamentos
+                         if not l['pago'] and l['tipo_pagamento'] == 'prazo'
+                         and l['data_vencimento'] and l['data_vencimento'] < hoje
+                         and not l['data_prevista_pgto'])
+
+    # ── Matriz de fluxo ──────────────────────────────────────────────────────
+    # Apenas lançamentos não pagos com data efetiva definida
+    saidas = defaultdict(lambda: defaultdict(float))  # saidas[fornecedor][data] = valor
+    datas_set = set()
+    for l in lancamentos:
+        if l['pago']:
+            continue
+        data_ef = l['data_prevista_pgto'] or l['data_vencimento']
+        if not data_ef:
+            continue
+        saidas[l['fornecedor_nome']][data_ef] += l['valor']
+        datas_set.add(data_ef)
+
+    entradas_db = db.execute('SELECT * FROM fluxo_entradas ORDER BY data, id').fetchall()
+    entradas_por_data = defaultdict(float)
+    for e in entradas_db:
+        datas_set.add(e['data'])
+        entradas_por_data[e['data']] += e['valor']
+
+    datas_matriz = sorted(datas_set)
+    fornecedores_matriz = sorted(saidas.keys())
 
     db.close()
     return render_template('fluxo_caixa.html',
@@ -5164,7 +5247,12 @@ def fluxo_caixa():
         total_pago=total_pago,
         total_pendente=total_pendente,
         total_vencido=total_vencido,
-        hoje=hoje)
+        hoje=hoje,
+        datas_matriz=datas_matriz,
+        fornecedores_matriz=fornecedores_matriz,
+        saidas=dict(saidas),
+        entradas_por_data=dict(entradas_por_data),
+        entradas_db=entradas_db)
 
 # ─────────────────────────────────────────────────────────────────────────────
 

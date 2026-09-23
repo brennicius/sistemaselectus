@@ -119,7 +119,7 @@
       </thead>
       <tbody>
         {% for l in lancamentos %}
-        {% set vencida = l.tipo_pagamento == 'prazo' and l.data_vencimento and l.data_vencimento < hoje and not l.pago %}
+        {% set vencida = l.tipo_pagamento == 'prazo' and l.data_vencimento and l.data_vencimento < hoje and not l.pago and not l['data_prevista_pgto'] %}
         {% set row_class = 'table-success' if l.confirmado_fin and l.pago else ('row-vencida' if vencida else ('table-warning' if l.confirmado_fin else '')) %}
         <tr class="{{ row_class }}"
             data-data="{{ l.data_entrada or '' }}"
@@ -142,8 +142,20 @@
             {% endif %}
           </td>
           <td class="text-center text-nowrap">
-            {% if vencida %}
+            {% if l['data_prevista_pgto'] %}
+              <span class="fw-semibold text-primary" title="Previsto: {{ l['data_prevista_pgto'] | data_br }} · Venc. orig.: {{ l.data_vencimento | data_br }}">
+                <i class="bi bi-calendar-check me-1"></i>{{ l['data_prevista_pgto'] | data_br }}
+              </span>
+              <div class="small text-muted" style="font-size:.7rem">orig: {{ l.data_vencimento | data_br }}</div>
+            {% elif vencida %}
               <span class="fw-semibold text-danger">{{ l.data_vencimento | data_br }} <i class="bi bi-exclamation-circle"></i></span>
+              <form method="POST" action="{{ url_for('ep_set_prevista', id=l.id) }}"
+                    class="d-flex gap-1 mt-1" title="Agendar nova data">
+                <input type="date" name="data_prevista_pgto" class="form-control form-control-sm" style="width:140px" required>
+                <button type="submit" class="btn btn-sm btn-outline-primary px-2" title="Confirmar">
+                  <i class="bi bi-calendar-plus"></i>
+                </button>
+              </form>
             {% else %}
               {{ l.data_vencimento | data_br }}
             {% endif %}
