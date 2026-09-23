@@ -174,9 +174,21 @@
             {% for d in datas_matriz %}
               {% set v = saidas_matriz.get(forn, {}).get(d, 0) %}
               {% set total_forn.v = total_forn.v + v %}
-              <td class="text-end val-saida">{% if v %}R$ {{ '{:,.2f}'.format(v).replace(',','X').replace('.',',').replace('X','.') }}{% else %}—{% endif %}</td>
+              <td class="text-end val-saida">{% if v %}-R$ {{ '{:,.2f}'.format(v).replace(',','X').replace('.',',').replace('X','.') }}{% else %}—{% endif %}</td>
             {% endfor %}
-            <td class="text-end col-total val-saida">R$ {{ '{:,.2f}'.format(total_forn.v).replace(',','X').replace('.',',').replace('X','.') }}</td>
+            <td class="text-end col-total val-saida">-R$ {{ '{:,.2f}'.format(total_forn.v).replace(',','X').replace('.',',').replace('X','.') }}</td>
+          </tr>
+          {% endfor %}
+          {% for cat in cats_matriz %}
+          {% set total_cat = namespace(v=0) %}
+          <tr>
+            <td class="fw-semibold"><i class="bi bi-arrow-up-circle me-1 text-danger"></i>{{ cat }}</td>
+            {% for d in datas_matriz %}
+              {% set v = saidas_cat_matriz.get(cat, {}).get(d, 0) %}
+              {% set total_cat.v = total_cat.v + v %}
+              <td class="text-end val-saida">{% if v %}-R$ {{ '{:,.2f}'.format(v).replace(',','X').replace('.',',').replace('X','.') }}{% else %}—{% endif %}</td>
+            {% endfor %}
+            <td class="text-end col-total val-saida">-R$ {{ '{:,.2f}'.format(total_cat.v).replace(',','X').replace('.',',').replace('X','.') }}</td>
           </tr>
           {% endfor %}
           <tr style="background:#f8f9fa;border-top:2px solid #dee2e6">
@@ -186,6 +198,7 @@
               {% set ent = entradas_por_data.get(d, 0) %}
               {% set sai = namespace(v=0) %}
               {% for forn in fornecedores_matriz %}{% set sai.v = sai.v + saidas_matriz.get(forn, {}).get(d, 0) %}{% endfor %}
+              {% for cat in cats_matriz %}{% set sai.v = sai.v + saidas_cat_matriz.get(cat, {}).get(d, 0) %}{% endfor %}
               {% set saldo = ent - sai.v %}
               {% set total_saldo.v = total_saldo.v + saldo %}
               <td class="text-end fw-bold {{ 'val-saldo-pos' if saldo >= 0 else 'val-saldo-neg' }}">
@@ -368,7 +381,7 @@
               <td class="text-nowrap ps-4">{{ r.data | data_br }}</td>
               <td class="text-muted small">{{ r.descricao or '—' }}</td>
               <td class="text-end fw-semibold {{ 'text-danger' if tipo == 'custo' else 'text-warning' }}">
-                R$ {{ '{:,.2f}'.format(r.valor).replace(',','X').replace('.',',').replace('X','.') }}
+                -R$ {{ '{:,.2f}'.format(r.valor).replace(',','X').replace('.',',').replace('X','.') }}
               </td>
               <td>
                 <form method="POST" action="{{ url_for('fluxo_saida_excluir', id=r.id) }}"
@@ -385,17 +398,17 @@
           <tfoot style="background:#f8f9fa">
             <tr>
               <td colspan="2" class="fw-bold text-danger">Total Custos</td>
-              <td class="text-end fw-bold text-danger">R$ {{ '{:,.2f}'.format(total_custos).replace(',','X').replace('.',',').replace('X','.') }}</td>
+              <td class="text-end fw-bold text-danger">-R$ {{ '{:,.2f}'.format(total_custos).replace(',','X').replace('.',',').replace('X','.') }}</td>
               <td></td>
             </tr>
             <tr>
               <td colspan="2" class="fw-bold" style="color:#856404">Total Despesas</td>
-              <td class="text-end fw-bold" style="color:#856404">R$ {{ '{:,.2f}'.format(total_despesas).replace(',','X').replace('.',',').replace('X','.') }}</td>
+              <td class="text-end fw-bold" style="color:#856404">-R$ {{ '{:,.2f}'.format(total_despesas).replace(',','X').replace('.',',').replace('X','.') }}</td>
               <td></td>
             </tr>
             <tr style="border-top:2px solid #dee2e6">
               <td colspan="2" class="fw-bold">Total Geral C+D</td>
-              <td class="text-end fw-bold">R$ {{ '{:,.2f}'.format(total_custos+total_despesas).replace(',','X').replace('.',',').replace('X','.') }}</td>
+              <td class="text-end fw-bold">-R$ {{ '{:,.2f}'.format(total_custos+total_despesas).replace(',','X').replace('.',',').replace('X','.') }}</td>
               <td></td>
             </tr>
           </tfoot>

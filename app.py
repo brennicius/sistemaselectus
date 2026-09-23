@@ -5399,9 +5399,13 @@ def fluxo_caixa():
     # agrupamento por categoria
     from collections import OrderedDict
     grupos = OrderedDict()  # {(tipo, cat_nome): [rows]}
+    saidas_cat_matriz = defaultdict(lambda: defaultdict(float))  # {cat_label: {data: valor}}
     for s in saidas_db:
         key = (s['cat_tipo'] or 'custo', s['cat_nome'] or 'Sem categoria')
         grupos.setdefault(key, []).append(s)
+        cat_label = s['cat_nome'] or 'Sem categoria'
+        saidas_cat_matriz[cat_label][s['data']] += s['valor']
+        datas_set.add(s['data'])
     totais_grupo = {k: sum(r['valor'] for r in v) for k, v in grupos.items()}
     total_custos   = sum(r['valor'] for r in saidas_db if r['cat_tipo'] == 'custo')
     total_despesas = sum(r['valor'] for r in saidas_db if r['cat_tipo'] == 'despesa')
@@ -5411,6 +5415,7 @@ def fluxo_caixa():
 
     datas_matriz = sorted(datas_set)
     fornecedores_matriz = sorted(saidas.keys())
+    cats_matriz = sorted(saidas_cat_matriz.keys())
 
     db.close()
     return render_template('fluxo_caixa.html',
@@ -5423,6 +5428,8 @@ def fluxo_caixa():
         datas_matriz=datas_matriz,
         fornecedores_matriz=fornecedores_matriz,
         saidas_matriz=dict(saidas),
+        saidas_cat_matriz=dict(saidas_cat_matriz),
+        cats_matriz=cats_matriz,
         entradas_por_data=dict(entradas_por_data),
         entradas_db=entradas_db,
         saidas_db=saidas_db,
