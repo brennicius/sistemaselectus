@@ -1779,6 +1779,78 @@ def nf_lista():
     return render_template('nf_lista.html', nfs=nfs)
 
 
+@app.route('/nf/manual', methods=['GET', 'POST'])
+def nf_manual():
+    import json as _json
+    from datetime import date as _date
+    db = get_db()
+    insumos = db.execute('SELECT id, nome, unidade_compra FROM insumos ORDER BY nome COLLATE NOCASE').fetchall()
+    fornecedores = db.execute('SELECT nome FROM ep_fornecedores WHERE ativo=1 ORDER BY nome COLLATE NOCASE').fetchall()
+
+    if request.method == 'POST':
+        fornecedor  = request.form.get('fornecedor', '').strip()
+        data_emis   = request.form.get('data_emissao', '')
+        numero_nf   = request.form.get('numero_nf', '').strip() or 'MANUAL'
+        serie       = request.form.get('serie', '').strip() or '1'
+
+        # coleta itens do formulário (índices 0..N)
+        itens = []
+        for key in request.form:
+            if key.startswith('insumo_id_'):
+                i = key.split('_')[-1]
+                ins_id = request.form.get(f'insumo_id_{i}', '').strip()
+                qtd_s  = request.form.get(f'qtd_{i}', '').replace(',', '.').strip()
+                preco_s = request.form.get(f'preco_{i}', '').replace(',', '.').strip()
+                if ins_id and qtd_s:
+                    try:
+                        qtd   = float(qtd_s)
+                        preco = float(preco_s) if preco_s else None
+                        itens.append((int(ins_id), qtd, preco))
+                    except ValueError:
+                        pass
+
+        if not fornecedor or not itens:
+            flash('Informe o fornecedor e ao menos um item.', 'danger')
+            db.close()
+            return render_template('nf_manual.html', insumos=insumos, fornecedores=fornecedores,
+                                   hoje=str(_date.today()),
+                                   insumos_json=_json.dumps([{'id': r['id'], 'nome': r['nome'], 'unidade': r['unidade_compra'] or ''} for r in insumos]))
+
+        total = sum(qtd * (preco or 0) for _, qtd, preco in itens)
+        db.execute(
+            "INSERT INTO nf_entradas (numero, serie, fornecedor, data_emissao, total, status) VALUES (?,?,?,?,?,'confirmada')",
+            (numero_nf, serie, fornecedor, data_emis, total)
+        )
+        nf_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+
+        for ins_id, qtd, preco in itens:
+            db.execute(
+                'INSERT INTO nf_itens (nf_id, descricao_nf, qtd_nf, unid_nf, vlr_unit, insumo_id, qtd_entrada, confirmado) VALUES (?,?,?,?,?,?,?,1)',
+                (nf_id, '', qtd, '', preco, ins_id, qtd)
+            )
+            db.execute(
+                'UPDATE insumos SET estoque_central = COALESCE(estoque_central,0) + ? WHERE id=?',
+                (qtd, ins_id)
+            )
+            if preco and preco > 0:
+                db.execute('UPDATE insumos SET preco_compra=?, data_revisao_custo=? WHERE id=?',
+                           (preco, data_emis, ins_id))
+                db.execute(
+                    'INSERT INTO insumo_preco_historico (insumo_id, preco, data_ref, nf_id, fornecedor) VALUES (?,?,?,?,?)',
+                    (ins_id, preco, data_emis, nf_id, fornecedor)
+                )
+
+        db.commit()
+        db.close()
+        flash(f'NF manual lançada — {len(itens)} insumo(s) adicionado(s) ao estoque central.', 'success')
+        return redirect(url_for('nf_lista'))
+
+    db.close()
+    insumos_json = _json.dumps([{'id': r['id'], 'nome': r['nome'], 'unidade': r['unidade_compra'] or ''} for r in insumos])
+    return render_template('nf_manual.html', insumos=insumos, fornecedores=fornecedores,
+                           hoje=str(_date.today()), insumos_json=insumos_json)
+
+
 # ── helpers NF import ─────────────────────────────────────────────────────────
 
 def _nf_norm(s):

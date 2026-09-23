@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Entrada NF Manual{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-pencil-square me-2"></i>Entrada NF Manual</h1>
+  <p class="mb-0">Lance uma nota fiscal manualmente — os insumos serão adicionados ao estoque central.</p>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }} py-2">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<form method="POST">
+  <div class="card shadow-sm mb-3" style="max-width:820px">
+    <div class="card-header fw-semibold" style="background:#1a3a5c;color:#fff">
+      <i class="bi bi-file-earmark-text me-2"></i>Dados da Nota Fiscal
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-sm-5">
+          <label class="form-label fw-semibold">Fornecedor <span class="text-danger">*</span></label>
+          <input type="text" name="fornecedor" class="form-control" required
+                 placeholder="Nome do fornecedor" list="lista_fornecedores">
+          <datalist id="lista_fornecedores">
+            {% for f in fornecedores %}
+            <option value="{{ f.nome }}">
+            {% endfor %}
+          </datalist>
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label fw-semibold">Data de Entrada <span class="text-danger">*</span></label>
+          <input type="date" name="data_emissao" class="form-control" required value="{{ hoje }}">
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label fw-semibold">Nº NF</label>
+          <input type="text" name="numero_nf" class="form-control" placeholder="000000">
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label fw-semibold">Série</label>
+          <input type="text" name="serie" class="form-control" placeholder="1">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-3" style="max-width:820px">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center"
+         style="background:#1a3a5c;color:#fff">
+      <span><i class="bi bi-boxes me-2"></i>Itens da Nota</span>
+      <button type="button" class="btn btn-sm btn-light" onclick="addLinha()">
+        <i class="bi bi-plus-lg me-1"></i>Adicionar Item
+      </button>
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0 align-middle" id="tabela_itens">
+        <thead class="table-dark">
+          <tr>
+            <th style="min-width:280px">Insumo <span class="text-danger">*</span></th>
+            <th style="min-width:120px">Quantidade <span class="text-danger">*</span></th>
+            <th style="min-width:130px">Preço Unit. (R$)</th>
+            <th style="width:48px"></th>
+          </tr>
+        </thead>
+        <tbody id="tbody_itens">
+          <tr id="linha_0">
+            <td>
+              <select name="insumo_id_0" class="form-select form-select-sm" required>
+                <option value="">Selecione...</option>
+                {% for ins in insumos %}
+                <option value="{{ ins.id }}">{{ ins.nome }} ({{ ins.unidade_compra or '—' }})</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <input type="text" name="qtd_0" class="form-control form-control-sm" placeholder="0" required>
+            </td>
+            <td>
+              <input type="text" name="preco_0" class="form-control form-control-sm" placeholder="0,00">
+            </td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="max-width:820px" class="d-flex gap-2">
+    <button type="submit" class="btn btn-success">
+      <i class="bi bi-check-lg me-1"></i>Confirmar Entrada no Estoque
+    </button>
+    <a href="{{ url_for('nf_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const insumos = {{ insumos_json | safe }};
+let idx = 1;
+
+function addLinha() {
+  const tbody = document.getElementById('tbody_itens');
+  const tr = document.createElement('tr');
+  tr.id = `linha_${idx}`;
+  tr.innerHTML = `
+    <td>
+      <select name="insumo_id_${idx}" class="form-select form-select-sm" required>
+        <option value="">Selecione...</option>
+        ${insumos.map(i => `<option value="${i.id}">${i.nome} (${i.unidade || '—'})</option>`).join('')}
+      </select>
+    </td>
+    <td>
+      <input type="text" name="qtd_${idx}" class="form-control form-control-sm" placeholder="0" required>
+    </td>
+    <td>
+      <input type="text" name="preco_${idx}" class="form-control form-control-sm" placeholder="0,00">
+    </td>
+    <td>
+      <button type="button" class="btn btn-sm btn-outline-danger" onclick="removerLinha(${idx})">
+        <i class="bi bi-trash3"></i>
+      </button>
+    </td>`;
+  tbody.appendChild(tr);
+  idx++;
+}
+
+function removerLinha(i) {
+  const tr = document.getElementById(`linha_${i}`);
+  if (tr) tr.remove();
+}
+</script>
+{% endblock %}
