@@ -3533,13 +3533,16 @@ def api_pedidos_abertos(forn_id):
 def ep_lista():
     from datetime import date as _date
     db = get_db()
+    for col_sql in [
+        'ALTER TABLE ep_lancamentos ADD COLUMN pedido_id INTEGER REFERENCES pedidos(id)',
+        'ALTER TABLE ep_lancamentos ADD COLUMN data_prevista_pgto TEXT',
+    ]:
+        try:
+            db.execute(col_sql); db.commit()
+        except Exception:
+            pass
     try:
-        db.execute('ALTER TABLE ep_lancamentos ADD COLUMN pedido_id INTEGER REFERENCES pedidos(id)')
-        db.commit()
-    except Exception:
-        pass
-    try:
-        lancamentos = db.execute('''
+        rows = db.execute('''
             SELECT l.*, f.nome AS fornecedor_nome,
                    p.data_prevista AS ped_data, p.valor_previsto AS ped_valor
             FROM ep_lancamentos l
@@ -3548,12 +3551,13 @@ def ep_lista():
             ORDER BY l.data_entrada DESC, l.id DESC
         ''').fetchall()
     except Exception:
-        lancamentos = db.execute('''
+        rows = db.execute('''
             SELECT l.*, f.nome AS fornecedor_nome
             FROM ep_lancamentos l
             JOIN ep_fornecedores f ON f.id = l.fornecedor_id
             ORDER BY l.data_entrada DESC, l.id DESC
         ''').fetchall()
+    lancamentos = [{**dict(r), 'data_prevista_pgto': dict(r).get('data_prevista_pgto')} for r in rows]
     pendentes = sum(1 for r in lancamentos if not r['confirmado_fin'])
     db.close()
     return render_template('ep_lista.html', lancamentos=lancamentos, pendentes=pendentes,
@@ -5201,14 +5205,25 @@ def fluxo_caixa():
         return render_template('fluxo_login.html')
 
     db = get_db()
+    # garante colunas mesmo em DB importado sem migrações
+    for col_sql in [
+        'ALTER TABLE ep_lancamentos ADD COLUMN data_prevista_pgto TEXT',
+        'CREATE TABLE IF NOT EXISTS fluxo_entradas (id INTEGER PRIMARY KEY AUTOINCREMENT, data TEXT NOT NULL, descricao TEXT, valor REAL NOT NULL, criado_em TEXT DEFAULT (datetime(\'now\',\'localtime\')))',
+    ]:
+        try:
+            db.execute(col_sql); db.commit()
+        except Exception:
+            pass
+
     hoje = str(_date.today())
 
-    lancamentos = db.execute('''
+    rows = db.execute('''
         SELECT l.*, f.nome AS fornecedor_nome
         FROM ep_lancamentos l
         JOIN ep_fornecedores f ON f.id = l.fornecedor_id
         ORDER BY l.data_entrada DESC, l.id DESC
     ''').fetchall()
+    lancamentos = [{**dict(r), 'data_prevista_pgto': dict(r).get('data_prevista_pgto')} for r in rows]
 
     total_geral    = sum(l['valor'] for l in lancamentos)
     total_pago     = sum(l['valor'] for l in lancamentos if l['pago'])
@@ -5219,8 +5234,7 @@ def fluxo_caixa():
                          and not l['data_prevista_pgto'])
 
     # ── Matriz de fluxo ──────────────────────────────────────────────────────
-    # Apenas lançamentos não pagos com data efetiva definida
-    saidas = defaultdict(lambda: defaultdict(float))  # saidas[fornecedor][data] = valor
+    saidas = defaultdict(lambda: defaultdict(float))
     datas_set = set()
     for l in lancamentos:
         if l['pago']:
