@@ -2,6 +2,11 @@
 {% block title %}Entrada Produtos{% endblock %}
 
 {% block content %}
+<style>
+  tr.row-vencida td { background-color: #ffe5cc !important; }
+  tr.row-vencida:hover td { background-color: #ffd4aa !important; }
+</style>
+
 <div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
   <div>
     <h1><i class="bi bi-box-arrow-in-down me-2"></i>Entrada de Produtos</h1>
@@ -32,12 +37,72 @@
 </div>
 {% endif %}
 
+{# ── Filtros ── #}
+<div class="card shadow-sm mb-3">
+  <div class="card-body py-2">
+    <div class="row g-2 align-items-end">
+      <div class="col-sm-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Data Entrada</label>
+        <input type="date" id="f_data" class="form-control form-control-sm" onchange="filtrar()">
+      </div>
+      <div class="col-sm-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Fornecedor</label>
+        <input type="text" id="f_fornecedor" class="form-control form-control-sm" placeholder="Buscar…" oninput="filtrar()">
+      </div>
+      <div class="col-sm-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Nº NF</label>
+        <input type="text" id="f_nf" class="form-control form-control-sm" placeholder="Buscar…" oninput="filtrar()">
+      </div>
+      <div class="col-sm-6 col-md-1">
+        <label class="form-label small fw-semibold mb-1">Valor (R$)</label>
+        <input type="text" id="f_valor" class="form-control form-control-sm" placeholder="Ex: 500" oninput="filtrar()">
+      </div>
+      <div class="col-sm-6 col-md-1">
+        <label class="form-label small fw-semibold mb-1">Pagamento</label>
+        <select id="f_pagamento" class="form-select form-select-sm" onchange="filtrar()">
+          <option value="">Todos</option>
+          <option value="prazo">A Prazo</option>
+          <option value="vista">À Vista</option>
+        </select>
+      </div>
+      <div class="col-sm-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Vencimento</label>
+        <input type="date" id="f_vencimento" class="form-control form-control-sm" onchange="filtrar()">
+      </div>
+      <div class="col-sm-6 col-md-1">
+        <label class="form-label small fw-semibold mb-1">Pago</label>
+        <select id="f_pago" class="form-select form-select-sm" onchange="filtrar()">
+          <option value="">Todos</option>
+          <option value="1">Pago</option>
+          <option value="0">Pendente</option>
+        </select>
+      </div>
+      <div class="col-sm-6 col-md-1">
+        <label class="form-label small fw-semibold mb-1">Financeiro</label>
+        <select id="f_fin" class="form-select form-select-sm" onchange="filtrar()">
+          <option value="">Todos</option>
+          <option value="1">Confirmado</option>
+          <option value="0">Não conf.</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-sm btn-outline-secondary" onclick="limparFiltros()" title="Limpar filtros">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+    </div>
+    <div class="mt-1">
+      <small id="contador_filtro" class="text-muted"></small>
+    </div>
+  </div>
+</div>
+
 {% if not lancamentos %}
 <div class="alert alert-info">Nenhum lançamento registrado ainda.</div>
 {% else %}
 <div class="card shadow-sm">
   <div class="card-body p-0">
-    <table class="table table-hover mb-0 align-middle">
+    <table class="table table-hover mb-0 align-middle" id="tabela_ep">
       <thead class="table-dark">
         <tr>
           <th>Data Entrada</th>
@@ -54,7 +119,17 @@
       </thead>
       <tbody>
         {% for l in lancamentos %}
-        <tr class="{{ 'table-success' if l.confirmado_fin and l.pago else ('table-warning' if l.confirmado_fin else '') }}">
+        {% set vencida = l.tipo_pagamento == 'prazo' and l.data_vencimento and l.data_vencimento < hoje and not l.pago %}
+        {% set row_class = 'table-success' if l.confirmado_fin and l.pago else ('row-vencida' if vencida else ('table-warning' if l.confirmado_fin else '')) %}
+        <tr class="{{ row_class }}"
+            data-data="{{ l.data_entrada or '' }}"
+            data-fornecedor="{{ l.fornecedor_nome | lower }}"
+            data-nf="{{ l.numero_nf or '' | lower }}"
+            data-valor="{{ l.valor }}"
+            data-pagamento="{{ l.tipo_pagamento or '' }}"
+            data-vencimento="{{ l.data_vencimento or '' }}"
+            data-pago="{{ '1' if l.pago else '0' }}"
+            data-fin="{{ '1' if l.confirmado_fin else '0' }}">
           <td class="text-nowrap">{{ l.data_entrada }}</td>
           <td class="fw-semibold">{{ l.fornecedor_nome }}</td>
           <td class="text-muted small">{{ l.numero_nf or '—' }}</td>
@@ -66,7 +141,13 @@
               <span class="badge bg-secondary">À Prazo</span>
             {% endif %}
           </td>
-          <td class="text-center text-nowrap">{{ l.data_vencimento or '—' }}</td>
+          <td class="text-center text-nowrap">
+            {% if vencida %}
+              <span class="fw-semibold text-danger">{{ l.data_vencimento }} <i class="bi bi-exclamation-circle"></i></span>
+            {% else %}
+              {{ l.data_vencimento or '—' }}
+            {% endif %}
+          </td>
           <td class="text-center">
             <form method="POST" action="{{ url_for('ep_toggle_pago', id=l.id) }}" class="d-inline">
               <button type="submit" class="btn btn-sm {{ 'btn-success' if l.pago else 'btn-danger' }}"
@@ -123,7 +204,7 @@
           </td>
         </tr>
         {% if l.obs %}
-        <tr class="{{ 'table-success' if l.confirmado_fin and l.pago else ('table-warning' if l.confirmado_fin else 'table-light') }}">
+        <tr class="obs-row {{ 'table-success' if l.confirmado_fin and l.pago else ('row-vencida' if vencida else ('table-warning' if l.confirmado_fin else 'table-light')) }}">
           <td colspan="10" class="py-1 ps-4 small text-muted fst-italic">
             <i class="bi bi-chat-left-text me-1"></i>{{ l.obs }}
           </td>
@@ -135,4 +216,53 @@
   </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filtrar() {
+  const fData      = document.getElementById('f_data').value;
+  const fForn      = document.getElementById('f_fornecedor').value.toLowerCase();
+  const fNf        = document.getElementById('f_nf').value.toLowerCase();
+  const fValor     = document.getElementById('f_valor').value.replace(',', '.').trim();
+  const fPagamento = document.getElementById('f_pagamento').value;
+  const fVenc      = document.getElementById('f_vencimento').value;
+  const fPago      = document.getElementById('f_pago').value;
+  const fFin       = document.getElementById('f_fin').value;
+
+  const rows = document.querySelectorAll('#tabela_ep tbody tr:not(.obs-row)');
+  let visivel = 0;
+
+  rows.forEach(tr => {
+    const obsRow = tr.nextElementSibling;
+    const d = tr.dataset;
+    let ok = true;
+
+    if (fData      && d.data       !== fData)                              ok = false;
+    if (fForn      && !d.fornecedor.includes(fForn))                       ok = false;
+    if (fNf        && !d.nf.includes(fNf))                                 ok = false;
+    if (fValor     && !d.valor.startsWith(fValor))                         ok = false;
+    if (fPagamento && d.pagamento  !== fPagamento)                         ok = false;
+    if (fVenc      && d.vencimento !== fVenc)                              ok = false;
+    if (fPago      && d.pago       !== fPago)                              ok = false;
+    if (fFin       && d.fin        !== fFin)                               ok = false;
+
+    tr.style.display = ok ? '' : 'none';
+    if (obsRow && obsRow.classList.contains('obs-row')) {
+      obsRow.style.display = ok ? '' : 'none';
+    }
+    if (ok) visivel++;
+  });
+
+  const total = rows.length;
+  const el = document.getElementById('contador_filtro');
+  el.textContent = visivel < total ? `Exibindo ${visivel} de ${total} lançamentos` : '';
+}
+
+function limparFiltros() {
+  ['f_data','f_fornecedor','f_nf','f_valor','f_pagamento','f_vencimento','f_pago','f_fin']
+    .forEach(id => { document.getElementById(id).value = ''; });
+  filtrar();
+}
+</script>
 {% endblock %}

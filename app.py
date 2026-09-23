@@ -3501,8 +3501,8 @@ def api_pedidos_abertos(forn_id):
 
 @app.route('/entrada-produtos')
 def ep_lista():
+    from datetime import date as _date
     db = get_db()
-    # garante que a coluna pedido_id existe (migration segura)
     try:
         db.execute('ALTER TABLE ep_lancamentos ADD COLUMN pedido_id INTEGER REFERENCES pedidos(id)')
         db.commit()
@@ -3526,7 +3526,8 @@ def ep_lista():
         ''').fetchall()
     pendentes = sum(1 for r in lancamentos if not r['confirmado_fin'])
     db.close()
-    return render_template('ep_lista.html', lancamentos=lancamentos, pendentes=pendentes)
+    return render_template('ep_lista.html', lancamentos=lancamentos, pendentes=pendentes,
+                           hoje=str(_date.today()))
 
 
 @app.route('/entrada-produtos/novo', methods=['GET', 'POST'])
