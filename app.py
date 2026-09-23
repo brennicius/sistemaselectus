@@ -39,6 +39,17 @@ def num_br_filter(value, decimals=2):
     """Formata número no padrão brasileiro"""
     return _to_br(value, decimals)
 
+@app.template_filter('data_br')
+def data_br_filter(value):
+    """Converte YYYY-MM-DD para DD/MM/YYYY"""
+    if not value:
+        return '—'
+    try:
+        p = str(value).split('-')
+        return f'{p[2]}/{p[1]}/{p[0]}'
+    except Exception:
+        return value
+
 # Known conversions between purchase unit and usage unit
 CONV = {
     ('kg','g'): 1000, ('kg','mg'): 1000000, ('kg','kg'): 1,

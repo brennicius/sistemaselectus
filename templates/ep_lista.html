@@ -130,7 +130,7 @@
             data-vencimento="{{ l.data_vencimento or '' }}"
             data-pago="{{ '1' if l.pago else '0' }}"
             data-fin="{{ '1' if l.confirmado_fin else '0' }}">
-          <td class="text-nowrap">{{ l.data_entrada }}</td>
+          <td class="text-nowrap">{{ l.data_entrada | data_br }}</td>
           <td class="fw-semibold">{{ l.fornecedor_nome }}</td>
           <td class="text-muted small">{{ l.numero_nf or '—' }}</td>
           <td class="text-end fw-semibold">R$ {{ '{:,.2f}'.format(l.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
@@ -143,9 +143,9 @@
           </td>
           <td class="text-center text-nowrap">
             {% if vencida %}
-              <span class="fw-semibold text-danger">{{ l.data_vencimento }} <i class="bi bi-exclamation-circle"></i></span>
+              <span class="fw-semibold text-danger">{{ l.data_vencimento | data_br }} <i class="bi bi-exclamation-circle"></i></span>
             {% else %}
-              {{ l.data_vencimento or '—' }}
+              {{ l.data_vencimento | data_br }}
             {% endif %}
           </td>
           <td class="text-center">
