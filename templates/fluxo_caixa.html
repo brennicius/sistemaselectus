@@ -289,7 +289,12 @@
       <div class="card-body">
         <form method="POST" action="{{ url_for('fluxo_saida_add') }}">
           <div class="mb-2">
-            <label class="form-label small fw-semibold mb-1">Categoria <span class="text-danger">*</span></label>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label small fw-semibold mb-0">Categoria <span class="text-danger">*</span></label>
+              <a href="{{ url_for('fluxo_categorias') }}" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:.75rem">
+                <i class="bi bi-plus-lg me-1"></i>Nova Categoria
+              </a>
+            </div>
             <select name="categoria_id" class="form-select form-select-sm" required>
               <option value="">— Selecione —</option>
               {% set custos = categorias | selectattr('tipo','equalto','custo') | list %}
