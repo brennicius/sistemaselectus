@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}{{ forn.nome }}{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+  <div>
+    <a href="{{ url_for('fornecedores_lista') }}" class="text-muted small text-decoration-none">
+      <i class="bi bi-arrow-left me-1"></i>Fornecedores
+    </a>
+    <h1 class="mt-1"><i class="bi bi-building me-2"></i>{{ forn.nome }}</h1>
+    <p class="mb-0">Insumos cadastrados para este fornecedor.</p>
+  </div>
+  <a href="{{ url_for('fornecedor_insumo_novo', forn_id=forn.id) }}" class="btn btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>Novo Insumo
+  </a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }} alert-dismissible fade show py-2">{{ msg }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  {% endfor %}
+{% endwith %}
+
+{% if not insumos %}
+<div class="alert alert-info">
+  Nenhum insumo cadastrado para {{ forn.nome }} ainda.
+  <a href="{{ url_for('fornecedor_insumo_novo', forn_id=forn.id) }}">Adicionar o primeiro insumo.</a>
+</div>
+{% else %}
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Insumo</th>
+          <th>Categoria</th>
+          <th class="text-center">Unid. Compra</th>
+          <th class="text-end">Preço Compra</th>
+          <th class="text-center">Estoque Central</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in insumos %}
+        <tr>
+          <td class="fw-semibold">{{ i.nome }}</td>
+          <td class="text-muted small">{{ i.categoria or '—' }}</td>
+          <td class="text-center">{{ i.unidade_compra or '—' }}</td>
+          <td class="text-end">
+            {% if i.preco_compra %}
+              R$ {{ '{:,.2f}'.format(i.preco_compra).replace(',','X').replace('.',',').replace('X','.') }}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {{ (i.estoque_central or 0) | round(2) }} {{ i.unidade_compra or '' }}
+          </td>
+          <td class="text-end text-nowrap">
+            <a href="{{ url_for('insumo_editar', id=i.id) }}" class="btn btn-sm btn-outline-secondary me-1">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <form method="POST" action="{{ url_for('insumo_excluir', id=i.id) }}" class="d-inline"
+                  onsubmit="return confirm('Excluir {{ i.nome }}?')">
+              <input type="hidden" name="next" value="{{ url_for('fornecedor_detalhe', forn_id=forn.id) }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash3"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -323,6 +323,12 @@ def init_db():
         db.commit()
     except Exception:
         pass
+    # migration: ep_fornecedor_id em insumos
+    try:
+        db.execute('ALTER TABLE insumos ADD COLUMN ep_fornecedor_id INTEGER REFERENCES ep_fornecedores(id)')
+        db.commit()
+    except Exception:
+        pass
     db.close()
 
 def _recalcular_historico_fichas(db, insumo_id):
@@ -633,15 +639,16 @@ def insumo_uso(id):
 def insumo_excluir(id):
     db = get_db()
     uso = db.execute('SELECT COUNT(*) FROM ficha_tecnica WHERE insumo_id=?', (id,)).fetchone()[0]
+    next_url = request.form.get('next') or url_for('insumos_lista')
     if uso:
         db.close()
         flash('Insumo em uso em fichas técnicas — não pode ser excluído.', 'danger')
-        return redirect(url_for('insumos_lista'))
+        return redirect(next_url)
     nome = db.execute('SELECT nome FROM insumos WHERE id=?', (id,)).fetchone()['nome']
     db.execute('DELETE FROM insumos WHERE id=?', (id,))
     db.commit(); db.close()
     flash(f'"{nome}" excluído.', 'success')
-    return redirect(url_for('insumos_lista'))
+    return redirect(next_url)
 
 @app.route('/insumos/evolucao-precos')
 def insumos_evolucao_precos():
@@ -3474,6 +3481,77 @@ def pedidos_excluir(id):
     db.close()
     flash('Pedido excluído.', 'success')
     return redirect(url_for('pedidos_lista'))
+
+
+# ── Fornecedores (catálogo de insumos por fornecedor) ────────────────────────
+
+@app.route('/fornecedores')
+def fornecedores_lista():
+    db = get_db()
+    # garante coluna ep_fornecedor_id
+    try:
+        db.execute('ALTER TABLE insumos ADD COLUMN ep_fornecedor_id INTEGER REFERENCES ep_fornecedores(id)')
+        db.commit()
+    except Exception:
+        pass
+    fornecedores = db.execute('''
+        SELECT f.*, COUNT(i.id) AS total_insumos
+        FROM ep_fornecedores f
+        LEFT JOIN insumos i ON i.ep_fornecedor_id = f.id
+        GROUP BY f.id
+        ORDER BY f.nome COLLATE NOCASE
+    ''').fetchall()
+    db.close()
+    return render_template('fornecedores_lista.html', fornecedores=fornecedores)
+
+
+@app.route('/fornecedores/<int:forn_id>')
+def fornecedor_detalhe(forn_id):
+    db = get_db()
+    forn = db.execute('SELECT * FROM ep_fornecedores WHERE id=?', (forn_id,)).fetchone()
+    if not forn:
+        db.close()
+        return 'Fornecedor não encontrado', 404
+    insumos = db.execute('''
+        SELECT * FROM insumos WHERE ep_fornecedor_id=? ORDER BY nome COLLATE NOCASE
+    ''', (forn_id,)).fetchall()
+    db.close()
+    return render_template('fornecedor_detalhe.html', forn=forn, insumos=insumos)
+
+
+@app.route('/fornecedores/<int:forn_id>/insumo/novo', methods=['GET', 'POST'])
+def fornecedor_insumo_novo(forn_id):
+    db = get_db()
+    forn = db.execute('SELECT * FROM ep_fornecedores WHERE id=?', (forn_id,)).fetchone()
+    if not forn:
+        db.close()
+        return 'Fornecedor não encontrado', 404
+    if request.method == 'POST':
+        nome     = request.form.get('nome', '').strip()
+        uc       = request.form.get('unidade_compra', '').strip()
+        preco    = request.form.get('preco_compra', '').replace(',', '.').strip()
+        uu       = request.form.get('unidade_uso', '').strip()
+        qtd_emb  = request.form.get('qtd_por_embalagem', '').replace(',', '.').strip()
+        categoria = request.form.get('categoria', '').strip()
+        try:
+            preco_f = float(preco) if preco else None
+        except ValueError:
+            preco_f = None
+        try:
+            qtd_emb_f = float(qtd_emb) if qtd_emb else None
+        except ValueError:
+            qtd_emb_f = None
+        db.execute('''
+            INSERT INTO insumos (nome, unidade_compra, preco_compra, unidade_uso,
+                                 qtd_por_embalagem, fornecedor, ep_fornecedor_id, categoria)
+            VALUES (?,?,?,?,?,?,?,?)
+        ''', (nome, uc, preco_f, uu, qtd_emb_f, forn['nome'], forn_id, categoria or None))
+        db.commit()
+        db.close()
+        flash(f'Insumo "{nome}" cadastrado para {forn["nome"]}.', 'success')
+        return redirect(url_for('fornecedor_detalhe', forn_id=forn_id))
+    db.close()
+    return render_template('fornecedor_insumo_form.html', forn=forn)
 
 
 # ── Entrada Produtos ──────────────────────────────────────────────────────────
