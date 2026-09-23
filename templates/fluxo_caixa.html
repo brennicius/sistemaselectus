@@ -202,14 +202,16 @@
           </tr>
           {% for desc, dates in saidas_item_matriz.get(cat, {}).items() %}
           {% set total_desc = namespace(v=0) %}
-          <tr class="ci-rows ci-{{ ci }}" style="display:none;background:#fff3f3">
-            <td class="small text-muted ps-5"><i class="bi bi-dash me-1"></i>{{ desc }}</td>
+          <tr class="ci-rows ci-{{ ci }}" style="display:none">
+            <td class="small ps-5" style="border-left:3px solid #dc3545;color:#555;font-style:italic">
+              <i class="bi bi-arrow-return-right me-1 text-danger" style="font-size:.7rem"></i>{{ desc }}
+            </td>
             {% for d in datas_matriz %}
               {% set v = dates.get(d, 0) %}
               {% set total_desc.v = total_desc.v + v %}
-              <td class="text-end val-saida small">{% if v %}-R$ {{ '{:,.2f}'.format(v).replace(',','X').replace('.',',').replace('X','.') }}{% else %}—{% endif %}</td>
+              <td class="text-end small" style="color:#b02a37">{% if v %}-R$ {{ '{:,.2f}'.format(v).replace(',','X').replace('.',',').replace('X','.') }}{% else %}<span class="text-muted" style="font-size:.7rem">·</span>{% endif %}</td>
             {% endfor %}
-            <td class="text-end col-total val-saida small">-R$ {{ '{:,.2f}'.format(total_desc.v).replace(',','X').replace('.',',').replace('X','.') }}</td>
+            <td class="text-end small col-total" style="color:#b02a37;font-weight:600">{% if total_desc.v %}-R$ {{ '{:,.2f}'.format(total_desc.v).replace(',','X').replace('.',',').replace('X','.') }}{% else %}—{% endif %}</td>
           </tr>
           {% endfor %}
           {% endfor %}
@@ -448,9 +450,11 @@
 function toggleCat(ci) {
   const rows = document.querySelectorAll('.ci-' + ci);
   const icon = document.getElementById('ci-icon-' + ci);
+  const parentTr = icon ? icon.closest('tr') : null;
   const open = rows.length && rows[0].style.display !== 'none';
   rows.forEach(r => r.style.display = open ? 'none' : '');
   if (icon) icon.style.transform = open ? '' : 'rotate(90deg)';
+  if (parentTr) parentTr.style.background = open ? '' : '#ffe8e8';
 }
 </script>
 {% endblock %}
