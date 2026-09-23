@@ -54,7 +54,7 @@
       </thead>
       <tbody>
         {% for l in lancamentos %}
-        <tr class="{{ 'table-success' if l.confirmado_fin else '' }}">
+        <tr class="{{ 'table-success' if l.confirmado_fin and l.pago else ('table-warning' if l.confirmado_fin else '') }}">
           <td class="text-nowrap">{{ l.data_entrada }}</td>
           <td class="fw-semibold">{{ l.fornecedor_nome }}</td>
           <td class="text-muted small">{{ l.numero_nf or '—' }}</td>
@@ -123,7 +123,7 @@
           </td>
         </tr>
         {% if l.obs %}
-        <tr class="{{ 'table-success' if l.confirmado_fin else 'table-light' }}">
+        <tr class="{{ 'table-success' if l.confirmado_fin and l.pago else ('table-warning' if l.confirmado_fin else 'table-light') }}">
           <td colspan="10" class="py-1 ps-4 small text-muted fst-italic">
             <i class="bi bi-chat-left-text me-1"></i>{{ l.obs }}
           </td>
