@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Fluxo de Caixa{% endblock %}
+
+{% block content %}
+<style>
+  tr.row-vencida td { background-color: #ffe5cc !important; }
+</style>
+
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <h1><i class="bi bi-cash-coin me-2"></i>Fluxo de Caixa</h1>
+    <p class="mb-0">Visão financeira dos lançamentos de entrada de produtos.</p>
+  </div>
+  <form method="POST" action="{{ url_for('fluxo_logout') }}">
+    <button type="submit" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-lock me-1"></i>Sair
+    </button>
+  </form>
+</div>
+
+{# ── Cards de resumo ── #}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card stat-card shadow-sm border-0 h-100" style="background:#1a3a5c;color:#fff">
+      <div class="card-body">
+        <div class="small text-white-50 mb-1">Total Geral</div>
+        <div class="stat-num">R$ {{ '{:,.2f}'.format(total_geral).replace(',','X').replace('.',',').replace('X','.') }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card shadow-sm border-0 h-100" style="background:#198754;color:#fff">
+      <div class="card-body">
+        <div class="small text-white-50 mb-1">Total Pago</div>
+        <div class="stat-num">R$ {{ '{:,.2f}'.format(total_pago).replace(',','X').replace('.',',').replace('X','.') }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card shadow-sm border-0 h-100" style="background:#ffc107;color:#000">
+      <div class="card-body">
+        <div class="small mb-1" style="opacity:.7">Pendente</div>
+        <div class="stat-num">R$ {{ '{:,.2f}'.format(total_pendente).replace(',','X').replace('.',',').replace('X','.') }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card shadow-sm border-0 h-100" style="background:#dc3545;color:#fff">
+      <div class="card-body">
+        <div class="small text-white-50 mb-1">Vencido (não pago)</div>
+        <div class="stat-num">R$ {{ '{:,.2f}'.format(total_vencido).replace(',','X').replace('.',',').replace('X','.') }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Tabela ── #}
+{% if not lancamentos %}
+<div class="alert alert-info">Nenhum lançamento registrado.</div>
+{% else %}
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Data Entrada</th>
+          <th>Fornecedor</th>
+          <th>Nº NF</th>
+          <th class="text-end">Valor (R$)</th>
+          <th class="text-center">Pagamento</th>
+          <th class="text-center">Vencimento</th>
+          <th class="text-center">Status</th>
+          <th class="text-center">Financeiro</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in lancamentos %}
+        {% set vencida = l.tipo_pagamento == 'prazo' and l.data_vencimento and l.data_vencimento < hoje and not l.pago %}
+        {% set row_class = 'table-success' if l.confirmado_fin and l.pago else ('row-vencida' if vencida else ('table-warning' if l.confirmado_fin else '')) %}
+        <tr class="{{ row_class }}">
+          <td class="text-nowrap">{{ l.data_entrada | data_br }}</td>
+          <td class="fw-semibold">{{ l.fornecedor_nome }}</td>
+          <td class="text-muted small">{{ l.numero_nf or '—' }}</td>
+          <td class="text-end fw-semibold">
+            R$ {{ '{:,.2f}'.format(l.valor).replace(',','X').replace('.',',').replace('X','.') }}
+          </td>
+          <td class="text-center">
+            {% if l.tipo_pagamento == 'vista' %}
+              <span class="badge bg-info text-dark">À Vista</span>
+            {% else %}
+              <span class="badge bg-secondary">À Prazo</span>
+            {% endif %}
+          </td>
+          <td class="text-center text-nowrap">
+            {% if vencida %}
+              <span class="fw-semibold text-danger">{{ l.data_vencimento | data_br }} <i class="bi bi-exclamation-circle"></i></span>
+            {% else %}
+              {{ l.data_vencimento | data_br }}
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if l.pago %}
+              <span class="badge bg-success"><i class="bi bi-check-lg me-1"></i>Pago</span>
+            {% elif vencida %}
+              <span class="badge bg-danger">Vencido</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">Pendente</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if l.confirmado_fin %}
+              <span class="badge bg-success"><i class="bi bi-check2-all"></i> Confirmado</span>
+            {% else %}
+              <span class="badge bg-light text-muted border">Não conf.</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% if l.obs %}
+        <tr class="{{ 'table-success' if l.confirmado_fin and l.pago else ('row-vencida' if vencida else ('table-warning' if l.confirmado_fin else 'table-light')) }}">
+          <td colspan="8" class="py-1 ps-4 small text-muted fst-italic">
+            <i class="bi bi-chat-left-text me-1"></i>{{ l.obs }}
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

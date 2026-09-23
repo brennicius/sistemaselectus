@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Fluxo de Caixa{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-center align-items-center" style="min-height:60vh">
+  <div class="card shadow" style="width:100%;max-width:380px">
+    <div class="card-header text-white fw-semibold" style="background:#1a3a5c">
+      <i class="bi bi-lock-fill me-2"></i>Fluxo de Caixa — Acesso Restrito
+    </div>
+    <div class="card-body p-4">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+          <div class="alert alert-{{ cat }} py-2 small">{{ msg }}</div>
+        {% endfor %}
+      {% endwith %}
+      <p class="text-muted small mb-3">Esta área é protegida. Digite a senha para continuar.</p>
+      <form method="POST" action="{{ url_for('fluxo_login') }}">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Senha</label>
+          <input type="password" name="senha" class="form-control" autofocus required placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-unlock me-1"></i>Entrar
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

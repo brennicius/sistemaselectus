@@ -7,6 +7,8 @@ app = Flask(__name__)
 app.secret_key = 'selectus_cozinha_2024'
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
+FLUXO_SENHA = 'Panda2023!'
+
 DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cozinha.db')
 
 CATEGORIAS = [
@@ -5111,6 +5113,58 @@ def descartes_excluir(id):
     flash('Descarte excluído.', 'info')
     return redirect(url_for('descartes_lista'))
 
+
+# ── Fluxo de Caixa ───────────────────────────────────────────────────────────
+
+@app.route('/fluxo-caixa/login', methods=['POST'])
+def fluxo_login():
+    from flask import session
+    senha = request.form.get('senha', '')
+    if senha == FLUXO_SENHA:
+        session['fluxo_auth'] = True
+        return redirect(url_for('fluxo_caixa'))
+    flash('Senha incorreta.', 'danger')
+    return redirect(url_for('fluxo_caixa'))
+
+@app.route('/fluxo-caixa/logout', methods=['POST'])
+def fluxo_logout():
+    from flask import session
+    session.pop('fluxo_auth', None)
+    return redirect(url_for('index'))
+
+@app.route('/fluxo-caixa')
+def fluxo_caixa():
+    from flask import session
+    from datetime import date as _date
+    autenticado = session.get('fluxo_auth', False)
+    if not autenticado:
+        return render_template('fluxo_login.html')
+
+    db = get_db()
+    hoje = str(_date.today())
+
+    lancamentos = db.execute('''
+        SELECT l.*, f.nome AS fornecedor_nome
+        FROM ep_lancamentos l
+        JOIN ep_fornecedores f ON f.id = l.fornecedor_id
+        ORDER BY l.data_entrada DESC, l.id DESC
+    ''').fetchall()
+
+    total_geral   = sum(l['valor'] for l in lancamentos)
+    total_pago    = sum(l['valor'] for l in lancamentos if l['pago'])
+    total_pendente= sum(l['valor'] for l in lancamentos if not l['pago'])
+    total_vencido = sum(l['valor'] for l in lancamentos
+                        if not l['pago'] and l['tipo_pagamento'] == 'prazo'
+                        and l['data_vencimento'] and l['data_vencimento'] < hoje)
+
+    db.close()
+    return render_template('fluxo_caixa.html',
+        lancamentos=lancamentos,
+        total_geral=total_geral,
+        total_pago=total_pago,
+        total_pendente=total_pendente,
+        total_vencido=total_vencido,
+        hoje=hoje)
 
 # ─────────────────────────────────────────────────────────────────────────────
 

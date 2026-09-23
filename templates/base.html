@@ -150,6 +150,10 @@
     <a href="{{ url_for('consolidado') }}" class="{{ 'active' if 'consolidado' in request.endpoint }}">
       <i class="bi bi-table"></i> Consolidado
     </a>
+    <a href="{{ url_for('fluxo_caixa') }}" class="{{ 'active' if 'fluxo' in request.endpoint }}">
+      <i class="bi bi-cash-coin"></i> Fluxo de Caixa
+      <i class="bi bi-lock-fill ms-auto" style="font-size:.7rem;opacity:.5"></i>
+    </a>
   </nav>
   <div class="sidebar-footer" style="padding:10px 14px">
     <div class="d-flex gap-2 mb-2">
