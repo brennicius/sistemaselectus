@@ -3759,6 +3759,23 @@ def ep_fornecedor_toggle(id):
     return redirect(next_url)
 
 
+@app.route('/entrada-produtos/fornecedores/<int:id>/set-tipo', methods=['POST'])
+def ep_fornecedor_set_tipo(id):
+    tipo = request.form.get('tipo', 'custo')
+    if tipo not in ('custo', 'despesa'):
+        tipo = 'custo'
+    db = get_db()
+    try:
+        db.execute('ALTER TABLE ep_fornecedores ADD COLUMN tipo TEXT DEFAULT \'custo\'')
+        db.commit()
+    except Exception:
+        pass
+    db.execute('UPDATE ep_fornecedores SET tipo=? WHERE id=?', (tipo, id))
+    db.commit()
+    db.close()
+    return redirect(request.form.get('next') or url_for('ep_fornecedores'))
+
+
 @app.route('/entrada-produtos/fornecedores/<int:id>/renomear', methods=['POST'])
 def ep_fornecedor_renomear(id):
     nome = request.form.get('nome', '').strip()
@@ -5331,6 +5348,7 @@ def fluxo_caixa():
     # garante tabelas/colunas mesmo em DB importado sem migrações
     for sql in [
         'ALTER TABLE ep_lancamentos ADD COLUMN data_prevista_pgto TEXT',
+        'ALTER TABLE ep_fornecedores ADD COLUMN tipo TEXT DEFAULT \'custo\'',
         'CREATE TABLE IF NOT EXISTS fluxo_clientes (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, ativo INTEGER NOT NULL DEFAULT 1)',
         'CREATE TABLE IF NOT EXISTS fluxo_entradas (id INTEGER PRIMARY KEY AUTOINCREMENT, data TEXT NOT NULL, descricao TEXT, valor REAL NOT NULL, criado_em TEXT DEFAULT (datetime(\'now\',\'localtime\')))',
         'ALTER TABLE fluxo_entradas ADD COLUMN cliente_id INTEGER REFERENCES fluxo_clientes(id)',
@@ -5399,12 +5417,16 @@ def fluxo_caixa():
     # agrupamento por categoria
     from collections import OrderedDict
     grupos = OrderedDict()  # {(tipo, cat_nome): [rows]}
-    saidas_cat_matriz = defaultdict(lambda: defaultdict(float))  # {cat_label: {data: valor}}
+    saidas_cat_matriz = defaultdict(lambda: defaultdict(float))   # {cat_label: {data: valor}}
+    saidas_item_matriz = {}   # {cat_label: {desc: {data: valor}}}
     for s in saidas_db:
         key = (s['cat_tipo'] or 'custo', s['cat_nome'] or 'Sem categoria')
         grupos.setdefault(key, []).append(s)
         cat_label = s['cat_nome'] or 'Sem categoria'
+        desc = s['descricao'] or '(sem descrição)'
         saidas_cat_matriz[cat_label][s['data']] += s['valor']
+        saidas_item_matriz.setdefault(cat_label, {}).setdefault(desc, {})
+        saidas_item_matriz[cat_label][desc][s['data']] = saidas_item_matriz[cat_label][desc].get(s['data'], 0) + s['valor']
         datas_set.add(s['data'])
     totais_grupo = {k: sum(r['valor'] for r in v) for k, v in grupos.items()}
     total_custos   = sum(r['valor'] for r in saidas_db if r['cat_tipo'] == 'custo')
@@ -5412,6 +5434,7 @@ def fluxo_caixa():
 
     clientes   = db.execute('SELECT * FROM fluxo_clientes WHERE ativo=1 ORDER BY nome COLLATE NOCASE').fetchall()
     categorias = db.execute("SELECT * FROM fluxo_categorias WHERE ativo=1 ORDER BY tipo, nome COLLATE NOCASE").fetchall()
+    forn_tipos = {r['nome']: (r['tipo'] or 'custo') for r in db.execute('SELECT nome, tipo FROM ep_fornecedores').fetchall()}
 
     datas_matriz = sorted(datas_set)
     fornecedores_matriz = sorted(saidas.keys())
@@ -5429,7 +5452,9 @@ def fluxo_caixa():
         fornecedores_matriz=fornecedores_matriz,
         saidas_matriz=dict(saidas),
         saidas_cat_matriz=dict(saidas_cat_matriz),
+        saidas_item_matriz=saidas_item_matriz,
         cats_matriz=cats_matriz,
+        forn_tipos=forn_tipos,
         entradas_por_data=dict(entradas_por_data),
         entradas_db=entradas_db,
         saidas_db=saidas_db,

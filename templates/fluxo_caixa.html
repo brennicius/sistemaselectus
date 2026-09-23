@@ -169,8 +169,14 @@
           </tr>
           {% for forn in fornecedores_matriz %}
           {% set total_forn = namespace(v=0) %}
+          {% set ftipo = forn_tipos.get(forn, 'custo') %}
           <tr>
-            <td class="fw-semibold"><i class="bi bi-arrow-up-circle me-1 text-danger"></i>{{ forn }}</td>
+            <td class="fw-semibold">
+              <i class="bi bi-arrow-up-circle me-1 text-danger"></i>{{ forn }}
+              <span class="badge ms-1 {{ 'bg-danger' if ftipo == 'custo' else 'bg-warning text-dark' }}" style="font-size:.65rem">
+                {{ 'Custo' if ftipo == 'custo' else 'Despesa' }}
+              </span>
+            </td>
             {% for d in datas_matriz %}
               {% set v = saidas_matriz.get(forn, {}).get(d, 0) %}
               {% set total_forn.v = total_forn.v + v %}
@@ -181,8 +187,12 @@
           {% endfor %}
           {% for cat in cats_matriz %}
           {% set total_cat = namespace(v=0) %}
-          <tr>
-            <td class="fw-semibold"><i class="bi bi-arrow-up-circle me-1 text-danger"></i>{{ cat }}</td>
+          {% set ci = loop.index %}
+          <tr style="cursor:pointer" onclick="toggleCat({{ ci }})" class="cat-parent">
+            <td class="fw-semibold">
+              <i class="bi bi-chevron-right me-1 ci-icon" id="ci-icon-{{ ci }}" style="font-size:.8rem;transition:transform .2s"></i>
+              <i class="bi bi-arrow-up-circle me-1 text-danger"></i>{{ cat }}
+            </td>
             {% for d in datas_matriz %}
               {% set v = saidas_cat_matriz.get(cat, {}).get(d, 0) %}
               {% set total_cat.v = total_cat.v + v %}
@@ -190,6 +200,18 @@
             {% endfor %}
             <td class="text-end col-total val-saida">-R$ {{ '{:,.2f}'.format(total_cat.v).replace(',','X').replace('.',',').replace('X','.') }}</td>
           </tr>
+          {% for desc, dates in saidas_item_matriz.get(cat, {}).items() %}
+          {% set total_desc = namespace(v=0) %}
+          <tr class="ci-rows ci-{{ ci }}" style="display:none;background:#fff3f3">
+            <td class="small text-muted ps-5"><i class="bi bi-dash me-1"></i>{{ desc }}</td>
+            {% for d in datas_matriz %}
+              {% set v = dates.get(d, 0) %}
+              {% set total_desc.v = total_desc.v + v %}
+              <td class="text-end val-saida small">{% if v %}-R$ {{ '{:,.2f}'.format(v).replace(',','X').replace('.',',').replace('X','.') }}{% else %}—{% endif %}</td>
+            {% endfor %}
+            <td class="text-end col-total val-saida small">-R$ {{ '{:,.2f}'.format(total_desc.v).replace(',','X').replace('.',',').replace('X','.') }}</td>
+          </tr>
+          {% endfor %}
           {% endfor %}
           <tr style="background:#f8f9fa;border-top:2px solid #dee2e6">
             <td class="fw-bold">Saldo do Dia</td>
@@ -419,4 +441,16 @@
   {% endif %}
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleCat(ci) {
+  const rows = document.querySelectorAll('.ci-' + ci);
+  const icon = document.getElementById('ci-icon-' + ci);
+  const open = rows.length && rows[0].style.display !== 'none';
+  rows.forEach(r => r.style.display = open ? 'none' : '');
+  if (icon) icon.style.transform = open ? '' : 'rotate(90deg)';
+}
+</script>
 {% endblock %}
