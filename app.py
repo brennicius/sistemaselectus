@@ -22,6 +22,7 @@ CATEGORIAS = [
     ('Produção',       'bg-dark text-white'),
     ('Poke',           'bg-info text-dark'),
     ('Saladas +P',     'bg-teal'),
+    ('Pratos',         'bg-orange'),
 ]
 
 def _to_br(value, decimals):
