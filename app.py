@@ -2852,31 +2852,51 @@ def estoque_reposicao():
         if r['pdv'] == 'Central':
             categorias[r['nome']] = r['categoria']
 
-    # Calcula déficits e aloca estoque do Central
-    envios   = {p: [] for p in PDVS}   # [{nome, cat, deficit, enviar}]
-    compras  = []                        # [{nome, cat, pdv, comprar}]
+    # Calcula déficits e aloca estoque do Central — resultado pivotado por produto
+    # envios_pivot:  {cat: [{nome, enviar:{pdv:qty}, total_enviar}]}
+    # compras_pivot: {cat: [{nome, comprar:{pdv:qty}, total_comprar, central_atual}]}
+    envios_pivot  = OrderedDict()
+    compras_pivot = OrderedDict()
 
     for nome, locs in sorted(produtos.items(), key=lambda x: (categorias.get(x[0], ''), x[0])):
         cat = categorias.get(nome, 'Sem categoria')
         central_disp = locs['Central']['atual']
+        row_env = {p: 0 for p in PDVS}
+        row_cmp = {p: 0 for p in PDVS}
 
         for pdv in PDVS:
             deficit = locs[pdv]['minimo'] - locs[pdv]['atual']
             if deficit <= 0:
                 continue
-            enviar  = min(deficit, central_disp)
+            enviar  = min(deficit, max(central_disp, 0))
             comprar = deficit - enviar
             central_disp -= enviar
-            if enviar > 0:
-                envios[pdv].append({'nome': nome, 'cat': cat, 'atual': locs[pdv]['atual'],
-                                    'minimo': locs[pdv]['minimo'], 'enviar': enviar})
-            if comprar > 0:
-                compras.append({'nome': nome, 'cat': cat, 'pdv': pdv, 'atual': locs[pdv]['atual'],
-                                'minimo': locs[pdv]['minimo'], 'comprar': comprar,
-                                'central': locs['Central']['atual']})
+            row_env[pdv] = enviar
+            row_cmp[pdv] = comprar
 
-    return render_template('estoque_reposicao.html', envios=envios, compras=compras, pdvs=PDVS,
-                           hoje=date.today())
+        total_env = sum(row_env.values())
+        total_cmp = sum(row_cmp.values())
+
+        if total_env > 0:
+            envios_pivot.setdefault(cat, []).append({
+                'nome': nome, 'por_pdv': row_env, 'total': total_env,
+                'atual': {p: locs[p]['atual'] for p in PDVS},
+                'minimo': {p: locs[p]['minimo'] for p in PDVS},
+            })
+        if total_cmp > 0:
+            compras_pivot.setdefault(cat, []).append({
+                'nome': nome, 'por_pdv': row_cmp, 'total': total_cmp,
+                'central': locs['Central']['atual'],
+                'atual': {p: locs[p]['atual'] for p in PDVS},
+                'minimo': {p: locs[p]['minimo'] for p in PDVS},
+            })
+
+    total_envios = sum(len(v) for v in envios_pivot.values())
+    total_compras = sum(len(v) for v in compras_pivot.values())
+    return render_template('estoque_reposicao.html',
+                           envios_pivot=envios_pivot, compras_pivot=compras_pivot,
+                           pdvs=PDVS, hoje=date.today(),
+                           total_envios=total_envios, total_compras=total_compras)
 
 
 @app.route('/estoque-semana/<pdv>', methods=['GET', 'POST'])
