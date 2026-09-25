@@ -2813,6 +2813,107 @@ def estoque_consolidado():
     return render_template('estoque_consolidado.html', cats_produtos=cats_produtos, pdvs=PDVS)
 
 
+_BASE_INVENTARIO = date(2026, 9, 25)
+
+
+@app.route('/estoque-semana/<pdv>', methods=['GET', 'POST'])
+def estoque_semana(pdv):
+    from datetime import timedelta
+    from collections import defaultdict, OrderedDict
+    pdv = pdv.lower()
+    pdv_label = _PDV_LABELS.get(pdv)
+    if not pdv_label:
+        return redirect(url_for('estoque_semana', pdv='central'))
+    pdv_color = _PDV_COLORS.get(pdv, '1a3a5c')
+
+    db = get_db()
+    db.execute('''CREATE TABLE IF NOT EXISTS movimentos_pdv (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pdv TEXT NOT NULL,
+        produto_nome TEXT NOT NULL,
+        data TEXT NOT NULL,
+        tipo TEXT NOT NULL,
+        quantidade REAL NOT NULL DEFAULT 0,
+        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+    )''')
+    db.commit()
+
+    if request.method == 'POST':
+        acao = request.form.get('acao')
+        if acao == 'add':
+            db.execute(
+                'INSERT INTO movimentos_pdv (pdv, produto_nome, data, tipo, quantidade) VALUES (?,?,?,?,?)',
+                (pdv_label,
+                 request.form.get('produto_nome', '').strip(),
+                 request.form.get('data', '').strip(),
+                 request.form.get('tipo', '').strip(),
+                 float(request.form.get('quantidade') or 0))
+            )
+            db.commit()
+        elif acao == 'del':
+            db.execute('DELETE FROM movimentos_pdv WHERE id=? AND pdv=?',
+                       (int(request.form.get('id')), pdv_label))
+            db.commit()
+        db.close()
+        return redirect(url_for('estoque_semana', pdv=pdv))
+
+    # 7 dias a partir do inventário base
+    days = [_BASE_INVENTARIO + timedelta(days=i) for i in range(7)]
+    day_strs = [d.isoformat() for d in days]
+
+    # Produtos base para este PDV
+    produtos = db.execute(
+        "SELECT id, nome, categoria, estoque_atual FROM estoque_revenda WHERE pdv=? AND ativo=1 ORDER BY categoria COLLATE NOCASE, nome COLLATE NOCASE",
+        (pdv_label,)
+    ).fetchall()
+
+    # Todos movimentos do período
+    movimentos = db.execute(
+        "SELECT id, produto_nome, data, tipo, quantidade FROM movimentos_pdv WHERE pdv=? AND data >= ? AND data <= ?",
+        (pdv_label, day_strs[0], day_strs[-1])
+    ).fetchall()
+
+    db.close()
+
+    # Índice: {nome: {data: {entrada: x, venda: x}}}
+    mov_idx = defaultdict(lambda: defaultdict(lambda: {'entrada': 0.0, 'venda': 0.0}))
+    mov_list = defaultdict(list)  # {(nome, data): [movimentos]}
+    for m in movimentos:
+        mov_idx[m['produto_nome']][m['data']][m['tipo']] += m['quantidade']
+        mov_list[(m['produto_nome'], m['data'])].append({'id': m['id'], 'tipo': m['tipo'], 'quantidade': m['quantidade']})
+
+    # Montar linhas com saldo acumulado
+    cats_rows = OrderedDict()
+    for p in produtos:
+        nome = p['nome']
+        cat  = p['categoria']
+        saldo_base = p['estoque_atual'] or 0
+        saldo = saldo_base
+        dias = []
+        for d_str in day_strs:
+            entrada = mov_idx[nome][d_str]['entrada']
+            venda   = mov_idx[nome][d_str]['venda']
+            saldo   = saldo + entrada - venda
+            dias.append({
+                'data': d_str,
+                'entrada': entrada,
+                'venda': venda,
+                'saldo': saldo,
+                'movs': mov_list.get((nome, d_str), []),
+            })
+        cats_rows.setdefault(cat, []).append({
+            'nome': nome,
+            'saldo_base': saldo_base,
+            'dias': dias,
+        })
+
+    nomes_pdv = [p['nome'] for p in produtos]
+    return render_template('estoque_semana.html',
+                           pdv=pdv, pdv_label=pdv_label, pdv_color=pdv_color,
+                           days=days, cats_rows=cats_rows, nomes_pdv=nomes_pdv,
+                           base_date=_BASE_INVENTARIO)
+
+
 @app.route('/alertas')
 def alertas():
     db = get_db()

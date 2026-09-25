@@ -162,8 +162,8 @@
       <span><i class="bi bi-cart3 me-2"></i>Lançamento de Pedidos</span>
       {% if n_pedidos_abertos > 0 %}<span class="badge bg-warning text-dark">{{ n_pedidos_abertos }}</span>{% endif %}
     </a>
-    {% set estoque_open = request.endpoint in ('alertas', 'estoque_pdv', 'estoque_consolidado') %}
-    {% set revenda_open = request.endpoint in ('estoque_pdv', 'estoque_consolidado') %}
+    {% set estoque_open = request.endpoint in ('alertas', 'estoque_pdv', 'estoque_consolidado', 'estoque_semana') %}
+    {% set revenda_open = request.endpoint in ('estoque_pdv', 'estoque_consolidado', 'estoque_semana') %}
     <button class="sidebar-group-toggle d-flex align-items-center justify-content-between w-100"
             type="button"
             data-bs-toggle="collapse" data-bs-target="#sub-estoque"
@@ -186,18 +186,14 @@
         <i class="bi bi-chevron-{{ 'down' if revenda_open else 'right' }}" style="font-size:.7rem"></i>
       </button>
       <div class="collapse {{ 'show' if revenda_open else '' }}" id="sub-revenda">
-        <a href="{{ url_for('estoque_pdv', pdv='central') }}"
-           class="sidebar-sub {{ 'active' if request.endpoint == 'estoque_pdv' and request.view_args.get('pdv') == 'central' }}"
-           style="padding-left:2.5rem"><i class="bi bi-building me-2"></i>Central</a>
-        <a href="{{ url_for('estoque_pdv', pdv='amaro') }}"
-           class="sidebar-sub {{ 'active' if request.endpoint == 'estoque_pdv' and request.view_args.get('pdv') == 'amaro' }}"
-           style="padding-left:2.5rem"><i class="bi bi-geo-alt me-2"></i>Amaro</a>
-        <a href="{{ url_for('estoque_pdv', pdv='portugues') }}"
-           class="sidebar-sub {{ 'active' if request.endpoint == 'estoque_pdv' and request.view_args.get('pdv') == 'portugues' }}"
-           style="padding-left:2.5rem"><i class="bi bi-geo-alt me-2"></i>Portugues</a>
-        <a href="{{ url_for('estoque_pdv', pdv='izabel') }}"
-           class="sidebar-sub {{ 'active' if request.endpoint == 'estoque_pdv' and request.view_args.get('pdv') == 'izabel' }}"
-           style="padding-left:2.5rem"><i class="bi bi-geo-alt me-2"></i>Izabel</a>
+        {% for pdv_k, pdv_n, icon in [('central','Central','bi-building'),('amaro','Amaro','bi-geo-alt'),('portugues','Portugues','bi-geo-alt'),('izabel','Izabel','bi-geo-alt')] %}
+        <a href="{{ url_for('estoque_pdv', pdv=pdv_k) }}"
+           class="sidebar-sub {{ 'active' if request.endpoint == 'estoque_pdv' and request.view_args.get('pdv') == pdv_k }}"
+           style="padding-left:2.5rem"><i class="bi {{ icon }} me-2"></i>{{ pdv_n }}</a>
+        <a href="{{ url_for('estoque_semana', pdv=pdv_k) }}"
+           class="sidebar-sub {{ 'active' if request.endpoint == 'estoque_semana' and request.view_args.get('pdv') == pdv_k }}"
+           style="padding-left:3.5rem;font-size:.78rem;opacity:.85"><i class="bi bi-calendar-week me-1"></i>Semana</a>
+        {% endfor %}
         <a href="{{ url_for('estoque_consolidado') }}"
            class="sidebar-sub {{ 'active' if request.endpoint == 'estoque_consolidado' }}"
            style="padding-left:2.5rem"><i class="bi bi-table me-2"></i>Consolidado</a>

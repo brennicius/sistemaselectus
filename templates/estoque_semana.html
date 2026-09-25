@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}Semana {{ pdv_label }}{% endblock %}
+
+{% block content %}
+<style>
+  /* ── Container com scroll bidirecional ── */
+  .semana-outer {
+    max-height: calc(100vh - 140px);
+    overflow: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+  }
+  /* ── Tabela ── */
+  .semana-table {
+    border-collapse: collapse;
+    font-size: .78rem;
+    width: max-content;
+    min-width: 100%;
+  }
+  /* Coluna produto fixa à esquerda */
+  .semana-table .col-prod {
+    position: sticky;
+    left: 0;
+    z-index: 5;
+    background: #fff;
+    min-width: 220px;
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Coluna saldo base fixa */
+  .semana-table .col-base {
+    position: sticky;
+    left: 220px;
+    z-index: 5;
+    background: #f0f6ff;
+    min-width: 68px;
+    text-align: center;
+  }
+  /* Cabeçalhos fixos no topo */
+  .semana-table thead tr th {
+    position: sticky;
+    z-index: 10;
+    background: #1a3a5c;
+    color: #fff;
+    padding: 6px 8px;
+    border: 1px solid #15325a;
+    white-space: nowrap;
+    text-align: center;
+  }
+  .semana-table thead tr:first-child th { top: 0; }
+  .semana-table thead tr:last-child  th { top: 33px; }
+  /* Cabeçalho produto/saldo base — canto superior esquerdo */
+  .semana-table thead th.col-prod {
+    left: 0; z-index: 20;
+    text-align: left;
+  }
+  .semana-table thead th.col-base {
+    left: 220px; z-index: 20;
+    background: #0d6efd;
+  }
+  /* Colunas de dia */
+  .col-ent  { min-width: 60px; background: #f0fff4; }
+  .col-vend { min-width: 60px; background: #fff5f5; }
+  .col-saldo{ min-width: 68px; background: #f8f9fa; font-weight:600; }
+  /* Cabeçalho de dia */
+  .th-dia { background: #{{ pdv_color }} !important; }
+  .th-ent  { background: #1a6b3c !important; font-size:.7rem; }
+  .th-vend { background: #8b1a1a !important; font-size:.7rem; }
+  .th-saldo{ background: #0d6efd !important; font-size:.7rem; }
+  /* Separador de categoria */
+  .semana-table tr.cat-row td {
+    background: #{{ pdv_color }};
+    color: #fff;
+    font-weight: 600;
+    padding: 5px 10px;
+    position: sticky;
+    left: 0;
+    cursor: pointer;
+    border-top: 2px solid #fff;
+  }
+  /* Linhas de produto */
+  .semana-table tbody tr.item-row td {
+    padding: 4px 8px;
+    border-bottom: 1px solid #eee;
+    border-right: 1px solid #eee;
+    vertical-align: middle;
+  }
+  .semana-table tbody tr.item-row:hover .col-prod { background: #f0f6ff; }
+  /* Saldo negativo */
+  .saldo-neg { color: #dc3545; font-weight: 700; }
+  /* Zero tachado */
+  .zero { color: #ccc; }
+  /* Botão de lançamento inline */
+  .btn-add-mov {
+    font-size: .65rem; padding: 1px 4px; opacity:.6;
+  }
+  .btn-add-mov:hover { opacity:1; }
+  .semana-table tr.hidden { display: none; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <div>
+    <h1 style="color:#{{ pdv_color }}"><i class="bi bi-calendar-week me-2"></i>Semana — {{ pdv_label }}</h1>
+    <p class="mb-0 text-muted small">
+      Base: inventário {{ base_date.strftime('%d/%m/%Y') }} &nbsp;|&nbsp;
+      {% for pdv_k, pdv_n in [('central','Central'),('amaro','Amaro'),('portugues','Portugues'),('izabel','Izabel')] %}
+        {% if pdv_k == pdv %}
+          <strong>{{ pdv_n }}</strong>
+        {% else %}
+          <a href="{{ url_for('estoque_semana', pdv=pdv_k) }}">{{ pdv_n }}</a>
+        {% endif %}
+        {% if not loop.last %}&nbsp;·&nbsp;{% endif %}
+      {% endfor %}
+    </p>
+  </div>
+  <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalMov">
+    <i class="bi bi-plus-lg me-1"></i>Lançar movimento
+  </button>
+</div>
+
+{% if not cats_rows %}
+<div class="alert alert-info">Nenhum produto cadastrado para {{ pdv_label }}.</div>
+{% else %}
+<div class="semana-outer">
+  <table class="semana-table">
+    <thead>
+      <!-- Linha 1: Produto | Saldo Ini. | [Dia colspan=3] ... -->
+      <tr>
+        <th class="col-prod" rowspan="2">Produto</th>
+        <th class="col-base" rowspan="2">Saldo<br>{{ base_date.strftime('%d/%m') }}</th>
+        {% for d in days %}
+        <th colspan="3" class="th-dia">{{ d.strftime('%a %d/%m') }}</th>
+        {% endfor %}
+      </tr>
+      <!-- Linha 2: Ent | Venda | Saldo por dia -->
+      <tr>
+        {% for d in days %}
+        <th class="th-ent">Entrada</th>
+        <th class="th-vend">Venda</th>
+        <th class="th-saldo">Saldo</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+    {% for cat, rows in cats_rows.items() %}
+      <tr class="cat-row" onclick="toggleCat(this, '{{ cat|replace("'","")|replace('"','')|replace(' ','-') }}')">
+        <td colspan="{{ 2 + days|length * 3 }}">
+          <i class="bi bi-tag me-2"></i>{{ cat }}
+          <span class="badge bg-secondary ms-2" style="font-size:.65rem">{{ rows|length }} itens</span>
+        </td>
+      </tr>
+      {% for row in rows %}
+      <tr class="item-row cat-{{ cat|replace("'","")|replace('"','')|replace(' ','-')|lower }}">
+        <td class="col-prod" title="{{ row.nome }}">{{ row.nome }}</td>
+        <td class="col-base text-center">
+          {% if row.saldo_base %}{{ row.saldo_base|int }}{% else %}<span class="zero">—</span>{% endif %}
+        </td>
+        {% for dia in row.dias %}
+        <td class="col-ent text-center">
+          {% if dia.entrada %}
+            <span class="text-success fw-semibold">+{{ dia.entrada|int }}</span>
+          {% else %}
+            <span class="zero">—</span>
+          {% endif %}
+        </td>
+        <td class="col-vend text-center">
+          {% if dia.venda %}
+            <span class="text-danger">-{{ dia.venda|int }}</span>
+          {% else %}
+            <span class="zero">—</span>
+          {% endif %}
+        </td>
+        <td class="col-saldo text-center {% if dia.saldo < 0 %}saldo-neg{% endif %}">
+          {{ dia.saldo|int }}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{# ── Modal: Lançar movimento ── #}
+<div class="modal fade" id="modalMov" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST">
+      <input type="hidden" name="acao" value="add">
+      <div class="modal-content">
+        <div class="modal-header" style="background:#{{ pdv_color }}">
+          <h6 class="modal-title text-white"><i class="bi bi-plus-circle me-2"></i>Lançar Movimento — {{ pdv_label }}</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-2">
+            <div class="col-12">
+              <label class="form-label small fw-semibold mb-1">Produto <span class="text-danger">*</span></label>
+              <select name="produto_nome" class="form-select" required id="selProduto">
+                <option value="">— selecione —</option>
+                {% for nome in nomes_pdv %}
+                <option value="{{ nome }}">{{ nome }}</option>
+                {% endfor %}
+              </select>
+              <input type="text" id="filtroModal" class="form-control form-control-sm mt-1"
+                     placeholder="Filtrar produto…" oninput="filtrarSelect(this.value)">
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold mb-1">Data <span class="text-danger">*</span></label>
+              <input type="date" name="data" class="form-control" required
+                     min="{{ base_date.isoformat() }}"
+                     value="{{ days[0].isoformat() }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold mb-1">Tipo <span class="text-danger">*</span></label>
+              <select name="tipo" class="form-select" required>
+                <option value="venda">Venda</option>
+                <option value="entrada">Entrada</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label small fw-semibold mb-1">Quantidade <span class="text-danger">*</span></label>
+              <input type="number" name="quantidade" class="form-control" required min="0" step="1" value="">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm">Lançar</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleCat(catRow, catKey) {
+  catRow.classList.toggle('collapsed');
+  const cls = 'cat-' + catKey.toLowerCase();
+  document.querySelectorAll('tr.' + cls).forEach(tr => tr.classList.toggle('hidden'));
+}
+
+function filtrarSelect(q) {
+  const sel = document.getElementById('selProduto');
+  const ql = q.toLowerCase();
+  Array.from(sel.options).forEach(opt => {
+    if (!opt.value) return;
+    opt.style.display = opt.text.toLowerCase().includes(ql) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}
