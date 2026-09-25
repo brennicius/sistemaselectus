@@ -114,17 +114,27 @@
             data-baixo="{{ '1' if item._baixo else '0' }}">
           <td class="fw-semibold small">{{ item.nome }}</td>
           <td>
-            <form method="POST" class="d-flex gap-1 justify-content-center">
+            <form method="POST" class="d-flex gap-1 justify-content-center align-items-center">
               <input type="hidden" name="acao" value="atualizar">
               <input type="hidden" name="id" value="{{ item.id }}">
               <input type="number" name="estoque_atual" value="{{ item.estoque_atual or 0 }}"
-                     step="1" min="0" class="form-control form-control-sm text-center estoque-input">
+                     step="1" min="0" class="form-control form-control-sm text-center estoque-input" title="Estoque atual">
               <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-1" title="Salvar">
                 <i class="bi bi-floppy" style="font-size:.7rem"></i>
               </button>
             </form>
           </td>
-          <td class="text-center text-muted small">{{ item.estoque_minimo | int if item.estoque_minimo else '—' }}</td>
+          <td>
+            <form method="POST" class="d-flex gap-1 justify-content-center align-items-center">
+              <input type="hidden" name="acao" value="atualizar_min">
+              <input type="hidden" name="id" value="{{ item.id }}">
+              <input type="number" name="estoque_minimo" value="{{ item.estoque_minimo or 0 }}"
+                     step="1" min="0" class="form-control form-control-sm text-center estoque-input" title="Estoque mínimo">
+              <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Salvar mínimo">
+                <i class="bi bi-floppy" style="font-size:.7rem"></i>
+              </button>
+            </form>
+          </td>
           <td class="text-center">
             {% if item._baixo %}
               <span class="badge bg-danger" style="font-size:.65rem">Baixo</span>

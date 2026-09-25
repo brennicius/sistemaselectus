@@ -2770,6 +2770,12 @@ def estoque_pdv(pdv):
                 (float(request.form.get('estoque_atual') or 0), int(request.form.get('id')))
             )
             db.commit()
+        elif acao == 'atualizar_min':
+            db.execute(
+                'UPDATE estoque_revenda SET estoque_minimo=? WHERE id=?',
+                (float(request.form.get('estoque_minimo') or 0), int(request.form.get('id')))
+            )
+            db.commit()
         elif acao == 'excluir':
             db.execute('DELETE FROM estoque_revenda WHERE id=?', (int(request.form.get('id')),))
             db.commit()
