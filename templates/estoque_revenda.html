@@ -2,137 +2,191 @@
 {% block title %}Estoque de Revenda{% endblock %}
 
 {% block content %}
+<style>
+  .cat-header {
+    cursor: pointer; user-select: none;
+    background: #1a3a5c; color: #fff;
+    padding: 10px 16px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 2px;
+  }
+  .cat-header:hover { background: #15325a; }
+  .cat-toggle-icon { transition: transform .2s; font-size: .8rem; }
+  .cat-header.open .cat-toggle-icon { transform: rotate(90deg); }
+  .cat-body { display: none; }
+  .cat-body.open { display: block; }
+  tr.hidden-row { display: none; }
+  .estoque-input { width: 75px; }
+</style>
+
 <div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
   <div>
     <h1><i class="bi bi-shop me-2"></i>Estoque de Revenda</h1>
-    <p class="mb-0">Controle de itens para venda direta.</p>
+    <p class="mb-0">{{ itens | length }} itens em {{ cats | length }} categorias.</p>
   </div>
   <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAdd">
-    <i class="bi bi-plus-lg me-1"></i>Novo Item
+    <i class="bi bi-plus-lg me-1"></i>Novo Produto
   </button>
 </div>
 
 {% with messages = get_flashed_messages(with_categories=true) %}
-  {% for cat, msg in messages %}
-    <div class="alert alert-{{ cat }} py-2 small alert-dismissible fade show">
+  {% for c, msg in messages %}
+    <div class="alert alert-{{ c }} py-2 small alert-dismissible fade show">
       {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
   {% endfor %}
 {% endwith %}
 
+{# ── Filtro ── #}
+<div class="card shadow-sm mb-3">
+  <div class="card-body py-2">
+    <div class="row g-2 align-items-end">
+      <div class="col-sm-5">
+        <label class="form-label small fw-semibold mb-1">Produto</label>
+        <input type="text" id="f_nome" class="form-control form-control-sm"
+               placeholder="Buscar produto…" oninput="filtrar()">
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label small fw-semibold mb-1">Categoria</label>
+        <select id="f_cat" class="form-select form-select-sm" onchange="filtrar()">
+          <option value="">Todas</option>
+          {% for cat in cats %}
+          <option value="{{ cat }}">{{ cat }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label small fw-semibold mb-1">Status</label>
+        <select id="f_status" class="form-select form-select-sm" onchange="filtrar()">
+          <option value="">Todos</option>
+          <option value="baixo">Estoque Baixo</option>
+          <option value="ok">OK</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-sm btn-outline-secondary" onclick="limpar()" title="Limpar">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+    </div>
+    <div class="mt-1"><small id="contador" class="text-muted"></small></div>
+  </div>
+</div>
+
+{# ── Categorias colapsáveis ── #}
 {% if not itens %}
-<div class="alert alert-info">Nenhum item cadastrado ainda. Clique em <strong>Novo Item</strong> para começar.</div>
+<div class="alert alert-info">Nenhum item cadastrado.</div>
 {% else %}
 
-{# Agrupa por categoria → subcategoria #}
-{% set cats = itens | map(attribute='categoria') | unique | list %}
 {% for cat in cats %}
-  {% set cat_itens = itens | selectattr('categoria','equalto', cat) | list %}
-  {% set subcats = cat_itens | map(attribute='subcategoria') | unique | list %}
+{% set cat_itens = itens_por_cat[cat] %}
+{% set n_baixo = cat_itens | selectattr('_baixo') | list | length %}
 
-  <div class="card shadow-sm mb-3">
-    <div class="card-header fw-semibold" style="background:#1a3a5c;color:#fff">
-      <i class="bi bi-tag me-2"></i>{{ cat }}
-    </div>
-    <div class="card-body p-0">
-      {% for subcat in subcats %}
-        {% set sub_itens = cat_itens | selectattr('subcategoria','equalto', subcat) | list %}
-        {% if subcat %}
-        <div class="px-3 pt-2 pb-0">
-          <span class="badge bg-secondary mb-1">{{ subcat }}</span>
-        </div>
-        {% endif %}
-        <table class="table table-hover table-sm mb-0 align-middle">
-          <thead class="table-light">
-            <tr>
-              <th>Produto</th>
-              <th class="text-center" style="width:80px">Unidade</th>
-              <th class="text-center" style="width:110px">Estoque Atual</th>
-              <th class="text-center" style="width:110px">Estoque Mín.</th>
-              <th class="text-center" style="width:80px">Status</th>
-              <th style="width:80px"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for item in sub_itens %}
-            {% set abaixo = item.estoque_atual is not none and item.estoque_minimo and item.estoque_atual < item.estoque_minimo %}
-            <tr class="{{ 'table-danger' if abaixo else '' }}">
-              <td class="fw-semibold">{{ item.nome }}</td>
-              <td class="text-center text-muted small">{{ item.unidade }}</td>
-              <td class="text-center">
-                <form method="POST" class="d-flex gap-1 justify-content-center">
-                  <input type="hidden" name="acao" value="atualizar">
-                  <input type="hidden" name="id" value="{{ item.id }}">
-                  <input type="number" name="estoque_atual" value="{{ item.estoque_atual or 0 }}"
-                         step="0.1" min="0" class="form-control form-control-sm text-center"
-                         style="width:70px">
-                  <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-1" title="Salvar">
-                    <i class="bi bi-floppy" style="font-size:.75rem"></i>
-                  </button>
-                </form>
-              </td>
-              <td class="text-center text-muted small">{{ item.estoque_minimo or '—' }}</td>
-              <td class="text-center">
-                {% if abaixo %}
-                  <span class="badge bg-danger">Baixo</span>
-                {% else %}
-                  <span class="badge bg-success">OK</span>
-                {% endif %}
-              </td>
-              <td class="text-end">
-                <form method="POST" class="d-inline" onsubmit="return confirm('Excluir {{ item.nome }}?')">
-                  <input type="hidden" name="acao" value="excluir">
-                  <input type="hidden" name="id" value="{{ item.id }}">
-                  <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1">
-                    <i class="bi bi-trash3" style="font-size:.75rem"></i>
-                  </button>
-                </form>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% endfor %}
-    </div>
+<div class="mb-2 cat-block" data-cat="{{ cat }}">
+  <div class="cat-header open" onclick="toggleCat(this)">
+    <span>
+      <i class="bi bi-tag me-2"></i>
+      <strong>{{ cat }}</strong>
+      <span class="badge bg-secondary ms-2" style="font-size:.7rem">{{ cat_itens | length }}</span>
+      {% if n_baixo > 0 %}
+        <span class="badge bg-danger ms-1" style="font-size:.7rem">{{ n_baixo }} baixo{{ 's' if n_baixo > 1 }}</span>
+      {% endif %}
+    </span>
+    <i class="bi bi-chevron-right cat-toggle-icon"></i>
   </div>
+  <div class="cat-body open">
+    <table class="table table-hover table-sm mb-0 align-middle border">
+      <thead class="table-light">
+        <tr>
+          <th>Produto</th>
+          <th class="text-center" style="width:100px">Estoque Atual</th>
+          <th class="text-center" style="width:90px">Mín.</th>
+          <th class="text-center" style="width:70px">Status</th>
+          <th style="width:50px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in cat_itens %}
+        <tr data-nome="{{ item.nome | lower }}" data-cat="{{ item.categoria | lower }}"
+            data-baixo="{{ '1' if item._baixo else '0' }}">
+          <td class="fw-semibold small">{{ item.nome }}</td>
+          <td>
+            <form method="POST" class="d-flex gap-1 justify-content-center">
+              <input type="hidden" name="acao" value="atualizar">
+              <input type="hidden" name="id" value="{{ item.id }}">
+              <input type="number" name="estoque_atual" value="{{ item.estoque_atual or 0 }}"
+                     step="1" min="0" class="form-control form-control-sm text-center estoque-input">
+              <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-1" title="Salvar">
+                <i class="bi bi-floppy" style="font-size:.7rem"></i>
+              </button>
+            </form>
+          </td>
+          <td class="text-center text-muted small">{{ item.estoque_minimo | int if item.estoque_minimo else '—' }}</td>
+          <td class="text-center">
+            {% if item._baixo %}
+              <span class="badge bg-danger" style="font-size:.65rem">Baixo</span>
+            {% else %}
+              <span class="badge bg-success" style="font-size:.65rem">OK</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <form method="POST" class="d-inline" onsubmit="return confirm('Excluir?')">
+              <input type="hidden" name="acao" value="excluir">
+              <input type="hidden" name="id" value="{{ item.id }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1">
+                <i class="bi bi-trash3" style="font-size:.7rem"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endfor %}
 {% endif %}
 
-{# Modal novo item #}
+{# ── Modal Novo Produto ── #}
 <div class="modal fade" id="modalAdd" tabindex="-1">
   <div class="modal-dialog">
     <form method="POST">
       <input type="hidden" name="acao" value="add">
       <div class="modal-content">
         <div class="modal-header" style="background:#1a3a5c">
-          <h6 class="modal-title text-white"><i class="bi bi-plus-circle me-2"></i>Novo Item de Revenda</h6>
+          <h6 class="modal-title text-white"><i class="bi bi-plus-circle me-2"></i>Novo Produto de Revenda</h6>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <div class="row g-2">
-            <div class="col-sm-6">
+            <div class="col-12">
               <label class="form-label small fw-semibold mb-1">Categoria <span class="text-danger">*</span></label>
-              <input type="text" name="categoria" class="form-control" placeholder="Ex: Bebidas" required>
+              <select name="categoria" id="sel_cat" class="form-select" required onchange="toggleNovaCat()">
+                {% for cat in cats %}
+                <option value="{{ cat }}">{{ cat }}</option>
+                {% endfor %}
+                <option value="__nova__">+ Nova categoria…</option>
+              </select>
             </div>
-            <div class="col-sm-6">
-              <label class="form-label small fw-semibold mb-1">Subcategoria</label>
-              <input type="text" name="subcategoria" class="form-control" placeholder="Ex: Sucos">
+            <div class="col-12" id="div_nova_cat" style="display:none">
+              <label class="form-label small fw-semibold mb-1">Nome da Nova Categoria</label>
+              <input type="text" name="nova_categoria" id="inp_nova_cat" class="form-control" placeholder="Ex: Snacks">
             </div>
-            <div class="col-sm-8">
+            <div class="col-8">
               <label class="form-label small fw-semibold mb-1">Nome do Produto <span class="text-danger">*</span></label>
               <input type="text" name="nome" class="form-control" required>
             </div>
-            <div class="col-sm-4">
+            <div class="col-4">
               <label class="form-label small fw-semibold mb-1">Unidade</label>
-              <input type="text" name="unidade" class="form-control" value="un" placeholder="un / kg / L">
+              <input type="text" name="unidade" class="form-control" value="un">
             </div>
-            <div class="col-sm-6">
+            <div class="col-6">
               <label class="form-label small fw-semibold mb-1">Estoque Atual</label>
-              <input type="number" name="estoque_atual" class="form-control" value="0" min="0" step="0.1">
+              <input type="number" name="estoque_atual" class="form-control" value="0" min="0" step="1">
             </div>
-            <div class="col-sm-6">
+            <div class="col-6">
               <label class="form-label small fw-semibold mb-1">Estoque Mínimo</label>
-              <input type="number" name="estoque_minimo" class="form-control" value="0" min="0" step="0.1">
+              <input type="number" name="estoque_minimo" class="form-control" value="0" min="0" step="1">
             </div>
           </div>
         </div>
@@ -144,4 +198,63 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleCat(el) {
+  el.classList.toggle('open');
+  el.nextElementSibling.classList.toggle('open');
+}
+
+function filtrar() {
+  const fNome   = document.getElementById('f_nome').value.toLowerCase().trim();
+  const fCat    = document.getElementById('f_cat').value.toLowerCase();
+  const fStatus = document.getElementById('f_status').value;
+
+  let total = 0, vis = 0;
+  document.querySelectorAll('.cat-block').forEach(block => {
+    const cat = block.dataset.cat.toLowerCase();
+    let blockVis = 0;
+    block.querySelectorAll('tbody tr').forEach(tr => {
+      total++;
+      const nome  = tr.dataset.nome || '';
+      const baixo = tr.dataset.baixo === '1';
+      let ok = true;
+      if (fNome   && !nome.includes(fNome)) ok = false;
+      if (fCat    && cat !== fCat) ok = false;
+      if (fStatus === 'baixo' && !baixo) ok = false;
+      if (fStatus === 'ok'    &&  baixo) ok = false;
+      tr.style.display = ok ? '' : 'none';
+      if (ok) { vis++; blockVis++; }
+    });
+    // mostra/oculta o bloco inteiro
+    block.style.display = blockVis > 0 ? '' : 'none';
+    // abre automaticamente se filtro ativo
+    if (fNome || fCat || fStatus) {
+      const hdr = block.querySelector('.cat-header');
+      const bdy = block.querySelector('.cat-body');
+      if (blockVis > 0) { hdr.classList.add('open'); bdy.classList.add('open'); }
+    }
+  });
+  const el = document.getElementById('contador');
+  el.textContent = (fNome || fCat || fStatus) ? `Exibindo ${vis} de ${total} itens` : '';
+}
+
+function limpar() {
+  document.getElementById('f_nome').value = '';
+  document.getElementById('f_cat').value  = '';
+  document.getElementById('f_status').value = '';
+  filtrar();
+}
+
+function toggleNovaCat() {
+  const sel = document.getElementById('sel_cat');
+  const div = document.getElementById('div_nova_cat');
+  const inp = document.getElementById('inp_nova_cat');
+  const show = sel.value === '__nova__';
+  div.style.display = show ? '' : 'none';
+  inp.required = show;
+}
+</script>
 {% endblock %}
