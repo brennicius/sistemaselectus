@@ -81,13 +81,16 @@
 {% for cat in cats %}
 {% set cat_itens = itens_por_cat[cat] %}
 {% set n_baixo = cat_itens | selectattr('_baixo') | list | length %}
+{% set ns = namespace(total=0) %}
+{% for item in cat_itens %}{% set ns.total = ns.total + (item.estoque_atual or 0) %}{% endfor %}
 
 <div class="mb-2 cat-block" data-cat="{{ cat }}">
   <div class="cat-header open" onclick="toggleCat(this)">
     <span>
       <i class="bi bi-tag me-2"></i>
       <strong>{{ cat }}</strong>
-      <span class="badge bg-secondary ms-2" style="font-size:.7rem">{{ cat_itens | length }}</span>
+      <span class="badge bg-secondary ms-2" style="font-size:.7rem">{{ cat_itens | length }} itens</span>
+      <span class="badge ms-1" style="font-size:.7rem;background:#0d6efd">{{ ns.total | int }} em estoque</span>
       {% if n_baixo > 0 %}
         <span class="badge bg-danger ms-1" style="font-size:.7rem">{{ n_baixo }} baixo{{ 's' if n_baixo > 1 }}</span>
       {% endif %}
