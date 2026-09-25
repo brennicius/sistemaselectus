@@ -3,9 +3,6 @@
 
 {% block content %}
 <style>
-  .cons-wrap {
-    overflow-x: auto;
-  }
   .cons-table {
     width: 100%;
     table-layout: fixed;
@@ -69,8 +66,7 @@
 {% if not cats_produtos %}
 <div class="alert alert-info">Nenhum item cadastrado.</div>
 {% else %}
-<div class="cons-wrap">
-  <table class="cons-table">
+<table class="cons-table">
     <thead>
       <tr>
         <th class="col-nome">Produto</th>
@@ -109,7 +105,6 @@
     {% endfor %}
     </tbody>
   </table>
-</div>
 {% endif %}
 {% endblock %}
 
