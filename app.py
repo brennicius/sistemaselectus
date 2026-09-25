@@ -2302,6 +2302,17 @@ def nf_confirmar(nf_id):
 @app.route('/estoque-revenda', methods=['GET', 'POST'])
 def estoque_revenda():
     db = get_db()
+    db.execute('''CREATE TABLE IF NOT EXISTS estoque_revenda (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        categoria TEXT NOT NULL,
+        subcategoria TEXT,
+        nome TEXT NOT NULL,
+        unidade TEXT DEFAULT 'un',
+        estoque_atual REAL DEFAULT 0,
+        estoque_minimo REAL DEFAULT 0,
+        ativo INTEGER NOT NULL DEFAULT 1
+    )''')
+    db.commit()
     try:
         db.execute('ALTER TABLE estoque_revenda ADD COLUMN subcategoria TEXT')
         db.commit()
