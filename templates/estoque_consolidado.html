@@ -3,91 +3,122 @@
 
 {% block content %}
 <style>
-  .cat-header {
-    cursor: pointer; user-select: none;
-    background: #1a3a5c; color: #fff;
-    padding: 10px 16px; border-radius: 6px;
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 2px;
+  .cons-wrap {
+    overflow-x: auto;
   }
-  .cat-header:hover { filter: brightness(0.9); }
-  .cat-toggle-icon { transition: transform .2s; font-size: .8rem; }
-  .cat-header.open .cat-toggle-icon { transform: rotate(90deg); }
-  .cat-body { display: none; }
-  .cat-body.open { display: block; }
-  th.pdv-col { text-align: center; min-width: 80px; }
-  td.pdv-col { text-align: center; }
-  td.total-col { text-align: center; font-weight: 600; background: #f8f9fa; }
-  .zero { color: #ccc; }
+  .cons-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: .85rem;
+  }
+  .cons-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: #1a3a5c;
+    color: #fff;
+    padding: 10px 8px;
+    text-align: center;
+    border: 1px solid #15325a;
+    white-space: nowrap;
+  }
+  .cons-table thead th.col-nome {
+    text-align: left;
+    width: 36%;
+  }
+  .cons-table thead th.col-pdv  { width: 11%; }
+  .cons-table thead th.col-tot  { width: 11%; background: #0d6efd; }
+
+  /* Category separator rows */
+  .cons-table tr.cat-row td {
+    background: #1a3a5c;
+    color: #fff;
+    font-weight: 600;
+    padding: 8px 12px;
+    cursor: pointer;
+    user-select: none;
+    border-top: 3px solid #fff;
+  }
+  .cons-table tr.cat-row:hover td { background: #15325a; }
+  .cons-table tr.cat-row td .chevron { float: right; transition: transform .2s; }
+  .cons-table tr.cat-row.collapsed td .chevron { transform: rotate(-90deg); }
+
+  /* Product rows */
+  .cons-table tr.item-row td {
+    padding: 5px 8px;
+    border-bottom: 1px solid #eee;
+    vertical-align: middle;
+  }
+  .cons-table tr.item-row td.col-nome { font-weight: 500; word-break: break-word; }
+  .cons-table tr.item-row td.num { text-align: center; }
+  .cons-table tr.item-row td.zero { text-align: center; color: #ccc; }
+  .cons-table tr.item-row td.col-tot { text-align: center; font-weight: 600; background: #f0f6ff; }
+  .cons-table tr.item-row:hover td { background: #f8f9fa; }
+  .cons-table tr.item-row:hover td.col-tot { background: #e0edff; }
+  .cons-table tr.hidden { display: none; }
 </style>
 
-<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
   <div>
     <h1><i class="bi bi-table me-2"></i>Estoque Consolidado</h1>
-    <p class="mb-0 text-muted small">Visão geral por PDV</p>
+    <p class="mb-0 text-muted small">Clique na categoria para expandir/recolher</p>
   </div>
 </div>
 
 {% if not cats_produtos %}
 <div class="alert alert-info">Nenhum item cadastrado.</div>
 {% else %}
-
-{% for cat, produtos in cats_produtos.items() %}
-{% set ns = namespace(total_cat=0) %}
-{% for nome, qtds in produtos.items() %}{% set ns.total_cat = ns.total_cat + qtds.values() | sum %}{% endfor %}
-
-<div class="mb-2">
-  <div class="cat-header open" onclick="toggleCat(this)">
-    <span>
-      <i class="bi bi-tag me-2"></i>
-      <strong>{{ cat }}</strong>
-      <span class="badge bg-secondary ms-2" style="font-size:.7rem">{{ produtos | length }} itens</span>
-      <span class="badge ms-1" style="font-size:.7rem;background:#0d6efd">{{ ns.total_cat | int }} total</span>
-    </span>
-    <i class="bi bi-chevron-right cat-toggle-icon"></i>
-  </div>
-  <div class="cat-body open">
-    <table class="table table-hover table-sm mb-0 align-middle border">
-      <thead class="table-light">
-        <tr>
-          <th>Produto</th>
-          {% for pdv in pdvs %}
-          <th class="pdv-col">{{ pdv }}</th>
-          {% endfor %}
-          <th class="pdv-col" style="background:#e8f4fd">Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for nome, qtds in produtos.items() %}
-        {% set total_linha = qtds.values() | sum %}
-        <tr>
-          <td class="fw-semibold small">{{ nome }}</td>
-          {% for pdv in pdvs %}
-          <td class="pdv-col">
-            {% if qtds[pdv] %}
-              <span>{{ qtds[pdv] | int }}</span>
-            {% else %}
-              <span class="zero">—</span>
-            {% endif %}
-          </td>
-          {% endfor %}
-          <td class="total-col">{{ total_linha | int }}</td>
-        </tr>
+<div class="cons-wrap">
+  <table class="cons-table">
+    <thead>
+      <tr>
+        <th class="col-nome">Produto</th>
+        {% for pdv in pdvs %}
+        <th class="col-pdv">{{ pdv }}</th>
         {% endfor %}
-      </tbody>
-    </table>
-  </div>
+        <th class="col-tot">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for cat, produtos in cats_produtos.items() %}
+      {% set ns = namespace(cat_total=0) %}
+      {% for nome, qtds in produtos.items() %}{% set ns.cat_total = ns.cat_total + (qtds.values()|list|sum) %}{% endfor %}
+      <tr class="cat-row" onclick="toggleCat(this, '{{ cat | replace("'","") | replace('"','') | replace(' ','-') }}')">
+        <td colspan="{{ pdvs|length + 2 }}">
+          <i class="bi bi-tag me-2"></i>{{ cat }}
+          <span class="badge bg-secondary ms-2" style="font-size:.7rem">{{ produtos|length }} itens</span>
+          <span class="badge ms-1" style="font-size:.7rem;background:#0d6efd">{{ ns.cat_total|int }} em estoque</span>
+          <span class="chevron"><i class="bi bi-chevron-down" style="font-size:.7rem"></i></span>
+        </td>
+      </tr>
+      {% for nome, qtds in produtos.items() %}
+      {% set total_linha = qtds.values()|list|sum %}
+      <tr class="item-row cat-{{ cat | replace("'","") | replace('"','') | replace(' ','-') | lower }}">
+        <td class="col-nome">{{ nome }}</td>
+        {% for pdv in pdvs %}
+        {% if qtds[pdv] %}
+          <td class="num">{{ qtds[pdv]|int }}</td>
+        {% else %}
+          <td class="zero">—</td>
+        {% endif %}
+        {% endfor %}
+        <td class="col-tot">{{ total_linha|int if total_linha else '—' }}</td>
+      </tr>
+      {% endfor %}
+    {% endfor %}
+    </tbody>
+  </table>
 </div>
-{% endfor %}
-
 {% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
-function toggleCat(el) {
-  el.classList.toggle('open');
-  el.nextElementSibling.classList.toggle('open');
+function toggleCat(catRow, catKey) {
+  catRow.classList.toggle('collapsed');
+  const cls = 'cat-' + catKey.toLowerCase();
+  document.querySelectorAll('tr.' + cls).forEach(tr => tr.classList.toggle('hidden'));
 }
 </script>
 {% endblock %}
