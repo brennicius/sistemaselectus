@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Estoque Central{% endblock %}
+{% block title %}Estoque {{ pdv_label }}{% endblock %}
 
 {% block content %}
 <style>
   .cat-header {
     cursor: pointer; user-select: none;
-    background: #1a3a5c; color: #fff;
+    background: #{{ pdv_color }}; color: #fff;
     padding: 10px 16px; border-radius: 6px;
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 2px;
   }
-  .cat-header:hover { background: #15325a; }
+  .cat-header:hover { filter: brightness(0.9); }
   .cat-toggle-icon { transition: transform .2s; font-size: .8rem; }
   .cat-header.open .cat-toggle-icon { transform: rotate(90deg); }
   .cat-body { display: none; }
@@ -21,7 +21,7 @@
 
 <div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
   <div>
-    <h1><i class="bi bi-shop me-2"></i>Estoque Central</h1>
+    <h1><i class="bi bi-shop me-2"></i>Estoque {{ pdv_label }}</h1>
     <p class="mb-0">{{ itens | length }} itens em {{ cats | length }} categorias.</p>
   </div>
   <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAdd">

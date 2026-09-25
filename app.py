@@ -2299,8 +2299,22 @@ def nf_confirmar(nf_id):
                            requisicoes_nf=requisicoes_nf, itens_fora=itens_fora)
 
 
-@app.route('/estoque-revenda', methods=['GET', 'POST'])
+@app.route('/estoque-revenda')
 def estoque_revenda():
+    return redirect(url_for('estoque_pdv', pdv='central'))
+
+
+_PDV_LABELS = {'central': 'Central', 'amaro': 'Amaro', 'portugues': 'Portugues', 'izabel': 'Izabel'}
+_PDV_COLORS = {'central': '1a3a5c', 'amaro': '1a5c2e', 'portugues': '7d3c0e', 'izabel': '5b1a6e'}
+
+
+@app.route('/estoque-pdv/<pdv>', methods=['GET', 'POST'])
+def estoque_pdv(pdv):
+    pdv = pdv.lower()
+    pdv_label = _PDV_LABELS.get(pdv)
+    if not pdv_label:
+        return redirect(url_for('estoque_pdv', pdv='central'))
+    pdv_color = _PDV_COLORS.get(pdv, '1a3a5c')
     db = get_db()
     db.execute('''CREATE TABLE IF NOT EXISTS estoque_revenda (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2318,8 +2332,14 @@ def estoque_revenda():
         db.commit()
     except Exception:
         pass
-    # seed estoque_revenda if empty
-    if not db.execute('SELECT 1 FROM estoque_revenda LIMIT 1').fetchone():
+    try:
+        db.execute("ALTER TABLE estoque_revenda ADD COLUMN pdv TEXT DEFAULT 'Central'")
+        db.execute("UPDATE estoque_revenda SET pdv = 'Central' WHERE pdv IS NULL OR pdv = ''")
+        db.commit()
+    except Exception:
+        pass
+    # seed Central if empty
+    if pdv == 'central' and not db.execute("SELECT 1 FROM estoque_revenda WHERE pdv='Central' LIMIT 1").fetchone():
         _seed = [
             ('Açaí', 'AÇAI NATURAL'),
             ('Açaí', 'AÇAI COM LEITINHO'),
@@ -2710,8 +2730,8 @@ def estoque_revenda():
         ]
         for _cat, _nome in _seed:
             db.execute(
-                'INSERT INTO estoque_revenda (categoria, nome, unidade, estoque_atual, estoque_minimo) VALUES (?,?,?,?,?)',
-                (_cat, _nome, 'un', 0, 0)
+                "INSERT INTO estoque_revenda (categoria, nome, unidade, estoque_atual, estoque_minimo, pdv) VALUES (?,?,?,?,?,?)",
+                (_cat, _nome, 'un', 0, 0, 'Central')
             )
         db.commit()
 
@@ -2744,10 +2764,11 @@ def estoque_revenda():
             db.commit()
             flash('Item removido.', 'success')
         db.close()
-        return redirect(url_for('estoque_revenda'))
+        return redirect(url_for('estoque_pdv', pdv=pdv))
 
     rows = db.execute(
-        'SELECT * FROM estoque_revenda WHERE ativo=1 ORDER BY categoria COLLATE NOCASE, nome COLLATE NOCASE'
+        "SELECT * FROM estoque_revenda WHERE ativo=1 AND pdv=? ORDER BY categoria COLLATE NOCASE, nome COLLATE NOCASE",
+        (pdv_label,)
     ).fetchall()
     db.close()
 
@@ -2759,7 +2780,37 @@ def estoque_revenda():
         itens_por_cat.setdefault(d['categoria'], []).append(d)
     cats = list(itens_por_cat.keys())
     itens = rows
-    return render_template('estoque_revenda.html', itens=itens, itens_por_cat=itens_por_cat, cats=cats)
+    return render_template('estoque_revenda.html', itens=itens, itens_por_cat=itens_por_cat, cats=cats,
+                           pdv=pdv, pdv_label=pdv_label, pdv_color=pdv_color)
+
+
+@app.route('/estoque-consolidado')
+def estoque_consolidado():
+    db = get_db()
+    # ensure table/column exists
+    try:
+        db.execute("ALTER TABLE estoque_revenda ADD COLUMN pdv TEXT DEFAULT 'Central'")
+        db.commit()
+    except Exception:
+        pass
+    rows = db.execute(
+        "SELECT categoria, nome, pdv, estoque_atual FROM estoque_revenda WHERE ativo=1 ORDER BY categoria COLLATE NOCASE, nome COLLATE NOCASE"
+    ).fetchall()
+    db.close()
+    from collections import OrderedDict
+    PDVS = ['Central', 'Amaro', 'Portugues', 'Izabel']
+    cats_produtos = OrderedDict()
+    for r in rows:
+        cat  = r['categoria']
+        nome = r['nome']
+        pdv_r = r['pdv'] or 'Central'
+        qty  = r['estoque_atual'] or 0
+        cats_produtos.setdefault(cat, OrderedDict())
+        if nome not in cats_produtos[cat]:
+            cats_produtos[cat][nome] = {p: 0 for p in PDVS}
+        if pdv_r in PDVS:
+            cats_produtos[cat][nome][pdv_r] += qty
+    return render_template('estoque_consolidado.html', cats_produtos=cats_produtos, pdvs=PDVS)
 
 
 @app.route('/alertas')
