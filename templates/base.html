@@ -80,22 +80,26 @@
     .bg-teal   { background-color: #0d9488 !important; color: #fff; }
     .bg-orange { background-color: #e8590c !important; color: #fff; }
     .sidebar-group-toggle {
-      background: none; border: none; color: inherit;
-      padding: 10px 16px; font-size: .9rem; font-weight: 500;
-      text-align: left; border-radius: 8px; cursor: pointer;
-      transition: background .15s;
+      display: flex; align-items: center; gap: 10px; width: 100%;
+      background: none; border: none; border-left: 3px solid transparent;
+      color: rgba(255,255,255,.75);
+      padding: 11px 18px; font-size: .92rem; font-weight: 400;
+      text-align: left; cursor: pointer;
+      transition: background .15s, color .15s;
     }
-    .sidebar-group-toggle:hover { background: rgba(255,255,255,.08); }
+    .sidebar-group-toggle:hover { background: var(--sidebar-hover); color: #fff; }
+    .sidebar-group-toggle i.bi-archive { font-size: 1.05rem; width: 20px; text-align:center; }
     .sidebar-sub {
-      display: flex; align-items: center;
-      padding: 7px 16px 7px 36px;
-      color: rgba(255,255,255,.75); text-decoration: none;
-      font-size: .85rem; border-radius: 6px; margin: 1px 6px;
-      transition: background .15s;
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 18px 8px 44px;
+      color: rgba(255,255,255,.65); text-decoration: none;
+      font-size: .88rem; border-left: 3px solid transparent;
+      transition: background .15s, color .15s;
     }
     .sidebar-sub:hover, .sidebar-sub.active {
-      background: rgba(255,255,255,.12); color: #fff;
+      background: var(--sidebar-hover); color: #fff;
     }
+    .sidebar-sub.active { background: var(--sidebar-active); border-left-color: #90caf9; }
 
     /* Price input inline */
     .price-input { width: 110px; text-align: right; }
