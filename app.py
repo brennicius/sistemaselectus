@@ -2338,6 +2338,17 @@ def estoque_pdv(pdv):
         db.commit()
     except Exception:
         pass
+    # propagar novos produtos do Central para este PDV
+    if pdv != 'central':
+        central_nomes = {r[0] for r in db.execute("SELECT nome FROM estoque_revenda WHERE pdv='Central' AND ativo=1").fetchall()}
+        pdv_nomes    = {r[0] for r in db.execute("SELECT nome FROM estoque_revenda WHERE pdv=?", (pdv_label,)).fetchall()}
+        for nome_c in central_nomes - pdv_nomes:
+            p = db.execute("SELECT categoria, unidade FROM estoque_revenda WHERE pdv='Central' AND nome=? LIMIT 1", (nome_c,)).fetchone()
+            if p:
+                db.execute("INSERT INTO estoque_revenda (categoria, nome, unidade, estoque_atual, estoque_minimo, pdv) VALUES (?,?,?,0,0,?)",
+                           (p[0], nome_c, p[1] or 'un', pdv_label))
+        db.commit()
+
     # seed Central if empty
     if pdv == 'central' and not db.execute("SELECT 1 FROM estoque_revenda WHERE pdv='Central' LIMIT 1").fetchone():
         _seed = [
