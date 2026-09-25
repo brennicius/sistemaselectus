@@ -155,6 +155,16 @@ def init_db():
             custo_novo REAL NOT NULL,
             data_registro TEXT DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS estoque_revenda (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            categoria TEXT NOT NULL,
+            subcategoria TEXT,
+            nome TEXT NOT NULL,
+            unidade TEXT DEFAULT 'un',
+            estoque_atual REAL DEFAULT 0,
+            estoque_minimo REAL DEFAULT 0,
+            ativo INTEGER NOT NULL DEFAULT 1
+        );
     ''')
     # Seed inicial: registra custo atual de cada ficha se tabela vazia
     if db.execute('SELECT COUNT(*) FROM historico_custo_fichas').fetchone()[0] == 0:
@@ -2287,6 +2297,50 @@ def nf_confirmar(nf_id):
     db.close()
     return render_template('nf_confirmar.html', nf=nf, itens=itens, insumos=insumos,
                            requisicoes_nf=requisicoes_nf, itens_fora=itens_fora)
+
+
+@app.route('/estoque-revenda', methods=['GET', 'POST'])
+def estoque_revenda():
+    db = get_db()
+    try:
+        db.execute('ALTER TABLE estoque_revenda ADD COLUMN subcategoria TEXT')
+        db.commit()
+    except Exception:
+        pass
+
+    if request.method == 'POST':
+        acao = request.form.get('acao')
+        if acao == 'add':
+            db.execute(
+                'INSERT INTO estoque_revenda (categoria, subcategoria, nome, unidade, estoque_atual, estoque_minimo) VALUES (?,?,?,?,?,?)',
+                (request.form.get('categoria','').strip(),
+                 request.form.get('subcategoria','').strip() or None,
+                 request.form.get('nome','').strip(),
+                 request.form.get('unidade','un').strip(),
+                 float(request.form.get('estoque_atual') or 0),
+                 float(request.form.get('estoque_minimo') or 0))
+            )
+            db.commit()
+            flash('Item cadastrado.', 'success')
+        elif acao == 'atualizar':
+            db.execute(
+                'UPDATE estoque_revenda SET estoque_atual=? WHERE id=?',
+                (float(request.form.get('estoque_atual') or 0), int(request.form.get('id')))
+            )
+            db.commit()
+            flash('Estoque atualizado.', 'success')
+        elif acao == 'excluir':
+            db.execute('DELETE FROM estoque_revenda WHERE id=?', (int(request.form.get('id')),))
+            db.commit()
+            flash('Item removido.', 'success')
+        db.close()
+        return redirect(url_for('estoque_revenda'))
+
+    itens = db.execute(
+        'SELECT * FROM estoque_revenda WHERE ativo=1 ORDER BY categoria COLLATE NOCASE, subcategoria COLLATE NOCASE, nome COLLATE NOCASE'
+    ).fetchall()
+    db.close()
+    return render_template('estoque_revenda.html', itens=itens)
 
 
 @app.route('/alertas')

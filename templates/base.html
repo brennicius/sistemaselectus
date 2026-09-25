@@ -79,6 +79,23 @@
     .bg-purple { background-color: #6f42c1 !important; color: #fff; }
     .bg-teal   { background-color: #0d9488 !important; color: #fff; }
     .bg-orange { background-color: #e8590c !important; color: #fff; }
+    .sidebar-group-toggle {
+      background: none; border: none; color: inherit;
+      padding: 10px 16px; font-size: .9rem; font-weight: 500;
+      text-align: left; border-radius: 8px; cursor: pointer;
+      transition: background .15s;
+    }
+    .sidebar-group-toggle:hover { background: rgba(255,255,255,.08); }
+    .sidebar-sub {
+      display: flex; align-items: center;
+      padding: 7px 16px 7px 36px;
+      color: rgba(255,255,255,.75); text-decoration: none;
+      font-size: .85rem; border-radius: 6px; margin: 1px 6px;
+      transition: background .15s;
+    }
+    .sidebar-sub:hover, .sidebar-sub.active {
+      background: rgba(255,255,255,.12); color: #fff;
+    }
 
     /* Price input inline */
     .price-input { width: 110px; text-align: right; }
@@ -141,10 +158,26 @@
       <span><i class="bi bi-cart3 me-2"></i>Lançamento de Pedidos</span>
       {% if n_pedidos_abertos > 0 %}<span class="badge bg-warning text-dark">{{ n_pedidos_abertos }}</span>{% endif %}
     </a>
-    <a href="{{ url_for('alertas') }}" class="{{ 'active' if request.endpoint == 'alertas' }}" style="justify-content:space-between">
+    {% set estoque_open = request.endpoint in ('alertas', 'estoque_revenda') %}
+    <button class="sidebar-group-toggle d-flex align-items-center justify-content-between w-100"
+            type="button"
+            data-bs-toggle="collapse" data-bs-target="#sub-estoque"
+            aria-expanded="{{ 'true' if estoque_open else 'false' }}">
       <span><i class="bi bi-archive me-2"></i>Estoque</span>
-      {% if n_alertas > 0 %}<span class="badge bg-danger">{{ n_alertas }}</span>{% endif %}
-    </a>
+      <i class="bi bi-chevron-{{ 'down' if estoque_open else 'right' }}" style="font-size:.75rem"></i>
+    </button>
+    <div class="collapse {{ 'show' if estoque_open else '' }}" id="sub-estoque">
+      <a href="{{ url_for('alertas') }}"
+         class="sidebar-sub {{ 'active' if request.endpoint == 'alertas' }}"
+         style="justify-content:space-between">
+        <span><i class="bi bi-box-seam me-2"></i>Insumos</span>
+        {% if n_alertas > 0 %}<span class="badge bg-danger">{{ n_alertas }}</span>{% endif %}
+      </a>
+      <a href="{{ url_for('estoque_revenda') }}"
+         class="sidebar-sub {{ 'active' if request.endpoint == 'estoque_revenda' }}">
+        <i class="bi bi-shop me-2"></i>Revenda
+      </a>
+    </div>
     <a href="{{ url_for('cafe_lista') }}" class="{{ 'active' if 'cafe' in request.endpoint }}">
       <i class="bi bi-cup-hot"></i> Café
     </a>
