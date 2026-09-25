@@ -162,8 +162,8 @@
       <span><i class="bi bi-cart3 me-2"></i>Lançamento de Pedidos</span>
       {% if n_pedidos_abertos > 0 %}<span class="badge bg-warning text-dark">{{ n_pedidos_abertos }}</span>{% endif %}
     </a>
-    {% set estoque_open = request.endpoint in ('alertas', 'estoque_pdv', 'estoque_consolidado', 'estoque_semana') %}
-    {% set revenda_open = request.endpoint in ('estoque_pdv', 'estoque_consolidado', 'estoque_semana') %}
+    {% set estoque_open = request.endpoint in ('alertas', 'estoque_pdv', 'estoque_consolidado', 'estoque_semana', 'estoque_reposicao') %}
+    {% set revenda_open = request.endpoint in ('estoque_pdv', 'estoque_consolidado', 'estoque_semana', 'estoque_reposicao') %}
     <button class="sidebar-group-toggle d-flex align-items-center justify-content-between w-100"
             type="button"
             data-bs-toggle="collapse" data-bs-target="#sub-estoque"
@@ -197,6 +197,9 @@
         <a href="{{ url_for('estoque_consolidado') }}"
            class="sidebar-sub {{ 'active' if request.endpoint == 'estoque_consolidado' }}"
            style="padding-left:2.5rem"><i class="bi bi-table me-2"></i>Consolidado</a>
+        <a href="{{ url_for('estoque_reposicao') }}"
+           class="sidebar-sub {{ 'active' if request.endpoint == 'estoque_reposicao' }}"
+           style="padding-left:2.5rem"><i class="bi bi-cart-check me-2"></i>Reposição</a>
       </div>
     </div>
     <a href="{{ url_for('cafe_lista') }}" class="{{ 'active' if 'cafe' in request.endpoint }}">

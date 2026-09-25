@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Reposição de Estoque{% endblock %}
+
+{% block content %}
+<style>
+  @media print {
+    .no-print { display: none !important; }
+    .page-break { page-break-before: always; }
+    body { font-size: 12px; }
+  }
+  .section-card { border-radius: 8px; overflow: hidden; margin-bottom: 2rem; }
+  .section-head {
+    padding: 12px 18px; color: #fff; font-weight: 700; font-size: 1rem;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .pdv-head { background: #1a3a5c; }
+  .compra-head { background: #8b1a1a; }
+  .rep-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  .rep-table th { background: #f0f6ff; padding: 7px 10px; text-align: left; border-bottom: 2px solid #dee2e6; }
+  .rep-table th.num { text-align: center; }
+  .rep-table td { padding: 6px 10px; border-bottom: 1px solid #eee; vertical-align: middle; }
+  .rep-table td.num { text-align: center; }
+  .rep-table tr:hover td { background: #f8f9fa; }
+  .badge-cat { font-size: .68rem; background: #e9ecef; color: #495057; padding: 2px 6px; border-radius: 4px; }
+  .qty-enviar { color: #1a5c2e; font-weight: 700; font-size: 1rem; }
+  .qty-comprar { color: #8b1a1a; font-weight: 700; font-size: 1rem; }
+  .empty-msg { padding: 16px; text-align: center; color: #6c757d; font-style: italic; }
+  .summary-bar { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .summary-pill {
+    padding: 8px 18px; border-radius: 20px; font-size: .85rem; font-weight: 600;
+    display: flex; align-items: center; gap: 6px;
+  }
+</style>
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 no-print">
+  <div>
+    <h1><i class="bi bi-cart-check me-2"></i>Reposição de Estoque</h1>
+    <p class="mb-0 text-muted small">Gerado em {{ hoje.strftime('%d/%m/%Y') }} — com base nos mínimos cadastrados por PDV</p>
+  </div>
+  <button class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+    <i class="bi bi-printer me-1"></i>Imprimir
+  </button>
+</div>
+
+{# ── Resumo ── #}
+{% set total_envios = envios.values() | map('length') | sum %}
+{% set total_compras = compras | length %}
+<div class="summary-bar no-print">
+  <div class="summary-pill" style="background:#e8f5e9;color:#1a5c2e">
+    <i class="bi bi-send"></i> {{ total_envios }} envio{{ 's' if total_envios != 1 }} do Central
+  </div>
+  <div class="summary-pill" style="background:#fdecea;color:#8b1a1a">
+    <i class="bi bi-bag-plus"></i> {{ total_compras }} item{{ 'ns' if total_compras != 1 }} para comprar
+  </div>
+</div>
+
+{# ── Ordens de Envio por PDV ── #}
+{% for pdv in pdvs %}
+{% set lista = envios[pdv] %}
+{% if lista %}
+<div class="section-card border">
+  <div class="section-head pdv-head">
+    <span><i class="bi bi-send me-2"></i>Envio Central → {{ pdv }}</span>
+    <span class="badge bg-light text-dark">{{ lista | length }} iten{{ 's' if lista|length != 1 }}</span>
+  </div>
+  <table class="rep-table">
+    <thead>
+      <tr>
+        <th style="width:40%">Produto</th>
+        <th>Categoria</th>
+        <th class="num">Atual PDV</th>
+        <th class="num">Mínimo</th>
+        <th class="num">Déficit</th>
+        <th class="num" style="background:#d4edda">Enviar</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in lista %}
+      <tr>
+        <td class="fw-semibold">{{ item.nome }}</td>
+        <td><span class="badge-cat">{{ item.cat }}</span></td>
+        <td class="num">{{ item.atual | int }}</td>
+        <td class="num">{{ item.minimo | int }}</td>
+        <td class="num text-danger">{{ (item.minimo - item.atual) | int }}</td>
+        <td class="num"><span class="qty-enviar">{{ item.enviar | int }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endfor %}
+
+{# ── Pedido de Compra ── #}
+{% if compras %}
+<div class="section-card border {% if total_envios > 0 %}page-break{% endif %}">
+  <div class="section-head compra-head">
+    <span><i class="bi bi-bag-plus me-2"></i>Pedido de Compra — Central sem estoque suficiente</span>
+    <span class="badge bg-light text-dark">{{ compras | length }} iten{{ 's' if compras|length != 1 }}</span>
+  </div>
+  <table class="rep-table">
+    <thead>
+      <tr>
+        <th style="width:38%">Produto</th>
+        <th>Categoria</th>
+        <th>PDV</th>
+        <th class="num">Atual PDV</th>
+        <th class="num">Mínimo</th>
+        <th class="num">Central</th>
+        <th class="num" style="background:#fdecea">Comprar</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set ns = namespace(last_cat='') %}
+      {% for item in compras %}
+      <tr>
+        <td class="fw-semibold">{{ item.nome }}</td>
+        <td><span class="badge-cat">{{ item.cat }}</span></td>
+        <td>{{ item.pdv }}</td>
+        <td class="num">{{ item.atual | int }}</td>
+        <td class="num">{{ item.minimo | int }}</td>
+        <td class="num text-muted">{{ item.central | int }}</td>
+        <td class="num"><span class="qty-comprar">{{ item.comprar | int }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if total_envios == 0 and total_compras == 0 %}
+<div class="alert alert-success">
+  <i class="bi bi-check-circle me-2"></i>Todos os PDVs estão com estoque acima do mínimo. Nenhuma reposição necessária.
+</div>
+{% endif %}
+{% endblock %}

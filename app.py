@@ -2833,6 +2833,52 @@ def estoque_consolidado():
 _BASE_INVENTARIO = date(2026, 9, 25)
 
 
+@app.route('/estoque-reposicao')
+def estoque_reposicao():
+    from collections import OrderedDict, defaultdict
+    db = get_db()
+    rows = db.execute(
+        "SELECT categoria, nome, pdv, estoque_atual, estoque_minimo FROM estoque_revenda WHERE ativo=1"
+    ).fetchall()
+    db.close()
+
+    PDVS = ['Amaro', 'Portugues', 'Izabel']
+
+    # Organiza: {nome: {pdv: {atual, minimo}}}
+    produtos = defaultdict(lambda: {'Central': {'atual': 0, 'minimo': 0}, **{p: {'atual': 0, 'minimo': 0} for p in PDVS}})
+    categorias = {}
+    for r in rows:
+        produtos[r['nome']][r['pdv']] = {'atual': r['estoque_atual'] or 0, 'minimo': r['estoque_minimo'] or 0}
+        if r['pdv'] == 'Central':
+            categorias[r['nome']] = r['categoria']
+
+    # Calcula déficits e aloca estoque do Central
+    envios   = {p: [] for p in PDVS}   # [{nome, cat, deficit, enviar}]
+    compras  = []                        # [{nome, cat, pdv, comprar}]
+
+    for nome, locs in sorted(produtos.items(), key=lambda x: (categorias.get(x[0], ''), x[0])):
+        cat = categorias.get(nome, 'Sem categoria')
+        central_disp = locs['Central']['atual']
+
+        for pdv in PDVS:
+            deficit = locs[pdv]['minimo'] - locs[pdv]['atual']
+            if deficit <= 0:
+                continue
+            enviar  = min(deficit, central_disp)
+            comprar = deficit - enviar
+            central_disp -= enviar
+            if enviar > 0:
+                envios[pdv].append({'nome': nome, 'cat': cat, 'atual': locs[pdv]['atual'],
+                                    'minimo': locs[pdv]['minimo'], 'enviar': enviar})
+            if comprar > 0:
+                compras.append({'nome': nome, 'cat': cat, 'pdv': pdv, 'atual': locs[pdv]['atual'],
+                                'minimo': locs[pdv]['minimo'], 'comprar': comprar,
+                                'central': locs['Central']['atual']})
+
+    return render_template('estoque_reposicao.html', envios=envios, compras=compras, pdvs=PDVS,
+                           hoje=date.today())
+
+
 @app.route('/estoque-semana/<pdv>', methods=['GET', 'POST'])
 def estoque_semana(pdv):
     from datetime import timedelta
