@@ -4,6 +4,7 @@
 <div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
   <div>
     <h1><i class="bi bi-cup-hot me-2"></i>{{ maquina.nome }}</h1>
+    {% if maquina.etiqueta %}<p class="mb-1 fw-semibold"><i class="bi bi-tag me-1"></i>Etiqueta: {{ maquina.etiqueta }}</p>{% endif %}
     <p class="mb-0">Histórico de leituras acumuladas e consumo diário</p>
   </div>
   <a href="{{ url_for('cafe_lista') }}" class="btn btn-outline-secondary">
