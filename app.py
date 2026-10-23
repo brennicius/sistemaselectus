@@ -3582,6 +3582,10 @@ def registro_item_salvar(id, item_id):
                (qtd_val, concluido, obs, lote or None,
                 port, amaro, izabel, agnus, cris,
                 env_port, env_amaro, env_izabel, env_agnus, env_cris, item_id, id))
+    soma_pdv = sum(v or 0 for v in (port, amaro, izabel, agnus, cris))
+    if soma_pdv > 0:
+        db.execute('UPDATE registro_itens SET qtd_planejada=? WHERE id=? AND registro_id=?',
+                   (soma_pdv, item_id, id))
     db.commit()
     # Auto-atualizar status do registro se todos concluídos
     total = db.execute('SELECT COUNT(*) FROM registro_itens WHERE registro_id=?', (id,)).fetchone()[0]
