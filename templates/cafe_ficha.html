@@ -42,43 +42,42 @@
 <!-- Custo por dose -->
 <div class="card shadow-sm mb-4">
   <div class="card-header py-2" style="background:#375623">
-    <span class="text-white fw-semibold"><i class="bi bi-currency-dollar me-2"></i>Custo e Preço por Dose</span>
+    <span class="text-white fw-semibold"><i class="bi bi-currency-dollar me-2"></i>Custo e Preço de Venda por Máquina</span>
+    {% if vigencia %}<small class="text-white ms-2" style="opacity:.85">preços vigentes desde {{ vigencia[8:10] }}/{{ vigencia[5:7] }}/{{ vigencia[0:4] }}</small>{% endif %}
   </div>
-  <div class="card-body p-0">
+  <div class="card-body p-0" style="overflow-x:auto">
     <table class="table table-hover mb-0 align-middle">
       <thead style="background:#375623">
         <tr>
           <th style="color:#fff">Bebida</th>
           <th class="text-end" style="color:#fff">Custo Nestlé<br><small style="font-weight:400;font-size:.72rem">R$/dose</small></th>
-          <th class="text-end" style="color:#fff">Copo Térmico<br><small style="font-weight:400;font-size:.72rem">R$/dose</small></th>
+          <th class="text-end" style="color:#fff">Copo<br><small style="font-weight:400;font-size:.72rem">R$/dose</small></th>
           <th class="text-end" style="color:#fff">Custo Total<br><small style="font-weight:400;font-size:.72rem">insumo + copo</small></th>
-          <th class="text-end" style="color:#fff">Preço Venda<br><small style="font-weight:400;font-size:.72rem">Amaro</small></th>
-          <th class="text-end" style="color:#fff">Margem<br><small style="font-weight:400;font-size:.72rem">R$/dose</small></th>
-          <th class="text-end" style="color:#fff">Margem %</th>
+          {% for mid, nome in maquinas_preco %}
+          <th class="text-end" style="color:#fff">Preço<br><small style="font-weight:400;font-size:.72rem">{{ nome }}</small></th>
+          {% endfor %}
         </tr>
       </thead>
       <tbody>
-        {% for col, label, custo, preco in bebidas_custo %}
-        {% if custo %}
-        {% set custo_total = custo + custo_copo %}
-        {% set margem = (preco - custo_total) if preco else none %}
-        {% set margem_pct = (margem / preco * 100) if (margem is not none and preco) else none %}
+        {% for label, custo, custo_total, precos in bebidas_custo %}
         <tr>
           <td class="fw-semibold">{{ label }}</td>
-          <td class="text-end font-monospace">{{ custo|brl(2) }}</td>
-          <td class="text-end font-monospace text-muted">{{ custo_copo|brl(2) }}</td>
-          <td class="text-end font-monospace fw-semibold text-danger">{{ custo_total|brl(2) }}</td>
-          <td class="text-end font-monospace">{{ preco|brl(2) if preco else '—' }}</td>
-          <td class="text-end font-monospace fw-bold text-success">{{ margem|brl(2) if margem is not none else '—' }}</td>
+          <td class="text-end text-nowrap font-monospace">{{ custo|brl(2) }}</td>
+          <td class="text-end text-nowrap font-monospace text-muted">{{ custo_copo|brl(2) }}</td>
+          <td class="text-end text-nowrap font-monospace fw-semibold text-danger">{{ custo_total|brl(2) }}</td>
+          {% for preco, margem_pct in precos %}
           <td class="text-end">
-            {% if margem_pct is not none %}
-            <span class="badge {{ 'bg-success' if margem_pct >= 60 else ('bg-warning text-dark' if margem_pct >= 40 else 'bg-danger') }}">
+            {% if preco %}
+            <div class="font-monospace text-nowrap">{{ preco|brl(2) }}</div>
+            <span class="badge {{ 'bg-success' if margem_pct >= 60 else ('bg-warning text-dark' if margem_pct >= 40 else 'bg-danger') }}" style="font-size:.68rem">
               {{ '%.1f'|format(margem_pct) }}%
             </span>
-            {% else %}—{% endif %}
+            {% else %}
+            <span class="badge bg-secondary" style="font-size:.68rem">Gratuito</span>
+            {% endif %}
           </td>
+          {% endfor %}
         </tr>
-        {% endif %}
         {% endfor %}
       </tbody>
     </table>

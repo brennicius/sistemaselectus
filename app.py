@@ -4813,12 +4813,28 @@ def cafe_ficha():
             total += custo
             ins_enrich.append({**ins, 'custo_dose': custo})
         composicao.append({**item, 'insumos': ins_enrich, 'custo_total': total})
-    bebidas_custo = [(col, label, CAFE_CUSTO_DOSE.get(col), CAFE_PRECO_VENDA.get(col))
-                     for col, label in NESTLE_BEBIDAS]
+    from datetime import date as _date
+    hoje = _date.today().isoformat()
+    maquinas_preco = [(1, 'Amaro CC'), (2, 'Amaro CO'), (3, 'Português CC'),
+                      (5, 'Português CO'), (4, 'Português Diretoria'), (6, 'Izabel')]
+    bebidas_custo = []
+    for col, label in NESTLE_BEBIDAS:
+        custo = CAFE_CUSTO_DOSE.get(col)
+        if not custo:
+            continue
+        custo_total = custo + CUSTO_COPO
+        precos = []
+        for mid, _ in maquinas_preco:
+            p = _preco_cafe(mid, col, hoje)
+            precos.append((p, (p - custo_total) / p * 100 if p else None))
+        bebidas_custo.append((label, custo, custo_total, precos))
+    vigencia = max((ini for ini, _ in CAFE_PRECO_VIGENCIAS if ini <= hoje), default=None)
     return render_template('cafe_ficha.html',
                            insumos=insumos,
                            composicao=composicao,
                            bebidas_custo=bebidas_custo,
+                           maquinas_preco=maquinas_preco,
+                           vigencia=vigencia,
                            custo_copo=CUSTO_COPO)
 
 @app.route('/cafe/consolidado')
