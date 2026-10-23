@@ -250,6 +250,28 @@ def init_db():
     ''')
     db.commit()
 
+    # Troca de placa de contagem do café: a leitura bruta recomeça do zero na data da troca.
+    # cafe_leituras guarda a leitura exata do equipamento; cafe_leituras_calc soma a contagem
+    # final da placa antiga (offset) às leituras a partir da troca, para os deltas continuarem certos.
+    _cols_cafe = ['expresso','curto','duplo','americano','capuccino','cafe_leite','cafe_leite_curto',
+                  'achoc_kitkat','capp_alpino','achoc_alpino','mocaccino_2f','achoc_2f']
+    if db.execute("SELECT 1 FROM sqlite_master WHERE name='cafe_leituras'").fetchone():
+        db.execute('CREATE TABLE IF NOT EXISTS cafe_trocas_placa ('
+                   'id INTEGER PRIMARY KEY AUTOINCREMENT, maquina_id INTEGER NOT NULL, '
+                   'data TEXT NOT NULL, observacao TEXT, '
+                   + ', '.join(f'{c} INTEGER DEFAULT 0' for c in _cols_cafe) + ')')
+        _ajustadas = ', '.join(
+            f'l.{c} + COALESCE((SELECT SUM(t.{c}) FROM cafe_trocas_placa t '
+            f'WHERE t.maquina_id = l.maquina_id AND t.data <= l.data), 0) AS {c}'
+            for c in _cols_cafe)
+        _brutas = ', '.join(c[1] for c in db.execute('PRAGMA table_info(cafe_leituras)')
+                            if c[1] not in _cols_cafe and c[1] not in ('id', 'maquina_id', 'data'))
+        db.execute('DROP VIEW IF EXISTS cafe_leituras_calc')
+        db.execute(f'CREATE VIEW cafe_leituras_calc AS SELECT l.id, l.maquina_id, l.data, {_ajustadas}'
+                   + (f', {", ".join("l." + b for b in _brutas.split(", "))}' if _brutas else '')
+                   + ' FROM cafe_leituras l')
+        db.commit()
+
     # Migrations para estoque central e rastreamento de consumo
     try:
         db.execute('ALTER TABLE insumos ADD COLUMN estoque_central REAL DEFAULT 0')
@@ -4153,11 +4175,11 @@ def _consumo_insumos_periodo(db, pdv, desde, ate=None):
     for m in maquinas:
         mid = m['id']
         baseline = db.execute(
-            "SELECT * FROM cafe_leituras WHERE maquina_id=? AND data<=? ORDER BY data DESC LIMIT 1",
+            "SELECT * FROM cafe_leituras_calc WHERE maquina_id=? AND data<=? ORDER BY data DESC LIMIT 1",
             (mid, desde)
         ).fetchone()
         readings = db.execute(
-            "SELECT * FROM cafe_leituras WHERE maquina_id=? AND data>? AND data<=? ORDER BY data ASC",
+            "SELECT * FROM cafe_leituras_calc WHERE maquina_id=? AND data>? AND data<=? ORDER BY data ASC",
             (mid, desde, ate)
         ).fetchall()
         if not readings:
@@ -4549,7 +4571,7 @@ def cafe_lista():
     resumo = []
     for m in maquinas:
         ultima = db.execute(
-            'SELECT * FROM cafe_leituras WHERE maquina_id=? ORDER BY data DESC LIMIT 1', (m['id'],)
+            'SELECT * FROM cafe_leituras_calc WHERE maquina_id=? ORDER BY data DESC LIMIT 1', (m['id'],)
         ).fetchone()
         n_dias = db.execute(
             'SELECT COUNT(*) FROM cafe_leituras WHERE maquina_id=?', (m['id'],)
@@ -4565,7 +4587,7 @@ def cafe_lista():
                 total_acum = sum(vals)
         # Consumo do último dia (delta: última - penúltima leitura)
         penultima = db.execute(
-            'SELECT * FROM cafe_leituras WHERE maquina_id=? ORDER BY data DESC LIMIT 1 OFFSET 1', (m['id'],)
+            'SELECT * FROM cafe_leituras_calc WHERE maquina_id=? ORDER BY data DESC LIMIT 1 OFFSET 1', (m['id'],)
         ).fetchone()
         consumo_ultimo_dia = None
         if ultima and penultima:
@@ -4597,7 +4619,7 @@ def cafe_lista():
         return dias
 
     todas_leituras = db.execute(
-        "SELECT * FROM cafe_leituras l JOIN cafe_maquinas m ON l.maquina_id=m.id WHERE m.tipo!='bbc' ORDER BY l.maquina_id, l.data"
+        "SELECT * FROM cafe_leituras_calc l JOIN cafe_maquinas m ON l.maquina_id=m.id WHERE m.tipo!='bbc' ORDER BY l.maquina_id, l.data"
     ).fetchall()
     por_maquina = {}
     for r in todas_leituras:
@@ -4765,7 +4787,7 @@ def cafe_maquina(mid):
 
     # Buscar todos os registros para calcular deltas corretamente (inclui o anterior ao filtro)
     all_rows = db.execute(
-        'SELECT * FROM cafe_leituras WHERE maquina_id=? ORDER BY data ASC', (mid,)
+        'SELECT * FROM cafe_leituras_calc WHERE maquina_id=? ORDER BY data ASC', (mid,)
     ).fetchall()
 
     bebidas = BBC_BEBIDAS if maquina['tipo'] == 'bbc' else NESTLE_BEBIDAS
@@ -4852,7 +4874,7 @@ def cafe_consolidado():
             f'SELECT * FROM cafe_maquinas WHERE id IN ({ph})', maquina_ids).fetchall()}
 
         all_rows = db.execute(
-            f'SELECT * FROM cafe_leituras WHERE maquina_id IN ({ph}) ORDER BY maquina_id, data ASC',
+            f'SELECT * FROM cafe_leituras_calc WHERE maquina_id IN ({ph}) ORDER BY maquina_id, data ASC',
             maquina_ids).fetchall()
 
         # Calcular deltas por máquina
@@ -4983,7 +5005,7 @@ def cafe_financeiro():
             f'SELECT * FROM cafe_maquinas WHERE id IN ({ph})', maquina_ids).fetchall()}
 
         all_rows = db.execute(
-            f'SELECT * FROM cafe_leituras WHERE maquina_id IN ({ph}) ORDER BY maquina_id, data ASC',
+            f'SELECT * FROM cafe_leituras_calc WHERE maquina_id IN ({ph}) ORDER BY maquina_id, data ASC',
             maquina_ids).fetchall()
 
         rows_por_maquina = {}
@@ -5136,7 +5158,7 @@ def cafe_projecao():
         maquina_ids = pdv_info['maquinas']
         ph = ','.join('?' * len(maquina_ids))
         rows_all = db.execute(
-            f'SELECT l.* FROM cafe_leituras l '
+            f'SELECT l.* FROM cafe_leituras_calc l '
             f'JOIN cafe_maquinas m ON l.maquina_id = m.id '
             f'WHERE l.maquina_id IN ({ph}) AND m.tipo != "bbc"',
             maquina_ids,
