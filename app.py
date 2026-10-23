@@ -4102,6 +4102,32 @@ CAFE_PRECO_OVERRIDE = {
     4: {col: 0 for col, _ in NESTLE_BEBIDAS},            # Português Diretoria — tudo gratuito
 }
 
+def _tabela_cafe(expresso, curto, duplo, americano, capuccino, cafe_leite, cafe_leite_curto, especiais):
+    return {'expresso': expresso, 'curto': curto, 'duplo': duplo, 'americano': americano,
+            'capuccino': capuccino, 'cafe_leite': cafe_leite, 'cafe_leite_curto': cafe_leite_curto,
+            'achoc_kitkat': especiais, 'capp_alpino': especiais, 'achoc_alpino': especiais,
+            'mocaccino_2f': especiais, 'achoc_2f': especiais}
+
+# Tabelas de preço por máquina com data de início (vale para leituras com data >= início).
+# Máquinas fora da tabela usam CAFE_PRECO_OVERRIDE / CAFE_PRECO_VENDA.
+CAFE_PRECO_VIGENCIAS = [
+    ('2026-10-22', {
+        1: _tabela_cafe(2.50, 2.10, 2.90, 3.10, 3.10, 3.10, 3.10, 9.00),  # Amaro CC
+        2: _tabela_cafe(2.50, 2.10, 2.90, 3.10, 3.10, 3.10, 3.10, 9.00),  # Amaro CO
+        3: _tabela_cafe(0.00, 0.00, 5.00, 6.00, 9.00, 8.00, 6.50, 9.00),  # Português CC
+        5: _tabela_cafe(3.50, 3.50, 5.00, 6.00, 9.00, 8.00, 6.50, 9.00),  # Português CO
+        6: _tabela_cafe(2.30, 2.30, 2.90, 3.10, 3.70, 3.60, 3.60, 9.00),  # Izabel
+    }),
+]
+
+
+def _preco_cafe(mid, col, data):
+    for inicio, tabela in sorted(CAFE_PRECO_VIGENCIAS, reverse=True):
+        if data >= inicio and mid in tabela:
+            return tabela[mid][col]
+    return CAFE_PRECO_OVERRIDE.get(mid, {}).get(col, CAFE_PRECO_VENDA.get(col, 0))
+
+
 CAFE_PDVS = {
     'Amaro':    {'label': 'Amaro',     'cor': '#1a3a5c', 'maquinas': [1, 2]},
     'Portugues':{'label': 'Português', 'cor': '#375623', 'maquinas': [3, 4, 5]},
@@ -4916,9 +4942,10 @@ def cafe_financeiro():
             dias[r['data']] = d_row
         return dias
 
-    def _stats(dias_dict, filtro_de, filtro_ate):
-        """Calcula total doses por bebida e n_dias com dados no período."""
+    def _stats(dias_dict, filtro_de, filtro_ate, mid):
+        """Total de doses, receita (preço vigente na data da leitura) e n_dias no período."""
         total = {col: 0 for col, _ in NESTLE_BEBIDAS}
+        receita = {col: 0.0 for col, _ in NESTLE_BEBIDAS}
         n_dias = 0
         for data, d_row in dias_dict.items():
             if filtro_de and data < filtro_de: continue
@@ -4926,8 +4953,10 @@ def cafe_financeiro():
             if sum(d_row.values()) == 0: continue
             n_dias += 1
             for col, _ in NESTLE_BEBIDAS:
-                total[col] += d_row.get(col, 0)
-        return total, n_dias
+                doses = d_row.get(col, 0)
+                total[col] += doses
+                receita[col] += doses * _preco_cafe(mid, col, data)
+        return total, n_dias, receita
 
     resultado = {}
     for pdv_key, pdv_info in CAFE_PDVS.items():
@@ -4945,8 +4974,7 @@ def cafe_financeiro():
         for r in all_rows:
             rows_por_maquina.setdefault(r['maquina_id'], []).append(r)
 
-        def _financeiro(total_doses, n_dias, mid=None):
-            override = CAFE_PRECO_OVERRIDE.get(mid, {})
+        def _financeiro(total_doses, n_dias, receita_col):
             rows = []
             totais = {k: 0 for k in ['receita_periodo', 'custo_insumo_periodo', 'custo_copo_periodo',
                                       'custo_total_periodo', 'margem_periodo',
@@ -4957,12 +4985,12 @@ def cafe_financeiro():
                 if doses_total == 0:
                     continue
                 avg   = doses_total / n_dias if n_dias else 0
-                preco = override.get(col, CAFE_PRECO_VENDA.get(col, 0))
                 c_ins = CAFE_CUSTO_DOSE.get(col, 0)
                 c_cop = CUSTO_COPO
                 c_tot = c_ins + c_cop
 
-                receita_periodo       = doses_total * preco
+                receita_periodo       = receita_col.get(col, 0)
+                preco                 = receita_periodo / doses_total
                 custo_insumo_periodo  = doses_total * c_ins
                 custo_copo_periodo    = doses_total * c_cop
                 custo_total_periodo   = doses_total * c_tot
@@ -5006,12 +5034,13 @@ def cafe_financeiro():
 
         maquinas_dados = []
         total_consolidado = {col: 0 for col, _ in NESTLE_BEBIDAS}
+        receita_consolidada = {col: 0.0 for col, _ in NESTLE_BEBIDAS}
         n_dias_max = 0
         for mid in maquina_ids:
             rows_m = rows_por_maquina.get(mid, [])
             dias_m = _deltas_maquina(rows_m)
-            total_m, n_m = _stats(dias_m, filtro_de, filtro_ate)
-            fin_rows, fin_totais = _financeiro(total_m, n_m, mid=mid)
+            total_m, n_m, receita_m = _stats(dias_m, filtro_de, filtro_ate, mid)
+            fin_rows, fin_totais = _financeiro(total_m, n_m, receita_m)
             maquinas_dados.append({
                 'maquina': maquinas_info.get(mid, {}),
                 'n_dias': n_m,
@@ -5020,10 +5049,11 @@ def cafe_financeiro():
             })
             for col, _ in NESTLE_BEBIDAS:
                 total_consolidado[col] += total_m.get(col, 0)
+                receita_consolidada[col] += receita_m.get(col, 0)
             if n_m > n_dias_max:
                 n_dias_max = n_m
 
-        fin_rows_c, fin_totais_c = _financeiro(total_consolidado, n_dias_max)
+        fin_rows_c, fin_totais_c = _financeiro(total_consolidado, n_dias_max, receita_consolidada)
 
         # Datas para o filtro
         todas_datas = sorted({r['data'] for r in all_rows})
