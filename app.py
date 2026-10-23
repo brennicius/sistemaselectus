@@ -3317,6 +3317,9 @@ def previsao_lista():
     return render_template('previsao_lista.html', resultado=resultado)
 
 # ── Registro de Produção ─────────────────────────────────────
+# Corte entre registros antigos e o novo controle: 23/10/2026 00:00 de Brasília (criado_em é UTC)
+REGISTRO_CORTE = '2026-10-23 03:00:00'
+
 @app.route('/registros')
 def registro_lista():
     db = get_db()
@@ -3334,8 +3337,14 @@ def registro_lista():
     tab = request.args.get('tab', 'historico')
     reg_hist   = [r for r in regs if r['data'] <= hoje or r['no_historico']]
     reg_futura = [r for r in regs if r['data'] > hoje and not r['no_historico']]
+    lista = reg_futura if tab == 'futura' else reg_hist
+    grupos = [
+        ('Lançados a partir de 23/10/2026', [r for r in lista if (r['criado_em'] or '') >= REGISTRO_CORTE]),
+        ('Lançados até 22/10/2026',         [r for r in lista if (r['criado_em'] or '') <  REGISTRO_CORTE]),
+    ]
     return render_template('registro_lista.html', registros=regs,
-                           reg_hist=reg_hist, reg_futura=reg_futura, hoje=hoje, tab=tab)
+                           reg_hist=reg_hist, reg_futura=reg_futura, hoje=hoje, tab=tab,
+                           grupos=grupos)
 
 @app.route('/registros/<int:id>', methods=['GET', 'POST'])
 def registro_ver(id):

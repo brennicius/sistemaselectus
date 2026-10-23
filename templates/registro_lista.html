@@ -51,6 +51,16 @@
 </div>
 {% endif %}
 
+{% for titulo, regs_grupo in grupos %}
+<div class="d-flex align-items-center gap-2 mb-2 {{ 'mt-4' if not loop.first }}">
+  <h5 class="mb-0 fw-semibold">
+    <i class="bi {{ 'bi-pencil-square' if loop.first else 'bi-archive' }} me-1"></i>{{ titulo }}
+  </h5>
+  <span class="badge {{ 'bg-primary' if loop.first else 'bg-secondary' }}">{{ regs_grupo|length }}</span>
+</div>
+{% if not regs_grupo %}
+<p class="text-muted small mb-0">Nenhum registro neste grupo.</p>
+{% else %}
 <div class="card shadow-sm">
   <div class="card-body p-0">
     <table class="table table-hover mb-0 align-middle">
@@ -68,7 +78,7 @@
         </tr>
       </thead>
       <tbody>
-        {% for r in lista_ativa %}
+        {% for r in regs_grupo %}
         {% set pct = ((r.n_concluidos / r.n_itens * 100)|int) if r.n_itens > 0 else 0 %}
         <tr>
           {% if tab == 'futura' %}
@@ -144,6 +154,8 @@
     </table>
   </div>
 </div>
+{% endif %}
+{% endfor %}
 
 {% if tab == 'futura' %}
 </form>
