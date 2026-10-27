@@ -272,6 +272,16 @@ def init_db():
                    + ' FROM cafe_leituras l')
         db.commit()
 
+    # Insumo vinculado a uma sub-receita usa a mesma unidade do rendimento da ficha
+    db.execute('''UPDATE insumos SET
+                      unidade_uso    = (SELECT p.unidade_rendimento FROM produtos p WHERE p.id = insumos.produto_vinculado_id),
+                      unidade_compra = (SELECT p.unidade_rendimento FROM produtos p WHERE p.id = insumos.produto_vinculado_id)
+                  WHERE produto_vinculado_id IS NOT NULL
+                    AND EXISTS (SELECT 1 FROM produtos p WHERE p.id = insumos.produto_vinculado_id
+                                AND p.unidade_rendimento IS NOT NULL
+                                AND p.unidade_rendimento != COALESCE(insumos.unidade_uso, ''))''')
+    db.commit()
+
     # Migrations para estoque central e rastreamento de consumo
     try:
         db.execute('ALTER TABLE insumos ADD COLUMN estoque_central REAL DEFAULT 0')
@@ -1036,8 +1046,10 @@ def ficha_editar(id):
                    (novo_nome, d.get('descricao','').strip(),
                     float(d.get('rendimento') or 1), d.get('unidade_rendimento','un'),
                     d.get('categoria','').strip() or None, vref, id))
-        # Sincroniza o nome do insumo vinculado a este produto
-        db.execute('UPDATE insumos SET nome=? WHERE produto_vinculado_id=?', (novo_nome, id))
+        # Sincroniza nome e unidade do insumo vinculado a este produto
+        unid = d.get('unidade_rendimento', 'un')
+        db.execute('UPDATE insumos SET nome=?, unidade_uso=?, unidade_compra=? WHERE produto_vinculado_id=?',
+                   (novo_nome, unid, unid, id))
         db.commit()
         flash('Produto atualizado.', 'success')
         prod = db.execute('SELECT * FROM produtos WHERE id=?', (id,)).fetchone()
