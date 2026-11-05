@@ -169,6 +169,12 @@
                        id="bahia-{{ it.id }}" value="{{ it.qtd_bahia or '' }}" placeholder="0"
                        style="width:46px;font-size:.8rem" oninput="somarPDV({{ it.id }})">
               </div>
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#0f766e;font-weight:600">
+                <span>Central</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="central-{{ it.id }}" value="{{ it.qtd_central or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarPDV({{ it.id }})">
+              </div>
             </div>
           </td>
           <td class="text-center">
@@ -238,9 +244,15 @@
                        id="env-bahia-{{ it.id }}" value="{{ it.env_bahia or '' }}" placeholder="0"
                        style="width:46px;font-size:.8rem" oninput="somarEnviado({{ it.id }})">
               </div>
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#0f766e;font-weight:600">
+                <span>Central</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="env-central-{{ it.id }}" value="{{ it.env_central or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarEnviado({{ it.id }})">
+              </div>
             </div>
           </td>
-          {% set tot_env = (it.env_portugues or 0)+(it.env_amaro or 0)+(it.env_izabel or 0)+(it.env_agnus or 0)+(it.env_cris or 0)+(it.env_agnus_kits or 0)+(it.env_amaro2 or 0)+(it.env_bahia or 0) %}
+          {% set tot_env = (it.env_portugues or 0)+(it.env_amaro or 0)+(it.env_izabel or 0)+(it.env_agnus or 0)+(it.env_cris or 0)+(it.env_agnus_kits or 0)+(it.env_amaro2 or 0)+(it.env_bahia or 0)+(it.env_central or 0) %}
           <td class="text-center">
             <div class="d-flex align-items-center justify-content-center gap-1">
               <span id="tot-env-{{ it.id }}" style="font-size:1.05rem;font-weight:600;color:#1a3a5c">
@@ -274,7 +286,7 @@
           {% if vendas_datas %}
           {% set vlist = vendas_map.get(it.produto, []) %}
           {% set total_vendido = vlist | sum(attribute='total') %}
-          {% set total_enviado = ((it.env_portugues or 0) + (it.env_amaro or 0) + (it.env_izabel or 0) + (it.env_agnus or 0) + (it.env_cris or 0)) %}
+          {% set total_enviado = ((it.env_portugues or 0) + (it.env_amaro or 0) + (it.env_izabel or 0) + (it.env_agnus or 0) + (it.env_cris or 0) + (it.env_agnus_kits or 0) + (it.env_amaro2 or 0) + (it.env_bahia or 0) + (it.env_central or 0)) %}
           {% set delta = total_enviado - total_vendido %}
           {% set vend_ptg    = vlist | sum(attribute='ptg') %}
           {% set vend_amaro  = vlist | sum(attribute='amaro') %}
@@ -378,7 +390,7 @@
                   {% endfor %}
                 </tbody>
                 <tfoot>
-                  {% set env_total = (it.env_portugues or 0)+(it.env_amaro or 0)+(it.env_izabel or 0)+(it.env_agnus or 0)+(it.env_cris or 0) %}
+                  {% set env_total = (it.env_portugues or 0)+(it.env_amaro or 0)+(it.env_izabel or 0)+(it.env_agnus or 0)+(it.env_cris or 0)+(it.env_agnus_kits or 0)+(it.env_amaro2 or 0)+(it.env_bahia or 0)+(it.env_central or 0) %}
                   {% set pct_total = ((it.total_descarte / env_total * 100) | round(0) | int) if env_total > 0 else none %}
                   <tr style="border-top:2px solid #e5e7eb">
                     <td style="padding:2px 4px;font-weight:600;color:#374151">Total</td>
@@ -601,7 +613,8 @@ function somarPDV(id) {
   const kits   = parseInt(document.getElementById('kits-'  + id)?.value) || 0;
   const amaro2 = parseInt(document.getElementById('amaro2-'+ id)?.value) || 0;
   const bahia  = parseInt(document.getElementById('bahia-' + id)?.value) || 0;
-  const total  = port + amaro + izabel + agnus + cris + kits + amaro2 + bahia;
+  const central= parseInt(document.getElementById('central-'+ id)?.value) || 0;
+  const total  = port + amaro + izabel + agnus + cris + kits + amaro2 + bahia + central;
   const qtdInput = document.getElementById('qtd-' + id);
   if (total > 0) qtdInput.value = total;
   marcarDirty(id);
@@ -617,7 +630,8 @@ function somarEnviado(id) {
   const kits   = parseInt(document.getElementById('env-kits-'  + id)?.value) || 0;
   const amaro2 = parseInt(document.getElementById('env-amaro2-'+ id)?.value) || 0;
   const bahia  = parseInt(document.getElementById('env-bahia-' + id)?.value) || 0;
-  const totEnv = port + amaro + izabel + agnus + cris + kits + amaro2 + bahia;
+  const central= parseInt(document.getElementById('env-central-'+ id)?.value) || 0;
+  const totEnv = port + amaro + izabel + agnus + cris + kits + amaro2 + bahia + central;
   const totEnvEl = document.getElementById('tot-env-' + id);
   if (totEnvEl) totEnvEl.textContent = totEnv > 0 ? totEnv : '—';
   const qtdVal = parseInt(document.getElementById('qtd-' + id).value) || 0;
@@ -657,7 +671,8 @@ function recalcularTotais() {
     const ek = parseInt(document.getElementById('env-kits-'  + id)?.value) || 0;
     const e2 = parseInt(document.getElementById('env-amaro2-'+ id)?.value) || 0;
     const eb = parseInt(document.getElementById('env-bahia-' + id)?.value) || 0;
-    const env = ep + ea + ei + eg + ec + ek + e2 + eb;
+    const et = parseInt(document.getElementById('env-central-'+ id)?.value) || 0;
+    const env = ep + ea + ei + eg + ec + ek + e2 + eb + et;
     if (!catTotals[idx]) catTotals[idx] = { prod: 0, env: 0, temAlgum: false, temEnv: false };
     catTotals[idx].prod += prod;
     catTotals[idx].env += env;
@@ -709,9 +724,11 @@ function desfazerSave() {
   set('port-' + s.id, s.port); set('amaro-' + s.id, s.amaro);
   set('izabel-' + s.id, s.izabel); set('agnus-' + s.id, s.agnus); set('cris-' + s.id, s.cris);
   set('kits-' + s.id, s.kits); set('amaro2-' + s.id, s.amaro2); set('bahia-' + s.id, s.bahia);
+  set('central-' + s.id, s.central);
   set('env-port-' + s.id, s.ep); set('env-amaro-' + s.id, s.ea);
   set('env-izabel-' + s.id, s.ei); set('env-agnus-' + s.id, s.eg); set('env-cris-' + s.id, s.ec);
   set('env-kits-' + s.id, s.ek); set('env-amaro2-' + s.id, s.e2); set('env-bahia-' + s.id, s.eb);
+  set('env-central-' + s.id, s.et);
   _lastSave = null;
   salvarItem(s.id);
 }
@@ -737,6 +754,7 @@ function salvarItem(id) {
     kits:  document.getElementById('kits-'   + id)?.value ?? '',
     amaro2:document.getElementById('amaro2-' + id)?.value ?? '',
     bahia: document.getElementById('bahia-'  + id)?.value ?? '',
+    central:document.getElementById('central-'+ id)?.value ?? '',
     ep:    document.getElementById('env-port-'  + id)?.value ?? '',
     ea:    document.getElementById('env-amaro-' + id)?.value ?? '',
     ei:    document.getElementById('env-izabel-'+ id)?.value ?? '',
@@ -745,6 +763,7 @@ function salvarItem(id) {
     ek:    document.getElementById('env-kits-'  + id)?.value ?? '',
     e2:    document.getElementById('env-amaro2-'+ id)?.value ?? '',
     eb:    document.getElementById('env-bahia-' + id)?.value ?? '',
+    et:    document.getElementById('env-central-'+ id)?.value ?? '',
   };
 
   if (saveBtn) {
@@ -765,6 +784,7 @@ function salvarItem(id) {
       qtd_agnus_kits:document.getElementById('kits-'  + id)?.value || null,
       qtd_amaro2:    document.getElementById('amaro2-'+ id)?.value || null,
       qtd_bahia:     document.getElementById('bahia-' + id)?.value || null,
+      qtd_central:   document.getElementById('central-'+ id)?.value || null,
       env_portugues: document.getElementById('env-port-'  + id).value || null,
       env_amaro:     document.getElementById('env-amaro-' + id).value || null,
       env_izabel:    document.getElementById('env-izabel-'+ id).value || null,
@@ -773,6 +793,7 @@ function salvarItem(id) {
       env_agnus_kits:document.getElementById('env-kits-'  + id)?.value || null,
       env_amaro2:    document.getElementById('env-amaro2-'+ id)?.value || null,
       env_bahia:     document.getElementById('env-bahia-' + id)?.value || null,
+      env_central:   document.getElementById('env-central-'+ id)?.value || null,
     })
   }).then(r => r.json()).then(d => {
     if (d.ok) {
@@ -796,7 +817,8 @@ function salvarItem(id) {
       const ek = parseInt(document.getElementById('env-kits-'  + id)?.value) || 0;
       const e2 = parseInt(document.getElementById('env-amaro2-'+ id)?.value) || 0;
       const eb = parseInt(document.getElementById('env-bahia-' + id)?.value) || 0;
-      const totEnv = ep + ea + ei + eg + ec + ek + e2 + eb;
+      const et = parseInt(document.getElementById('env-central-'+ id)?.value) || 0;
+      const totEnv = ep + ea + ei + eg + ec + ek + e2 + eb + et;
       const difEnvEl = document.getElementById('dif-env-' + id);
       if (difEnvEl) {
         const qtdProd = isNaN(qtdVal) ? 0 : qtdVal;

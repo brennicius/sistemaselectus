@@ -292,7 +292,7 @@ def init_db():
     except Exception:
         pass
     # Migrations para os destinos Agnus Kits, Amaro 2 e Bahia no registro de produção
-    for col in ('qtd_agnus_kits', 'qtd_amaro2', 'qtd_bahia', 'env_agnus_kits', 'env_amaro2', 'env_bahia'):
+    for col in ('qtd_agnus_kits', 'qtd_amaro2', 'qtd_bahia', 'qtd_central', 'env_agnus_kits', 'env_amaro2', 'env_bahia', 'env_central'):
         try:
             db.execute(f'ALTER TABLE registro_itens ADD COLUMN {col} INTEGER')
         except Exception:
@@ -3611,6 +3611,7 @@ def registro_item_salvar(id, item_id):
     kits  = _int(d.get('qtd_agnus_kits'))
     amaro2= _int(d.get('qtd_amaro2'))
     bahia = _int(d.get('qtd_bahia'))
+    central = _int(d.get('qtd_central'))
     env_port  = _int(d.get('env_portugues'))
     env_amaro = _int(d.get('env_amaro'))
     env_izabel= _int(d.get('env_izabel'))
@@ -3619,20 +3620,21 @@ def registro_item_salvar(id, item_id):
     env_kits  = _int(d.get('env_agnus_kits'))
     env_amaro2= _int(d.get('env_amaro2'))
     env_bahia = _int(d.get('env_bahia'))
+    env_central = _int(d.get('env_central'))
     db = get_db()
     db.execute('''UPDATE registro_itens
                   SET qtd_produzida=?, concluido=?, observacao=?, lote=?,
                       qtd_portugues=?, qtd_amaro=?, qtd_izabel=?, qtd_agnus=?, qtd_cris=?,
-                      qtd_agnus_kits=?, qtd_amaro2=?, qtd_bahia=?,
+                      qtd_agnus_kits=?, qtd_amaro2=?, qtd_bahia=?, qtd_central=?,
                       env_portugues=?, env_amaro=?, env_izabel=?, env_agnus=?, env_cris=?,
-                      env_agnus_kits=?, env_amaro2=?, env_bahia=?
+                      env_agnus_kits=?, env_amaro2=?, env_bahia=?, env_central=?
                   WHERE id=? AND registro_id=?''',
                (qtd_val, concluido, obs, lote or None,
                 port, amaro, izabel, agnus, cris,
-                kits, amaro2, bahia,
+                kits, amaro2, bahia, central,
                 env_port, env_amaro, env_izabel, env_agnus, env_cris,
-                env_kits, env_amaro2, env_bahia, item_id, id))
-    soma_pdv = sum(v or 0 for v in (port, amaro, izabel, agnus, cris, kits, amaro2, bahia))
+                env_kits, env_amaro2, env_bahia, env_central, item_id, id))
+    soma_pdv = sum(v or 0 for v in (port, amaro, izabel, agnus, cris, kits, amaro2, bahia, central))
     if soma_pdv > 0:
         db.execute('UPDATE registro_itens SET qtd_planejada=? WHERE id=? AND registro_id=?',
                    (soma_pdv, item_id, id))
@@ -3672,6 +3674,9 @@ def registros_lista_compras():
     db = get_db()
     prods_all = db.execute('SELECT * FROM produtos ORDER BY nome').fetchall()
     prod_map = {_norm_reg_name(p['nome']): p['id'] for p in prods_all}
+    for n_prato, pid in list(prod_map.items()):
+        if n_prato.startswith('PRATO '):   # o plano escreve os pratos sem "Prato"
+            prod_map.setdefault(n_prato[6:].strip(), pid)
     for alias_key, pid in ALIASES.items():
         prod_map[_norm_reg_name(alias_key)] = pid
 
@@ -3744,6 +3749,9 @@ def registros_lista_compras_exportar():
     db = get_db()
     prods_all = db.execute('SELECT * FROM produtos ORDER BY nome').fetchall()
     prod_map = {_norm_reg_name(p['nome']): p['id'] for p in prods_all}
+    for n_prato, pid in list(prod_map.items()):
+        if n_prato.startswith('PRATO '):   # o plano escreve os pratos sem "Prato"
+            prod_map.setdefault(n_prato[6:].strip(), pid)
     for alias_key, pid in ALIASES.items():
         prod_map[_norm_reg_name(alias_key)] = pid
 
