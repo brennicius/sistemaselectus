@@ -291,6 +291,12 @@ def init_db():
         db.execute('ALTER TABLE requisicoes ADD COLUMN nf_origem_id INTEGER')
     except Exception:
         pass
+    # Migrations para os destinos Agnus Kits, Amaro 2 e Bahia no registro de produção
+    for col in ('qtd_agnus_kits', 'qtd_amaro2', 'qtd_bahia', 'env_agnus_kits', 'env_amaro2', 'env_bahia'):
+        try:
+            db.execute(f'ALTER TABLE registro_itens ADD COLUMN {col} INTEGER')
+        except Exception:
+            pass
     db.executescript('''
         CREATE TABLE IF NOT EXISTS requisicao_consumos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3602,21 +3608,31 @@ def registro_item_salvar(id, item_id):
     izabel= _int(d.get('qtd_izabel'))
     agnus = _int(d.get('qtd_agnus'))
     cris  = _int(d.get('qtd_cris'))
+    kits  = _int(d.get('qtd_agnus_kits'))
+    amaro2= _int(d.get('qtd_amaro2'))
+    bahia = _int(d.get('qtd_bahia'))
     env_port  = _int(d.get('env_portugues'))
     env_amaro = _int(d.get('env_amaro'))
     env_izabel= _int(d.get('env_izabel'))
     env_agnus = _int(d.get('env_agnus'))
     env_cris  = _int(d.get('env_cris'))
+    env_kits  = _int(d.get('env_agnus_kits'))
+    env_amaro2= _int(d.get('env_amaro2'))
+    env_bahia = _int(d.get('env_bahia'))
     db = get_db()
     db.execute('''UPDATE registro_itens
                   SET qtd_produzida=?, concluido=?, observacao=?, lote=?,
                       qtd_portugues=?, qtd_amaro=?, qtd_izabel=?, qtd_agnus=?, qtd_cris=?,
-                      env_portugues=?, env_amaro=?, env_izabel=?, env_agnus=?, env_cris=?
+                      qtd_agnus_kits=?, qtd_amaro2=?, qtd_bahia=?,
+                      env_portugues=?, env_amaro=?, env_izabel=?, env_agnus=?, env_cris=?,
+                      env_agnus_kits=?, env_amaro2=?, env_bahia=?
                   WHERE id=? AND registro_id=?''',
                (qtd_val, concluido, obs, lote or None,
                 port, amaro, izabel, agnus, cris,
-                env_port, env_amaro, env_izabel, env_agnus, env_cris, item_id, id))
-    soma_pdv = sum(v or 0 for v in (port, amaro, izabel, agnus, cris))
+                kits, amaro2, bahia,
+                env_port, env_amaro, env_izabel, env_agnus, env_cris,
+                env_kits, env_amaro2, env_bahia, item_id, id))
+    soma_pdv = sum(v or 0 for v in (port, amaro, izabel, agnus, cris, kits, amaro2, bahia))
     if soma_pdv > 0:
         db.execute('UPDATE registro_itens SET qtd_planejada=? WHERE id=? AND registro_id=?',
                    (soma_pdv, item_id, id))

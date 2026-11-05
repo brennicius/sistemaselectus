@@ -120,7 +120,7 @@
           <td class="fw-semibold">{{ it.produto }}</td>
           <td class="text-center fw-semibold plan-val" style="font-size:1.05rem">{{ it.qtd_planejada or '—' }}</td>
           <td class="text-center">
-            <div class="d-flex justify-content-center gap-1">
+            <div class="d-flex flex-wrap justify-content-center gap-1" style="width:204px;margin:0 auto">
               <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#0891b2;font-weight:600">
                 <span>Port.</span>
                 <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
@@ -151,6 +151,24 @@
                        id="cris-{{ it.id }}" value="{{ it.qtd_cris or '' }}" placeholder="0"
                        style="width:46px;font-size:.8rem" oninput="somarPDV({{ it.id }})">
               </div>
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#b45309;font-weight:600">
+                <span>Kits</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="kits-{{ it.id }}" value="{{ it.qtd_agnus_kits or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarPDV({{ it.id }})">
+              </div>
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#1e40af;font-weight:600">
+                <span>Am. 2</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="amaro2-{{ it.id }}" value="{{ it.qtd_amaro2 or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarPDV({{ it.id }})">
+              </div>
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#be123c;font-weight:600">
+                <span>Bahia</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="bahia-{{ it.id }}" value="{{ it.qtd_bahia or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarPDV({{ it.id }})">
+              </div>
             </div>
           </td>
           <td class="text-center">
@@ -171,7 +189,7 @@
             </div>
           </td>
           <td class="text-center">
-            <div class="d-flex justify-content-center gap-1">
+            <div class="d-flex flex-wrap justify-content-center gap-1" style="width:204px;margin:0 auto">
               <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#0891b2;font-weight:600">
                 <span>Port.</span>
                 <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
@@ -202,9 +220,27 @@
                        id="env-cris-{{ it.id }}" value="{{ it.env_cris or '' }}" placeholder="0"
                        style="width:46px;font-size:.8rem" oninput="somarEnviado({{ it.id }})">
               </div>
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#b45309;font-weight:600">
+                <span>Kits</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="env-kits-{{ it.id }}" value="{{ it.env_agnus_kits or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarEnviado({{ it.id }})">
+              </div>
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#1e40af;font-weight:600">
+                <span>Am. 2</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="env-amaro2-{{ it.id }}" value="{{ it.env_amaro2 or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarEnviado({{ it.id }})">
+              </div>
+              <div class="d-flex flex-column align-items-center" style="font-size:.65rem;color:#be123c;font-weight:600">
+                <span>Bahia</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm pdv-input text-center px-1"
+                       id="env-bahia-{{ it.id }}" value="{{ it.env_bahia or '' }}" placeholder="0"
+                       style="width:46px;font-size:.8rem" oninput="somarEnviado({{ it.id }})">
+              </div>
             </div>
           </td>
-          {% set tot_env = (it.env_portugues or 0)+(it.env_amaro or 0)+(it.env_izabel or 0)+(it.env_agnus or 0)+(it.env_cris or 0) %}
+          {% set tot_env = (it.env_portugues or 0)+(it.env_amaro or 0)+(it.env_izabel or 0)+(it.env_agnus or 0)+(it.env_cris or 0)+(it.env_agnus_kits or 0)+(it.env_amaro2 or 0)+(it.env_bahia or 0) %}
           <td class="text-center">
             <div class="d-flex align-items-center justify-content-center gap-1">
               <span id="tot-env-{{ it.id }}" style="font-size:1.05rem;font-weight:600;color:#1a3a5c">
@@ -562,7 +598,10 @@ function somarPDV(id) {
   const izabel = parseInt(document.getElementById('izabel-'+ id).value) || 0;
   const agnus  = parseInt(document.getElementById('agnus-' + id).value) || 0;
   const cris   = parseInt(document.getElementById('cris-'  + id)?.value) || 0;
-  const total  = port + amaro + izabel + agnus + cris;
+  const kits   = parseInt(document.getElementById('kits-'  + id)?.value) || 0;
+  const amaro2 = parseInt(document.getElementById('amaro2-'+ id)?.value) || 0;
+  const bahia  = parseInt(document.getElementById('bahia-' + id)?.value) || 0;
+  const total  = port + amaro + izabel + agnus + cris + kits + amaro2 + bahia;
   const qtdInput = document.getElementById('qtd-' + id);
   if (total > 0) qtdInput.value = total;
   marcarDirty(id);
@@ -575,7 +614,10 @@ function somarEnviado(id) {
   const izabel = parseInt(document.getElementById('env-izabel-'+ id).value) || 0;
   const agnus  = parseInt(document.getElementById('env-agnus-' + id).value) || 0;
   const cris   = parseInt(document.getElementById('env-cris-'  + id)?.value) || 0;
-  const totEnv = port + amaro + izabel + agnus + cris;
+  const kits   = parseInt(document.getElementById('env-kits-'  + id)?.value) || 0;
+  const amaro2 = parseInt(document.getElementById('env-amaro2-'+ id)?.value) || 0;
+  const bahia  = parseInt(document.getElementById('env-bahia-' + id)?.value) || 0;
+  const totEnv = port + amaro + izabel + agnus + cris + kits + amaro2 + bahia;
   const totEnvEl = document.getElementById('tot-env-' + id);
   if (totEnvEl) totEnvEl.textContent = totEnv > 0 ? totEnv : '—';
   const qtdVal = parseInt(document.getElementById('qtd-' + id).value) || 0;
@@ -612,7 +654,10 @@ function recalcularTotais() {
     const ei = parseInt(document.getElementById('env-izabel-'+ id)?.value) || 0;
     const eg = parseInt(document.getElementById('env-agnus-' + id)?.value) || 0;
     const ec = parseInt(document.getElementById('env-cris-'  + id)?.value) || 0;
-    const env = ep + ea + ei + eg + ec;
+    const ek = parseInt(document.getElementById('env-kits-'  + id)?.value) || 0;
+    const e2 = parseInt(document.getElementById('env-amaro2-'+ id)?.value) || 0;
+    const eb = parseInt(document.getElementById('env-bahia-' + id)?.value) || 0;
+    const env = ep + ea + ei + eg + ec + ek + e2 + eb;
     if (!catTotals[idx]) catTotals[idx] = { prod: 0, env: 0, temAlgum: false, temEnv: false };
     catTotals[idx].prod += prod;
     catTotals[idx].env += env;
@@ -663,8 +708,10 @@ function desfazerSave() {
   set('qtd-' + s.id, s.qtd); set('obs-' + s.id, s.obs); set('lote-' + s.id, s.lote);
   set('port-' + s.id, s.port); set('amaro-' + s.id, s.amaro);
   set('izabel-' + s.id, s.izabel); set('agnus-' + s.id, s.agnus); set('cris-' + s.id, s.cris);
+  set('kits-' + s.id, s.kits); set('amaro2-' + s.id, s.amaro2); set('bahia-' + s.id, s.bahia);
   set('env-port-' + s.id, s.ep); set('env-amaro-' + s.id, s.ea);
   set('env-izabel-' + s.id, s.ei); set('env-agnus-' + s.id, s.eg); set('env-cris-' + s.id, s.ec);
+  set('env-kits-' + s.id, s.ek); set('env-amaro2-' + s.id, s.e2); set('env-bahia-' + s.id, s.eb);
   _lastSave = null;
   salvarItem(s.id);
 }
@@ -687,11 +734,17 @@ function salvarItem(id) {
     izabel:document.getElementById('izabel-' + id)?.value ?? '',
     agnus: document.getElementById('agnus-'  + id)?.value ?? '',
     cris:  document.getElementById('cris-'   + id)?.value ?? '',
+    kits:  document.getElementById('kits-'   + id)?.value ?? '',
+    amaro2:document.getElementById('amaro2-' + id)?.value ?? '',
+    bahia: document.getElementById('bahia-'  + id)?.value ?? '',
     ep:    document.getElementById('env-port-'  + id)?.value ?? '',
     ea:    document.getElementById('env-amaro-' + id)?.value ?? '',
     ei:    document.getElementById('env-izabel-'+ id)?.value ?? '',
     eg:    document.getElementById('env-agnus-' + id)?.value ?? '',
     ec:    document.getElementById('env-cris-'  + id)?.value ?? '',
+    ek:    document.getElementById('env-kits-'  + id)?.value ?? '',
+    e2:    document.getElementById('env-amaro2-'+ id)?.value ?? '',
+    eb:    document.getElementById('env-bahia-' + id)?.value ?? '',
   };
 
   if (saveBtn) {
@@ -709,11 +762,17 @@ function salvarItem(id) {
       qtd_izabel:    document.getElementById('izabel-'+ id).value || null,
       qtd_agnus:     document.getElementById('agnus-' + id).value || null,
       qtd_cris:      document.getElementById('cris-'  + id)?.value || null,
+      qtd_agnus_kits:document.getElementById('kits-'  + id)?.value || null,
+      qtd_amaro2:    document.getElementById('amaro2-'+ id)?.value || null,
+      qtd_bahia:     document.getElementById('bahia-' + id)?.value || null,
       env_portugues: document.getElementById('env-port-'  + id).value || null,
       env_amaro:     document.getElementById('env-amaro-' + id).value || null,
       env_izabel:    document.getElementById('env-izabel-'+ id).value || null,
       env_agnus:     document.getElementById('env-agnus-' + id).value || null,
       env_cris:      document.getElementById('env-cris-'  + id)?.value || null,
+      env_agnus_kits:document.getElementById('env-kits-'  + id)?.value || null,
+      env_amaro2:    document.getElementById('env-amaro2-'+ id)?.value || null,
+      env_bahia:     document.getElementById('env-bahia-' + id)?.value || null,
     })
   }).then(r => r.json()).then(d => {
     if (d.ok) {
@@ -734,7 +793,10 @@ function salvarItem(id) {
       const ei = parseInt(document.getElementById('env-izabel-'+ id)?.value) || 0;
       const eg = parseInt(document.getElementById('env-agnus-' + id)?.value) || 0;
       const ec = parseInt(document.getElementById('env-cris-'  + id)?.value) || 0;
-      const totEnv = ep + ea + ei + eg + ec;
+      const ek = parseInt(document.getElementById('env-kits-'  + id)?.value) || 0;
+      const e2 = parseInt(document.getElementById('env-amaro2-'+ id)?.value) || 0;
+      const eb = parseInt(document.getElementById('env-bahia-' + id)?.value) || 0;
+      const totEnv = ep + ea + ei + eg + ec + ek + e2 + eb;
       const difEnvEl = document.getElementById('dif-env-' + id);
       if (difEnvEl) {
         const qtdProd = isNaN(qtdVal) ? 0 : qtdVal;
