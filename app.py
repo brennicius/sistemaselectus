@@ -3270,8 +3270,8 @@ def previsao_necessidade():
     lista_dia = [i for i in lista_dia if i['qtd_necessaria'] > 0]
 
     # Projetar estoque após o dia 1 (após compras + consumo)
-    all_estoques = {r['id']: float(r['estoque_atual'] or 0)
-                    for r in db.execute('SELECT id, estoque_atual FROM insumos').fetchall()}
+    all_estoques = {r['id']: float(r['estoque_atual'] or 0) + float(r['estoque_central'] or 0)
+                    for r in db.execute('SELECT id, estoque_atual, estoque_central FROM insumos').fetchall()}
     db.close()
 
     estoque_pos_dia1 = dict(all_estoques)
@@ -3775,8 +3775,8 @@ def registros_lista_compras_exportar():
                 matched[pid] = matched.get(pid, 0) + qty
         return matched
 
-    all_estoques = {r['id']: float(r['estoque_atual'] or 0)
-                    for r in db.execute('SELECT id, estoque_atual FROM insumos').fetchall()}
+    all_estoques = {r['id']: float(r['estoque_atual'] or 0) + float(r['estoque_central'] or 0)
+                    for r in db.execute('SELECT id, estoque_atual, estoque_central FROM insumos').fetchall()}
 
     # ── Cascata: cada dia herda o estoque projetado do anterior ──
     estoque_proj = dict(all_estoques)
