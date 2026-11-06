@@ -572,7 +572,7 @@ def insumos_lista():
     categorias_lista = [
         'Carnes e proteínas', 'Atum', 'Confeitaria', 'Descartáveis', 'Embalagens',
         'Etiquetas', 'Frutas, verduras e legumes', 'Grãos, cereais e massas',
-        'Laticínios, Frios', 'Molhos', 'Molhos e temperos', 'Pães',
+        'Laticínios, Frios', 'Molhos', 'Molhos e temperos', 'Pães', 'Preparos',
     ]
     return render_template('insumos_lista.html', insumos=rows, sem_preco_ids=sem_preco_ids,
                            mudancas=mudancas, categorias_lista=categorias_lista)

@@ -37,6 +37,7 @@
   .bc-molhos     { background:#fef9c3; color:#713f12; border-color:#fde047; }
   .bc-molhos2    { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
   .bc-paes       { background:#f0fdf4; color:#15803d; border-color:#4ade80; }
+  .bc-preparos   { background:#fdf2f8; color:#be185d; border-color:#f9a8d4; }
   .bc-sem        { background:#f9fafb; color:#9ca3af; border-color:#e5e7eb; font-style:italic; }
   /* Observação */
   .obs-wrapper { position:relative; display:inline-block; }
@@ -180,7 +181,7 @@
                 'Descartáveis':'bc-descart','Embalagens':'bc-embalam','Etiquetas':'bc-etiquet',
                 'Frutas, verduras e legumes':'bc-frutas','Grãos, cereais e massas':'bc-graos',
                 'Laticínios, Frios':'bc-latic','Molhos':'bc-molhos','Molhos e temperos':'bc-molhos2',
-                'Pães':'bc-paes'}.get(_cat, 'bc-sem') -%}
+                'Pães':'bc-paes','Preparos':'bc-preparos'}.get(_cat, 'bc-sem') -%}
             <span class="badge-cat {{ _cls }} cat-badge" data-id="{{ ins.id }}"
                   title="Clique para alterar categoria">{{ _cat or '— categoria —' }}</span>
             <select class="cat-select-inline cat-select d-none" data-id="{{ ins.id }}">
@@ -884,7 +885,7 @@ const CAT_CLS_MAP = {
   'descartáveis': 'bc-descart', 'embalagens': 'bc-embalam', 'etiquetas': 'bc-etiquet',
   'frutas, verduras e legumes': 'bc-frutas', 'grãos, cereais e massas': 'bc-graos',
   'laticínios, frios': 'bc-latic', 'molhos': 'bc-molhos', 'molhos e temperos': 'bc-molhos2',
-  'pães': 'bc-paes',
+  'pães': 'bc-paes', 'preparos': 'bc-preparos',
 };
 function catCls(val) { return CAT_CLS_MAP[(val||'').toLowerCase()] || 'bc-sem'; }
 
