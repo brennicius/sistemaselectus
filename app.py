@@ -11,6 +11,8 @@ FLUXO_SENHA = 'Panda2023!'
 
 DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cozinha.db')
 
+CATS1_INSUMO = ['Fornecedor', 'Mercado', 'Administrativo']
+
 CATEGORIAS = [
     ('Cuscuz',         'bg-warning text-dark'),
     ('Saladas gourmet','bg-success'),
@@ -292,6 +294,10 @@ def init_db():
     except Exception:
         pass
     # Migrations para os destinos Agnus Kits, Amaro 2 e Bahia no registro de produção
+    try:
+        db.execute('ALTER TABLE insumos ADD COLUMN cat1 TEXT')
+    except Exception:
+        pass
     for col in ('qtd_agnus_kits', 'qtd_amaro2', 'qtd_bahia', 'qtd_central', 'env_agnus_kits', 'env_amaro2', 'env_bahia', 'env_central'):
         try:
             db.execute(f'ALTER TABLE registro_itens ADD COLUMN {col} INTEGER')
@@ -575,7 +581,8 @@ def insumos_lista():
         'Laticínios, Frios', 'Molhos', 'Molhos e temperos', 'Pães', 'Preparos',
     ]
     return render_template('insumos_lista.html', insumos=rows, sem_preco_ids=sem_preco_ids,
-                           mudancas=mudancas, categorias_lista=categorias_lista)
+                           mudancas=mudancas, categorias_lista=categorias_lista,
+                           cats1_lista=CATS1_INSUMO)
 
 def _parse_insumo_form(d):
     nome  = d['nome'].strip()
@@ -719,6 +726,17 @@ def insumo_estoque_minimo(id):
     db.execute('UPDATE insumos SET estoque_minimo=? WHERE id=?', (v, id))
     db.commit(); db.close()
     return jsonify(ok=True)
+
+@app.route('/insumos/<int:id>/cat1', methods=['POST'])
+def insumo_cat1(id):
+    cat1 = (request.json or {}).get('cat1') or None
+    if cat1 is not None and cat1 not in CATS1_INSUMO:
+        return jsonify({'ok': False, 'erro': 'Cat 1 inválida'}), 400
+    db = get_db()
+    db.execute('UPDATE insumos SET cat1=? WHERE id=?', (cat1, id))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
 
 @app.route('/insumos/<int:id>/categoria', methods=['POST'])
 def insumo_categoria(id):
@@ -1294,6 +1312,7 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
                i.qtd_por_embalagem, i.unid_embalagem,
                i.produto_vinculado_id,
                COALESCE(i.fornecedor, '') as fornecedor,
+               i.cat1,
                COALESCE(i.estoque_atual, 0) as estoque_atual,
                COALESCE(i.estoque_central, 0) as estoque_central,
                p2.rendimento AS rend_vinc
@@ -1339,6 +1358,7 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
                                 'estoque_central': r['estoque_central'],
                                 'pkg_info': pkg_info,
                                 'fornecedor': r['fornecedor'] or '',
+                                'cat1': r['cat1'] or '',
                                 'qtd_uso': 0.0, 'valor': 0.0}
             ins_map[iid]['qtd_uso'] += qtd_uso
             if r['preco_compra'] is not None:
@@ -3650,6 +3670,39 @@ def registro_item_salvar(id, item_id):
     return jsonify(ok=True, n_concluidos=feitos, total=total)
 
 
+def _reserva_estoque(db, prods_all, prod_map, ids, primeira_data):
+    """Produções programadas entre amanhã e a véspera do primeiro dia da lista,
+    ainda não concluídas: o consumo delas fica reservado no estoque."""
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    hoje = _dt.now(_tz(_td(hours=-3))).date().isoformat()
+    ph = ','.join('?' * len(ids))
+    regs = db.execute(
+        f'''SELECT id, rodada, data FROM registros_producao
+            WHERE data > ? AND data < ? AND COALESCE(status, '') <> 'concluido'
+              AND id NOT IN ({ph}) ORDER BY data''',
+        [hoje, primeira_data, *ids]).fetchall()
+    form = {}
+    for reg in regs:
+        for it in db.execute('SELECT produto, qtd_planejada FROM registro_itens WHERE registro_id=?',
+                             (reg['id'],)).fetchall():
+            pid = prod_map.get(_norm_reg_name(it['produto']))
+            qty = float(it['qtd_planejada'] or 0)
+            if pid and qty > 0:
+                form[f'qty_{pid}'] = form.get(f'qty_{pid}', 0) + qty
+    if not form:
+        return regs, {}
+    lista, _ = _calcular_lista(prods_all, form, estoque_override={})
+    return regs, {i['id']: i['qtd_necessaria'] for i in lista}
+
+
+def _estoques_com_reserva(db, reservado):
+    """Devolve (estoque físico, estoque disponível depois da reserva) por insumo."""
+    fisico = {r['id']: float(r['estoque_atual'] or 0) + float(r['estoque_central'] or 0)
+              for r in db.execute('SELECT id, estoque_atual, estoque_central FROM insumos').fetchall()}
+    disponivel = {iid: max(0.0, est - reservado.get(iid, 0.0)) for iid, est in fisico.items()}
+    return fisico, disponivel
+
+
 @app.route('/registros/lista-compras', methods=['POST'])
 def registros_lista_compras():
     ids = request.form.getlist('reg_ids')
@@ -3696,6 +3749,9 @@ def registros_lista_compras():
         f'SELECT rodada, data FROM registros_producao WHERE id IN ({placeholders}) ORDER BY data',
         ids
     ).fetchall()
+    regs_reserva, reservado = _reserva_estoque(db, prods_all, prod_map, ids,
+                                               registros_sel[0]['data'])
+    estoque_fisico, estoque_disp = _estoques_com_reserva(db, reservado)
     db.close()
 
     matched = {}
@@ -3712,11 +3768,15 @@ def registros_lista_compras():
             sem_ficha.append({'nome': nome, 'qty': total})
 
     form_data = {f'qty_{pid}': qty for pid, qty in matched.items()}
-    lista, custo_total = _calcular_lista(prods_all, form_data)
+    lista, custo_total = _calcular_lista(prods_all, form_data, estoque_override=estoque_disp)
     lista = [i for i in lista if i['qtd_necessaria'] > 0]
+    for i in lista:
+        i['estoque_fisico'] = estoque_fisico.get(i['id'], 0.0)
+        i['reservado'] = reservado.get(i['id'], 0.0)
 
     return render_template('registros_lista_compras.html',
                            lista=lista, custo_total=custo_total,
+                           regs_reserva=regs_reserva, n_reservados=len(reservado),
                            sem_ficha=sem_ficha, registros_sel=registros_sel,
                            reg_ids=ids)
 
@@ -3775,8 +3835,9 @@ def registros_lista_compras_exportar():
                 matched[pid] = matched.get(pid, 0) + qty
         return matched
 
-    all_estoques = {r['id']: float(r['estoque_atual'] or 0) + float(r['estoque_central'] or 0)
-                    for r in db.execute('SELECT id, estoque_atual, estoque_central FROM insumos').fetchall()}
+    regs_reserva, reservado = _reserva_estoque(db, prods_all, prod_map, ids,
+                                               registros_sel[0]['data'])
+    estoque_fisico, all_estoques = _estoques_com_reserva(db, reservado)
 
     # ── Cascata: cada dia herda o estoque projetado do anterior ──
     estoque_proj = dict(all_estoques)
@@ -3843,26 +3904,26 @@ def registros_lista_compras_exportar():
         safe_title = label.replace('/', '-')[:31]
         ws = wb.create_sheet(title=safe_title)
 
-        # 9 colunas: #, Insumo, Necessário, Est.Cascata, Compra Cascata, Compra Indep, Unid, Preço, Valor
-        ws.merge_cells('A1:I1')
+        # 10 colunas: #, Insumo, Cat 1, Necessário, Est.Cascata, Compra Cascata, Compra Indep, Unid, Preço, Valor
+        ws.merge_cells('A1:J1')
         ws['A1'] = f'Produção — {label}  (dia {di+1} de {len(dias_ins)})'
         ws['A1'].font = Font(bold=True, color=BRANCO, size=11)
         ws['A1'].fill = fill(cor); ws['A1'].alignment = aln()
         ws.row_dimensions[1].height = 20
 
-        hdrs = ['#', 'Insumo', 'Qtd Necessária', 'Estoque (cascata)',
+        hdrs = ['#', 'Insumo', 'Cat 1', 'Qtd Necessária', 'Estoque (cascata)',
                 'Compra Cascata', 'Compra Indep.', 'Unid.', 'Preço/Unid.', 'Valor (R$)']
         cor_ind = 'B8520A'  # laranja para col indep
         for ci, h in enumerate(hdrs, 1):
             c = ws.cell(row=2, column=ci, value=h)
             c.font = Font(bold=True, color=BRANCO, size=9)
-            c.fill = fill(cor if ci != 6 else 'C0612B')
+            c.fill = fill(cor if ci != 7 else 'C0612B')
             c.alignment = aln(); c.border = brd
 
         ws.column_dimensions['A'].width = 5
         ws.column_dimensions['B'].width = 34
         from openpyxl.utils import get_column_letter
-        widths = [15, 16, 14, 14, 10, 12, 12]
+        widths = [13, 15, 16, 14, 14, 10, 12, 12]
         for i, w in enumerate(widths):
             ws.column_dimensions[get_column_letter(3 + i)].width = w
 
@@ -3879,6 +3940,7 @@ def registros_lista_compras_exportar():
             vals = [
                 idx,
                 item['nome'],
+                item.get('cat1') or '—',
                 f"{item['qtd_necessaria']:.0f} {item['unidade_uso']}",
                 f"{est:.0f}" if est > 0 else '—',
                 _fmt_qc(qc),
@@ -3891,9 +3953,9 @@ def registros_lista_compras_exportar():
                 c = ws.cell(row=row, column=ci, value=val)
                 c.fill = fill(bg); c.border = brd
                 c.alignment = aln() if ci != 2 else aln('left')
-                if ci == 5:
+                if ci == 6:
                     c.font = font(bold=(qc > 0), color='CC2200' if qc > 0 else '000000')
-                elif ci == 6:
+                elif ci == 7:
                     c.font = font(bold=(qc_i > 0), color=cor_ind if qc_i > 0 else '000000')
                 else:
                     c.font = font()
@@ -3901,20 +3963,20 @@ def registros_lista_compras_exportar():
 
         # Total financeiro da aba — cascata + indep
         custo_ind = d['custo_ind']
-        ws.merge_cells(f'A{row}:D{row}')
+        ws.merge_cells(f'A{row}:E{row}')
         c = ws.cell(row=row, column=1, value='TOTAL ESTIMADO')
         c.font = Font(bold=True, color=BRANCO, size=10)
         c.fill = fill(cor); c.alignment = aln('right')
         # cascata
-        c = ws.cell(row=row, column=5, value=_fmt_brl(custo_dia))
+        c = ws.cell(row=row, column=6, value=_fmt_brl(custo_dia))
         c.font = Font(bold=True, color='FFD700', size=10)
         c.fill = fill(cor); c.alignment = aln()
         # indep
-        c = ws.cell(row=row, column=6, value=_fmt_brl(custo_ind))
+        c = ws.cell(row=row, column=7, value=_fmt_brl(custo_ind))
         c.font = Font(bold=True, color='FFD700', size=10)
         c.fill = fill('C0612B'); c.alignment = aln()
-        ws.merge_cells(f'G{row}:I{row}')
-        c = ws.cell(row=row, column=7, value='← cascata  |  indep. →')
+        ws.merge_cells(f'H{row}:J{row}')
+        c = ws.cell(row=row, column=8, value='← cascata  |  indep. →')
         c.font = Font(italic=True, color='888888', size=8)
         c.fill = fill(CINZA); c.alignment = aln()
 
@@ -3926,18 +3988,20 @@ def registros_lista_compras_exportar():
     # Monta mapa por dia para lookup rápido: {di: {iid: item}}
     dia_maps = [{item['id']: item for item in d['lista']} for d in dias_ins]
 
-    # Colunas: #, Insumo, Unid. | [dia qtd_nec x n] | Total Nec | Est. Atual | Compra Cascata | Unid.Compra | Preço | Valor
-    n_cols = 3 + n_dias + 5
+    # Colunas: #, Insumo, Cat 1, Unid. | [dia qtd_nec x n] | Total Nec | Est. Atual | Compra Cascata | Unid.Compra | Preço | Valor
+    n_cols = 4 + n_dias + 7
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=n_cols)
     ws.cell(1, 1).value = f'Lista de Compras Consolidada — {_date.today().strftime("%d/%m/%Y")}'
+    if regs_reserva:
+        ws.cell(1, 1).value += '  |  Estoque reservado para: ' + ', '.join(r['rodada'] for r in regs_reserva)
     ws.cell(1, 1).font = Font(bold=True, color=BRANCO, size=13)
     ws.cell(1, 1).fill = fill(AZUL); ws.cell(1, 1).alignment = aln()
     ws.row_dimensions[1].height = 22
 
-    hdrs2 = ['#', 'Insumo', 'Unid.']
+    hdrs2 = ['#', 'Insumo', 'Cat 1', 'Unid.']
     for d in dias_ins:
         hdrs2.append(d['reg']['rodada'].split()[0][:10])
-    hdrs2 += ['Total Nec.', 'Estoque', 'A Comprar\n(cascata)', 'Unid.Compra', 'Preço/Un.', 'Valor (R$)']
+    hdrs2 += ['Total Nec.', 'Estoque', 'Reservado', 'A Comprar\n(cascata)', 'Unid.Compra', 'Preço/Un.', 'Valor (R$)']
     for ci, h in enumerate(hdrs2, 1):
         c = ws.cell(row=2, column=ci, value=h)
         c.font = Font(bold=True, color=BRANCO, size=9)
@@ -3946,12 +4010,14 @@ def registros_lista_compras_exportar():
 
     ws.column_dimensions['A'].width = 5
     ws.column_dimensions['B'].width = 36
-    ws.column_dimensions['C'].width = 8
-    for ci in range(4, 4 + n_dias):
+    ws.column_dimensions['C'].width = 13
+    ws.column_dimensions['D'].width = 8
+    for ci in range(5, 5 + n_dias):
         ws.column_dimensions[get_column_letter(ci)].width = 11
-    col_tot  = 4 + n_dias      # Total Nec.
+    col_tot  = 5 + n_dias      # Total Nec.
     col_est  = col_tot + 1     # Estoque
-    col_comp = col_est + 1     # A Comprar
+    col_res  = col_est + 1     # Reservado
+    col_comp = col_res + 1     # A Comprar
     col_uc   = col_comp + 1    # Unid.Compra
     col_prec = col_uc + 1      # Preço
     col_val  = col_prec + 1    # Valor
@@ -3966,7 +4032,8 @@ def registros_lista_compras_exportar():
         uc = info.get('unidade_compra') or unid_uso
         preco = info.get('preco_compra')
         fator = info.get('fator_conversao', 1) or 1
-        estoque = all_estoques.get(iid, 0.0)
+        estoque = estoque_fisico.get(iid, 0.0)
+        reserva = reservado.get(iid, 0.0)
 
         qtd_por_dia = [dia_maps[di].get(iid, {}).get('qtd_necessaria', 0) for di in range(n_dias)]
         qtd_total = sum(qtd_por_dia)
@@ -3976,12 +4043,13 @@ def registros_lista_compras_exportar():
         if valor: custo_total += valor
         bg = AMBAR if qc_casc > 0 else CINZA
 
-        row_vals = [idx, nome, unid_uso]
+        row_vals = [idx, nome, info.get('cat1') or '—', unid_uso]
         for qtd_d in qtd_por_dia:
             row_vals.append(round(qtd_d, 1) if qtd_d > 0 else '—')
         row_vals += [
             round(qtd_total, 1),
             round(estoque, 1) if estoque > 0 else '—',
+            round(reserva, 1) if reserva > 0 else '—',
             _fmt_qc(qc_casc),
             uc,
             _fmt_brl(preco) if preco else '—',
@@ -3998,22 +4066,22 @@ def registros_lista_compras_exportar():
 
     # Linha de totais por dia (custo indep. vs cascata)
     row += 1
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
     ws.cell(row, 1).value = 'Custo por dia (cascata)'
     ws.cell(row, 1).font = Font(bold=True, size=9, color=BRANCO)
     ws.cell(row, 1).fill = fill(AZUL); ws.cell(row, 1).alignment = aln('right')
     for di, d in enumerate(dias_ins):
-        c = ws.cell(row=row, column=4 + di, value=_fmt_brl(d['custo']))
+        c = ws.cell(row=row, column=5 + di, value=_fmt_brl(d['custo']))
         c.font = Font(bold=True, color='FFD700', size=9)
         c.fill = fill(AZUL); c.alignment = aln()
 
     row += 1
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
     ws.cell(row, 1).value = 'Custo por dia (indep., sem cascata)'
     ws.cell(row, 1).font = Font(bold=True, size=9, color=BRANCO)
     ws.cell(row, 1).fill = fill('C0612B'); ws.cell(row, 1).alignment = aln('right')
     for di, d in enumerate(dias_ins):
-        c = ws.cell(row=row, column=4 + di, value=_fmt_brl(d['custo_ind']))
+        c = ws.cell(row=row, column=5 + di, value=_fmt_brl(d['custo_ind']))
         c.font = Font(bold=True, color='FFD700', size=9)
         c.fill = fill('C0612B'); c.alignment = aln()
 

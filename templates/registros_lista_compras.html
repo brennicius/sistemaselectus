@@ -35,6 +35,16 @@
 </div>
 {% endif %}
 
+{% if regs_reserva %}
+<div class="alert alert-info py-2 mb-3">
+  <strong><i class="bi bi-lock me-1"></i>Estoque reservado para:</strong>
+  {% for r in regs_reserva %}
+    <span class="badge bg-info text-dark me-1">{{ r.rodada }}</span>
+  {% endfor %}
+  <span class="small">({{ n_reservados }} insumos) A compra considera só o que sobra depois dessa produção.</span>
+</div>
+{% endif %}
+
 {% if not lista %}
 <div class="text-center py-5 text-muted">
   <i class="bi bi-cart-x" style="font-size:2.5rem"></i>
@@ -71,6 +81,7 @@
       <thead style="background:#e9f0fa">
         <tr>
           <th>Insumo</th>
+          <th class="text-center">Cat 1</th>
           <th class="text-center">Necessário</th>
           <th class="text-center">Estoque</th>
           <th class="text-center text-danger">A Comprar</th>
@@ -83,13 +94,24 @@
         {% for i in itens %}
         <tr {% if i.qtd_compra > 0 %}style="background:#fff8f0"{% endif %}>
           <td class="fw-semibold">{{ i.nome }}</td>
+          <td class="text-center">
+            {% if i.cat1 %}
+              {% set c1 = {'Fornecedor':'background:#dbeafe;color:#1e40af;border-color:#93c5fd',
+                           'Mercado':'background:#dcfce7;color:#166534;border-color:#86efac',
+                           'Administrativo':'background:#ede9fe;color:#5b21b6;border-color:#c4b5fd'}.get(i.cat1, '') %}
+              <span class="badge border fw-bold" style="font-size:.72rem;{{ c1 }}">{{ i.cat1 }}</span>
+            {% else %}<span class="text-muted small">—</span>{% endif %}
+          </td>
           <td class="text-center font-monospace">
             {{ '%.0f'|format(i.qtd_necessaria) }} <small class="text-muted">{{ i.unidade_uso }}</small>
           </td>
           <td class="text-center font-monospace">
-            {% if i.estoque_disponivel > 0 %}
-              <span class="text-success">{{ '%.0f'|format(i.estoque_disponivel) }}</span>
+            {% if i.estoque_fisico > 0 %}
+              <span class="text-success">{{ '%.0f'|format(i.estoque_fisico) }}</span>
             {% else %}—{% endif %}
+            {% if i.reservado > 0 %}
+              <div class="text-info small" style="font-size:.7rem">reservado {{ '%.0f'|format(i.reservado) }}</div>
+            {% endif %}
           </td>
           <td class="text-center fw-bold">
             {% if i.qtd_compra > 0 %}
@@ -118,7 +140,7 @@
       </tbody>
       <tfoot>
         <tr style="background:#f0f4fb">
-          <td colspan="6" class="text-end fw-bold small pe-3 py-2">Total {{ cat | upper }}:</td>
+          <td colspan="7" class="text-end fw-bold small pe-3 py-2">Total {{ cat | upper }}:</td>
           {% set soma = namespace(v=0) %}
           {% for i in itens %}{% if i.valor is not none %}{% set soma.v = soma.v + i.valor %}{% endif %}{% endfor %}
           <td class="text-center fw-bold font-monospace py-2">

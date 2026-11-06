@@ -38,6 +38,9 @@
   .bc-molhos2    { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
   .bc-paes       { background:#f0fdf4; color:#15803d; border-color:#4ade80; }
   .bc-preparos   { background:#fdf2f8; color:#be185d; border-color:#f9a8d4; }
+  .bc1-fornecedor     { background:#dbeafe; color:#1e40af; border-color:#93c5fd; }
+  .bc1-mercado        { background:#dcfce7; color:#166534; border-color:#86efac; }
+  .bc1-administrativo { background:#ede9fe; color:#5b21b6; border-color:#c4b5fd; }
   .bc-sem        { background:#f9fafb; color:#9ca3af; border-color:#e5e7eb; font-style:italic; }
   /* Observação */
   .obs-wrapper { position:relative; display:inline-block; }
@@ -144,6 +147,19 @@
   </div>
   <div class="d-flex flex-column">
     <span class="text-muted mb-1" style="font-size:.65rem">&nbsp;</span>
+    <div class="d-flex align-items-center gap-1">
+      <span class="text-muted small text-nowrap">Cat 1:</span>
+      <select id="cat1-filter" class="form-select form-select-sm" style="max-width:150px">
+        <option value="">Todas</option>
+        <option value="__sem_cat1__">Sem Cat 1</option>
+        {% for c in cats1_lista %}
+        <option value="{{ c|lower }}">{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="d-flex flex-column">
+    <span class="text-muted mb-1" style="font-size:.65rem">&nbsp;</span>
     <button type="button" id="btn-ultimos" class="btn btn-sm btn-outline-primary" title="Mostrar apenas os últimos 30 insumos cadastrados">
       <i class="bi bi-clock-history me-1"></i>Últimos 30
     </button>
@@ -170,7 +186,7 @@
         {% for ins in insumos %}
         {% set mud = mudancas.get(ins.id) %}
         {% set fp_status = ins.status_revisao_fp or 'nao_revisado' %}
-        <tr class="{{ 'sem-preco' if ins.id in sem_preco_ids else '' }}" data-id="{{ ins.id }}" data-nome="{{ ins.nome|lower }}" data-custo="{{ ins.status_revisao_custo or 'nao_revisado' }}" data-nome-status="{{ ins.status_revisao_nome or 'nao_revisado' }}" data-fp="{{ fp_status }}" data-fornecedor="{{ (ins.fornecedor or '')|lower }}" data-categoria="{{ (ins.categoria or '')|lower }}">
+        <tr class="{{ 'sem-preco' if ins.id in sem_preco_ids else '' }}" data-id="{{ ins.id }}" data-nome="{{ ins.nome|lower }}" data-custo="{{ ins.status_revisao_custo or 'nao_revisado' }}" data-nome-status="{{ ins.status_revisao_nome or 'nao_revisado' }}" data-fp="{{ fp_status }}" data-fornecedor="{{ (ins.fornecedor or '')|lower }}" data-categoria="{{ (ins.categoria or '')|lower }}" data-cat1="{{ (ins.cat1 or '')|lower }}">
           {% set rc = ins.status_revisao_custo or 'nao_revisado' %}
           {% set rn = ins.status_revisao_nome or 'nao_revisado' %}
           <td class="fw-semibold">
@@ -188,6 +204,14 @@
               <option value="">— sem categoria —</option>
               {% for c in categorias_lista %}
               <option value="{{ c }}"{{ ' selected' if _cat == c else '' }}>{{ c }}</option>
+              {% endfor %}
+            </select>
+            <span class="badge-cat {{ 'bc1-' ~ ins.cat1|lower if ins.cat1 else 'bc-sem' }} cat1-badge" data-id="{{ ins.id }}"
+                  title="Clique para alterar Cat 1">{{ ins.cat1 or '— Cat 1 —' }}</span>
+            <select class="cat-select-inline cat1-select d-none" data-id="{{ ins.id }}">
+              <option value="">— sem Cat 1 —</option>
+              {% for c in cats1_lista %}
+              <option value="{{ c }}"{{ ' selected' if ins.cat1 == c else '' }}>{{ c }}</option>
               {% endfor %}
             </select>
             {% if ins.id in sem_preco_ids %}
@@ -747,6 +771,7 @@ const buscaClear     = document.getElementById('busca-clear');
 const custoFilterClr = document.getElementById('custo-filter-clear');
 const fornFilter     = document.getElementById('forn-filter');
 const catFilter      = document.getElementById('cat-filter');
+const cat1Filter     = document.getElementById('cat1-filter');
 const custoAtivos    = new Set();
 
 const CUSTO_ON = {
@@ -813,8 +838,10 @@ function applyVisible() {
     const okForn    = !forn || (forn === '__sem_fornecedor__' ? !tr.dataset.fornecedor : tr.dataset.fornecedor === forn);
     const catVal    = catFilter ? catFilter.value : '';
     const okCat     = !catVal || (catVal === '__sem_cat__' ? !tr.dataset.categoria : tr.dataset.categoria === catVal);
+    const cat1Val   = cat1Filter ? cat1Filter.value : '';
+    const okCat1    = !cat1Val || (cat1Val === '__sem_cat1__' ? !tr.dataset.cat1 : tr.dataset.cat1 === cat1Val);
     const okUltimos = !ultimosAtivo || ultimosIds.has(parseInt(tr.dataset.id || '0'));
-    tr.style.display = (okBusca && okCusto && okNome && okFp && okForn && okCat && okUltimos) ? '' : 'none';
+    tr.style.display = (okBusca && okCusto && okNome && okFp && okForn && okCat && okCat1 && okUltimos) ? '' : 'none';
   });
   custoFilterClr.style.display = custoAtivos.size > 0 ? '' : 'none';
   if (nomeFilterClr) nomeFilterClr.style.display = nomeAtivos.size > 0 ? '' : 'none';
@@ -921,6 +948,42 @@ document.querySelectorAll('.cat-select').forEach(sel => {
   sel.addEventListener('blur', function() {
     const badge = this.previousElementSibling;
     badge.classList.remove('d-none');
+    this.classList.add('d-none');
+  });
+});
+
+// ── Badge Cat 1 ──
+if (cat1Filter) cat1Filter.addEventListener('change', applyVisible);
+
+document.querySelectorAll('.cat1-badge').forEach(badge => {
+  badge.addEventListener('click', function() {
+    const sel = this.nextElementSibling;
+    this.classList.add('d-none');
+    sel.classList.remove('d-none');
+    sel.focus();
+  });
+});
+
+document.querySelectorAll('.cat1-select').forEach(sel => {
+  sel.addEventListener('change', function() {
+    const val = this.value;
+    fetch(`/insumos/${this.dataset.id}/cat1`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({cat1: val || null})
+    }).then(r => r.json()).then(d => {
+      if (!d.ok) return;
+      const badge = this.previousElementSibling;
+      badge.textContent = val || '— Cat 1 —';
+      badge.className   = `badge-cat ${val ? 'bc1-' + val.toLowerCase() : 'bc-sem'} cat1-badge`;
+      this.classList.add('d-none');
+      const tr = this.closest('tr');
+      if (tr) tr.dataset.cat1 = val.toLowerCase();
+      applyVisible();
+    });
+  });
+  sel.addEventListener('blur', function() {
+    this.previousElementSibling.classList.remove('d-none');
     this.classList.add('d-none');
   });
 });
