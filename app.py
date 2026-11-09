@@ -1380,6 +1380,37 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
                 ins_map[iid]['valor'] += qtd_uso * r['preco_compra'] / (r['fator_conversao'] or 1)
 
 
+def _match_produto_registro(nome_item, prods):
+    """Acha a ficha de um item de registro. Ordem: nome exato, 'Prato <nome>',
+    depois busca aproximada — sempre preferindo fichas finais às bases de
+    Produção (ex.: 'LOMBO RECHEADO' é o 'Prato Lombo recheado', não a 'Base Lombo Recheado')."""
+    import unicodedata as _ud, re as _re
+    def norm(s):
+        s = _ud.normalize('NFKD', s or '').encode('ascii', 'ignore').decode().lower().strip()
+        return _re.sub(r'\s+', ' ', s)
+    key = norm(nome_item)
+    if not key:
+        return None
+    # fichas finais primeiro, bases de produção por último
+    ordem = sorted(prods, key=lambda p: (
+        (p['categoria'] or '') == 'Produção' or norm(p['nome']).startswith('base '),
+        not norm(p['nome']).startswith('prato '),
+        p['nome']))
+    nomes = [(norm(p['nome']), p) for p in ordem]
+    for pname, p in nomes:
+        if pname == key or pname == 'prato ' + key:
+            return p
+    for pname, p in nomes:
+        if key in pname or pname in key:
+            return p
+    palavras = [w for w in key.split() if len(w) > 4]
+    if palavras:
+        for pname, p in nomes:
+            if sum(1 for w in palavras if w in pname) >= max(1, len(palavras) - 1):
+                return p
+    return None
+
+
 def _calcular_lista(prods, form, estoque_override=None):
     db = get_db()
     ins_map = {}
@@ -3453,23 +3484,12 @@ def registro_ver(id):
     def norm(s):
         s = _ud.normalize('NFKD', s).encode('ascii','ignore').decode().lower().strip()
         return _re2.sub(r'\s+', ' ', s)
-    prod_map = {norm(p['nome']): p for p in prods}
     form = {}
     for it in itens:
         qtd = it['qtd_planejada'] or 0
         if qtd <= 0:
             continue
-        key = norm(it['produto'])
-        found = prod_map.get(key)
-        if not found:
-            for pname, p in prod_map.items():
-                if key in pname or pname in key:
-                    found = p; break
-        if not found:
-            palavras = [w for w in key.split() if len(w) > 4]
-            for pname, p in prod_map.items():
-                if palavras and sum(1 for w in palavras if w in pname) >= max(1, len(palavras) - 1):
-                    found = p; break
+        found = _match_produto_registro(it['produto'], prods)
         if found:
             form[f'qty_{found["id"]}'] = qtd
         else:
@@ -3539,17 +3559,11 @@ def registro_exportar(id):
     def norm(s):
         s = unicodedata.normalize('NFKD', s).encode('ascii','ignore').decode().lower().strip()
         return _re.sub(r'\s+', ' ', s)
-    prod_map = {norm(p['nome']): p for p in prods}
     form = {}
     for it in itens:
         qtd = it['qtd_planejada'] or 0
         if qtd <= 0: continue
-        key = norm(it['produto'])
-        found = prod_map.get(key)
-        if not found:
-            for pname, p in prod_map.items():
-                if key in pname or pname in key:
-                    found = p; break
+        found = _match_produto_registro(it['produto'], prods)
         if found:
             form[f'qty_{found["id"]}'] = qtd
     lista, custo_total = _calcular_lista(prods, form)
