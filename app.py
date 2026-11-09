@@ -298,6 +298,10 @@ def init_db():
         db.execute('ALTER TABLE insumos ADD COLUMN cat1 TEXT')
     except Exception:
         pass
+    try:
+        db.execute("ALTER TABLE registros_producao ADD COLUMN tipo TEXT DEFAULT 'pereciveis'")
+    except Exception:
+        pass
     for col in ('qtd_agnus_kits', 'qtd_amaro2', 'qtd_bahia', 'qtd_central', 'env_agnus_kits', 'env_amaro2', 'env_bahia', 'env_central'):
         try:
             db.execute(f'ALTER TABLE registro_itens ADD COLUMN {col} INTEGER')
@@ -1280,20 +1284,31 @@ def producao_salvar():
         flash('Informe ao menos uma quantidade antes de salvar.', 'warning')
         return redirect(url_for('producao'))
 
-    cur = db.execute(
-        'INSERT INTO registros_producao (data, rodada, status, observacoes) VALUES (?,?,?,?)',
-        (data, rodada, 'planejado', obs)
-    )
-    reg_id = cur.lastrowid
-    for cat, nome, qty, ordem in itens:
-        db.execute(
-            'INSERT INTO registro_itens (registro_id, ordem, categoria, produto, qtd_planejada) VALUES (?,?,?,?,?)',
-            (reg_id, ordem, cat, nome, qty)
+    # Perecíveis e Pratos viram registros separados
+    reg_ids = []
+    for tipo in ('pereciveis', 'pratos'):
+        grupo = [it for it in itens if _tipo_registro(it[0]) == tipo]
+        if not grupo:
+            continue
+        cur = db.execute(
+            'INSERT INTO registros_producao (data, rodada, status, observacoes, tipo) VALUES (?,?,?,?,?)',
+            (data, rodada, 'planejado', obs, tipo)
         )
+        reg_ids.append(cur.lastrowid)
+        for cat, nome, qty, ordem in grupo:
+            db.execute(
+                'INSERT INTO registro_itens (registro_id, ordem, categoria, produto, qtd_planejada) VALUES (?,?,?,?,?)',
+                (cur.lastrowid, ordem, cat, nome, qty)
+            )
     db.commit()
     db.close()
     flash(f'Programação salva para {data} — {rodada}!', 'success')
-    return redirect(url_for('registro_ver', id=reg_id))
+    return redirect(url_for('registro_ver', id=reg_ids[0]))
+
+
+def _tipo_registro(categoria):
+    """Categoria do item → tipo do registro de produção."""
+    return 'pratos' if (categoria or '').strip().upper() == 'PRATOS' else 'pereciveis'
 
 
 def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
@@ -3398,9 +3413,15 @@ def registro_lista():
     reg_hist   = [r for r in regs if r['data'] <= hoje or r['no_historico']]
     reg_futura = [r for r in regs if r['data'] > hoje and not r['no_historico']]
     lista = reg_futura if tab == 'futura' else reg_hist
+    novos  = [r for r in lista if (r['criado_em'] or '') >= REGISTRO_CORTE]
+    # (âncora, título, ícone, cor do badge, registros)
     grupos = [
-        ('Lançados a partir de 23/10/2026', [r for r in lista if (r['criado_em'] or '') >= REGISTRO_CORTE]),
-        ('Lançados até 22/10/2026',         [r for r in lista if (r['criado_em'] or '') <  REGISTRO_CORTE]),
+        ('pereciveis', 'Perecíveis', 'bi-basket', 'bg-primary',
+         [r for r in novos if (r['tipo'] or 'pereciveis') == 'pereciveis']),
+        ('pratos', 'Pratos', 'bi-egg-fried', 'bg-danger',
+         [r for r in novos if r['tipo'] == 'pratos']),
+        ('antigos', 'Lançados até 22/10/2026', 'bi-archive', 'bg-secondary',
+         [r for r in lista if (r['criado_em'] or '') < REGISTRO_CORTE]),
     ]
     return render_template('registro_lista.html', registros=regs,
                            reg_hist=reg_hist, reg_futura=reg_futura, hoje=hoje, tab=tab,

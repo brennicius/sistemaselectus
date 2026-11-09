@@ -26,6 +26,17 @@
 
 {% set lista_ativa = reg_futura if tab == 'futura' else reg_hist %}
 
+{% if lista_ativa %}
+<div class="d-flex gap-2 mb-3">
+  {% for ancora, titulo, icone, cor, regs_grupo in grupos[:2] %}
+  <a href="#sec-{{ ancora }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi {{ icone }} me-1"></i>{{ titulo }}
+    <span class="badge {{ cor }} ms-1">{{ regs_grupo|length }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
 {% if not lista_ativa %}
 <div class="text-center py-5 text-muted">
   <i class="bi bi-clipboard2-x" style="font-size:2.5rem"></i>
@@ -51,12 +62,13 @@
 </div>
 {% endif %}
 
-{% for titulo, regs_grupo in grupos %}
-<div class="d-flex align-items-center gap-2 mb-2 {{ 'mt-4' if not loop.first }}">
+{% for ancora, titulo, icone, cor, regs_grupo in grupos %}
+{% if ancora != 'antigos' or regs_grupo %}
+<div class="d-flex align-items-center gap-2 mb-2 {{ 'mt-4' if not loop.first }}" id="sec-{{ ancora }}">
   <h5 class="mb-0 fw-semibold">
-    <i class="bi {{ 'bi-pencil-square' if loop.first else 'bi-archive' }} me-1"></i>{{ titulo }}
+    <i class="bi {{ icone }} me-1"></i>{{ titulo }}
   </h5>
-  <span class="badge {{ 'bg-primary' if loop.first else 'bg-secondary' }}">{{ regs_grupo|length }}</span>
+  <span class="badge {{ cor }}">{{ regs_grupo|length }}</span>
 </div>
 {% if not regs_grupo %}
 <p class="text-muted small mb-0">Nenhum registro neste grupo.</p>
@@ -154,6 +166,7 @@
     </table>
   </div>
 </div>
+{% endif %}
 {% endif %}
 {% endfor %}
 

@@ -23,6 +23,11 @@
     <h1><i class="bi bi-clipboard2-check me-2"></i>Produção de
       {{ reg.data[8:10] }}/{{ reg.data[5:7] }}/{{ reg.data[0:4] }}
       <small class="fs-6 fw-normal ms-2 text-muted">Rodada: {{ reg.rodada }}</small>
+      {% if reg.tipo == 'pratos' %}
+        <span class="badge bg-danger fs-6 align-middle ms-1"><i class="bi bi-egg-fried me-1"></i>Pratos</span>
+      {% else %}
+        <span class="badge bg-primary fs-6 align-middle ms-1"><i class="bi bi-basket me-1"></i>Perecíveis</span>
+      {% endif %}
     </h1>
     <p>
       {% if reg.status == 'concluido' %}
