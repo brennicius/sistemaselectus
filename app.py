@@ -1391,24 +1391,45 @@ def _match_produto_registro(nome_item, prods):
     key = norm(nome_item)
     if not key:
         return None
-    # fichas finais primeiro, bases de produção por último
-    ordem = sorted(prods, key=lambda p: (
-        (p['categoria'] or '') == 'Produção' or norm(p['nome']).startswith('base '),
-        not norm(p['nome']).startswith('prato '),
-        p['nome']))
+    por_id = {p['id']: p for p in prods}
+    for alias, pid in REG_ALIASES.items():
+        if norm(alias) == key and pid in por_id:
+            return por_id[pid]
+    def eh_base(p):
+        return (p['categoria'] or '') == 'Produção' or norm(p['nome']).startswith('base ')
+    # fichas de prato primeiro
+    ordem = sorted(prods, key=lambda p: (not norm(p['nome']).startswith('prato '), p['nome']))
     nomes = [(norm(p['nome']), p) for p in ordem]
     for pname, p in nomes:
         if pname == key or pname == 'prato ' + key:
             return p
-    for pname, p in nomes:
+    # busca aproximada: nunca cai numa base de Produção (ex.: 'Rondelli de queijo e presunto'
+    # é o recheio, não o prato) e exige todas as palavras relevantes
+    finais = [(n, p) for n, p in nomes if not eh_base(p)]
+    for pname, p in finais:
         if key in pname or pname in key:
             return p
-    palavras = [w for w in key.split() if len(w) > 4]
+    palavras = [w for w in key.split() if len(w) > 3 and w != 'selectus']
     if palavras:
-        for pname, p in nomes:
-            if sum(1 for w in palavras if w in pname) >= max(1, len(palavras) - 1):
+        for pname, p in finais:
+            if all(w in pname for w in palavras):
                 return p
     return None
+
+
+# Nomes do plano de produção que diferem do nome da ficha (id do produto)
+REG_ALIASES = {
+    'CUSCUZ':                                16,
+    'CUSCUZ CARNE SOL':                      16,
+    'MIX DE FRUTAS UVA E MANGA':             12,
+    'SALADA TERIYAKI COM PROTEINA':           4,
+    'SANDUICHE DE PEITO DE PERU':            11,
+    'GELATINA DE MORANGO':                   17,
+    'GELATINA DE UVA':                       18,
+    'OVERNIGHT 180G':                        31,
+    'SALADA PEITO DE FRANGO + PROTEINA':     24,
+    'MANDIOQUINHA ROSBIFE':                   7,
+}
 
 
 def _calcular_lista(prods, form, estoque_override=None):
