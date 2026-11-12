@@ -3837,6 +3837,33 @@ def registros_lista_compras():
                            reg_ids=ids)
 
 
+# Peso médio (g por unidade) de frutas, verduras e legumes comprados por kg.
+# Chave = trecho do nome do insumo (sem acento, minúsculo). Ajuste à vontade.
+PESO_MEDIO_UNIDADE_G = {
+    'cenoura': 120, 'tomate salada': 150, 'cebola': 150, 'beterraba': 150,
+    'pepino': 250, 'pimentao': 200, 'repolho': 1500, 'batata bolinha': 60,
+    'batata inglesa': 150, 'chuchu': 250, 'banana prata': 100, 'banana terra': 250,
+    'abacate': 600, 'manga': 450, 'kiwi': 80, 'tangerina': 130, 'alho import': 50,
+}
+
+
+def _compra_arredondada(item):
+    """Texto da compra em unidade fechada: pacote/kg arredondado p/ cima; hortifruti em unidades."""
+    import unicodedata
+    qc = item.get('qtd_compra') or 0
+    if qc <= 0:
+        return '—'
+    uc = (item.get('unidade_compra') or item.get('unidade_uso') or '').strip()
+    cat = unicodedata.normalize('NFKD', (item.get('categoria') or '')).encode('ascii', 'ignore').decode().lower()
+    nome = unicodedata.normalize('NFKD', (item.get('nome') or '')).encode('ascii', 'ignore').decode().lower()
+    hort = any(k in cat for k in ('fruta', 'verdura', 'legume'))
+    if hort and uc.lower() == 'kg':
+        for chave, peso in PESO_MEDIO_UNIDADE_G.items():
+            if chave in nome:
+                return f'{math.ceil(qc * 1000 / peso - 1e-9)} un (~{peso} g cada)'
+    return f'{math.ceil(qc - 1e-9)} {uc}'.strip()
+
+
 @app.route('/registros/lista-compras/exportar', methods=['POST'])
 def registros_lista_compras_exportar():
     from openpyxl import Workbook
@@ -3961,15 +3988,17 @@ def registros_lista_compras_exportar():
         ws = wb.create_sheet(title=safe_title)
 
         # 10 colunas: #, Insumo, Cat 1, Necessário, Est.Cascata, Compra Cascata, Compra Indep, Unid, Preço, Valor
-        ws.merge_cells('A1:J1')
+        ws.merge_cells('A1:L1')
         ws['A1'] = f'Produção — {label}  (dia {di+1} de {len(dias_ins)})'
         ws['A1'].font = Font(bold=True, color=BRANCO, size=11)
         ws['A1'].fill = fill(cor); ws['A1'].alignment = aln()
         ws.row_dimensions[1].height = 20
 
         hdrs = ['#', 'Insumo', 'Cat 1', 'Qtd Necessária', 'Estoque (cascata)',
-                'Compra Cascata', 'Compra Indep.', 'Unid.', 'Preço/Unid.', 'Valor (R$)']
+                'Compra Cascata', 'Compra Indep.', 'Unid.', 'Preço/Unid.', 'Valor (R$)',
+                'Compra arredondada\n(cascata)', 'Compra arredondada\n(indep.)']
         cor_ind = 'B8520A'  # laranja para col indep
+        ws.row_dimensions[2].height = 28
         for ci, h in enumerate(hdrs, 1):
             c = ws.cell(row=2, column=ci, value=h)
             c.font = Font(bold=True, color=BRANCO, size=9)
@@ -3979,7 +4008,7 @@ def registros_lista_compras_exportar():
         ws.column_dimensions['A'].width = 5
         ws.column_dimensions['B'].width = 34
         from openpyxl.utils import get_column_letter
-        widths = [13, 15, 16, 14, 14, 10, 12, 12]
+        widths = [13, 15, 16, 14, 14, 10, 12, 12, 24, 24]
         for i, w in enumerate(widths):
             ws.column_dimensions[get_column_letter(3 + i)].width = w
 
@@ -4004,12 +4033,18 @@ def registros_lista_compras_exportar():
                 item.get('unidade_compra') or item['unidade_uso'],
                 _fmt_brl(preco) if preco else '—',
                 _fmt_brl(valor) if valor else '—',
+                _compra_arredondada(item),
+                _compra_arredondada({**item, 'qtd_compra': qc_i}),
             ]
             for ci, val in enumerate(vals, 1):
                 c = ws.cell(row=row, column=ci, value=val)
                 c.fill = fill(bg); c.border = brd
                 c.alignment = aln() if ci != 2 else aln('left')
-                if ci == 6:
+                if ci == 11:
+                    c.font = font(bold=(qc > 0), color='1E6B3C')
+                elif ci == 12:
+                    c.font = font(bold=(qc_i > 0), color=cor_ind if qc_i > 0 else '000000')
+                elif ci == 6:
                     c.font = font(bold=(qc > 0), color='CC2200' if qc > 0 else '000000')
                 elif ci == 7:
                     c.font = font(bold=(qc_i > 0), color=cor_ind if qc_i > 0 else '000000')
@@ -4045,7 +4080,7 @@ def registros_lista_compras_exportar():
     dia_maps = [{item['id']: item for item in d['lista']} for d in dias_ins]
 
     # Colunas: #, Insumo, Cat 1, Unid. | [dia qtd_nec x n] | Total Nec | Est. Atual | Compra Cascata | Unid.Compra | Preço | Valor
-    n_cols = 4 + n_dias + 7
+    n_cols = 4 + n_dias + 8
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=n_cols)
     ws.cell(1, 1).value = f'Lista de Compras Consolidada — {_date.today().strftime("%d/%m/%Y")}'
     if regs_reserva:
@@ -4057,7 +4092,8 @@ def registros_lista_compras_exportar():
     hdrs2 = ['#', 'Insumo', 'Cat 1', 'Unid.']
     for d in dias_ins:
         hdrs2.append(d['reg']['rodada'].split()[0][:10])
-    hdrs2 += ['Total Nec.', 'Estoque', 'Reservado', 'A Comprar\n(cascata)', 'Unid.Compra', 'Preço/Un.', 'Valor (R$)']
+    hdrs2 += ['Total Nec.', 'Estoque', 'Reservado', 'A Comprar\n(cascata)', 'Unid.Compra', 'Preço/Un.', 'Valor (R$)',
+              'Compra arredondada\n(un. fechada)']
     for ci, h in enumerate(hdrs2, 1):
         c = ws.cell(row=2, column=ci, value=h)
         c.font = Font(bold=True, color=BRANCO, size=9)
@@ -4079,6 +4115,7 @@ def registros_lista_compras_exportar():
     col_val  = col_prec + 1    # Valor
     for ci in range(col_tot, col_val + 1):
         ws.column_dimensions[get_column_letter(ci)].width = 13
+    ws.column_dimensions[get_column_letter(col_val + 1)].width = 24
 
     custo_total = 0.0
     row = 3
@@ -4110,6 +4147,7 @@ def registros_lista_compras_exportar():
             uc,
             _fmt_brl(preco) if preco else '—',
             _fmt_brl(valor) if valor else '—',
+            _compra_arredondada({**info, 'qtd_compra': qc_casc}),
         ]
         for ci, val in enumerate(row_vals, 1):
             c = ws.cell(row=row, column=ci, value=val)
