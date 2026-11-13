@@ -1327,7 +1327,7 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
                i.qtd_por_embalagem, i.unid_embalagem,
                i.produto_vinculado_id,
                COALESCE(i.fornecedor, '') as fornecedor,
-               i.cat1,
+               i.cat1, i.categoria,
                COALESCE(i.estoque_atual, 0) as estoque_atual,
                COALESCE(i.estoque_central, 0) as estoque_central,
                p2.rendimento AS rend_vinc
@@ -1374,6 +1374,7 @@ def _expand_ingredientes(db, produto_id, scale, ins_map, _visited=None):
                                 'pkg_info': pkg_info,
                                 'fornecedor': r['fornecedor'] or '',
                                 'cat1': r['cat1'] or '',
+                                'categoria': r['categoria'] or '',
                                 'qtd_uso': 0.0, 'valor': 0.0}
             ins_map[iid]['qtd_uso'] += qtd_uso
             if r['preco_compra'] is not None:
@@ -3856,7 +3857,7 @@ def _compra_arredondada(item):
     uc = (item.get('unidade_compra') or item.get('unidade_uso') or '').strip()
     cat = unicodedata.normalize('NFKD', (item.get('categoria') or '')).encode('ascii', 'ignore').decode().lower()
     nome = unicodedata.normalize('NFKD', (item.get('nome') or '')).encode('ascii', 'ignore').decode().lower()
-    hort = any(k in cat for k in ('fruta', 'verdura', 'legume'))
+    hort = any(k in cat for k in ('fruta', 'verdura', 'legume')) or nome.startswith('hf.')
     if hort and uc.lower() == 'kg':
         for chave, peso in PESO_MEDIO_UNIDADE_G.items():
             if chave in nome:
