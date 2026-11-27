@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Financeiro — Primeiro acesso{% endblock %}
+{% block content %}
+<div class="row justify-content-center mt-4"><div class="col-md-5">
+  <div class="card shadow-sm"><div class="card-body p-4">
+    <h4><i class="bi bi-bank me-2"></i>Primeiro acesso ao Financeiro</h4>
+    <p class="text-muted small">Crie o primeiro usuário <strong>master</strong>. Os outros usuários são criados depois, em Cadastros → Usuários.</p>
+    <form method="POST">
+      <h6 class="mt-3">Empresa</h6>
+      <div class="mb-2"><label class="form-label small">Razão social</label><input name="razao" class="form-control"></div>
+      <div class="mb-3"><label class="form-label small">CNPJ <span class="text-muted">(usado para saber se a nota foi emitida ou recebida)</span></label><input name="cnpj" class="form-control" required></div>
+      <h6>Seu usuário</h6>
+      <div class="mb-2"><label class="form-label small">Nome</label><input name="nome" class="form-control" required></div>
+      <div class="mb-2"><label class="form-label small">Login</label><input name="login" class="form-control" required></div>
+      <div class="row g-2 mb-3">
+        <div class="col"><label class="form-label small">Senha (mín. 6)</label><input name="senha" type="password" class="form-control" required></div>
+        <div class="col"><label class="form-label small">Repita a senha</label><input name="senha2" type="password" class="form-control" required></div>
+      </div>
+      <button class="btn btn-primary w-100">Criar e continuar</button>
+    </form>
+  </div></div>
+</div></div>
+{% endblock %}

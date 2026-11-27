@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Usuários{% endblock %}
+{% block content %}
+{% include 'fin/_topo.html' %}
+<div class="page-header"><h1><i class="bi bi-gear me-2"></i>Cadastros</h1></div>
+{% include 'fin/_cad_tabs.html' %}
+<p class="text-muted small"><strong>Master</strong> acessa tudo, incluindo cadastros e usuários. <strong>Usuário</strong> pode importar notas, lançar e classificar contas. Marque abaixo o que mais ele pode fazer.</p>
+
+{% macro form_user(u) %}
+<form method="POST" class="row g-2 align-items-end">
+  <input type="hidden" name="id" value="{{ u.id if u else '' }}">
+  <div class="col-md-2"><label class="form-label small mb-0">Nome</label><input name="nome" value="{{ u.nome if u else '' }}" class="form-control form-control-sm" required></div>
+  <div class="col-md-2"><label class="form-label small mb-0">Login</label><input name="login" value="{{ u.login if u else '' }}" class="form-control form-control-sm" required></div>
+  <div class="col-md-2"><label class="form-label small mb-0">{{ 'Nova senha (deixe vazio p/ manter)' if u else 'Senha inicial' }}</label><input name="senha" type="password" class="form-control form-control-sm" autocomplete="new-password" {{ '' if u else 'required' }}></div>
+  <div class="col-md-1"><label class="form-label small mb-0">Perfil</label><select name="perfil" class="form-select form-select-sm"><option value="usuario">usuário</option><option value="master" {{ 'selected' if u and u.perfil == 'master' }}>master</option></select></div>
+  <div class="col-md-3 small">{% for k, n in permissoes %}<div class="form-check"><input class="form-check-input" type="checkbox" name="{{ k }}" id="{{ k }}{{ u.id if u else 'n' }}" {{ 'checked' if u and u[k] }}><label class="form-check-label" for="{{ k }}{{ u.id if u else 'n' }}">{{ n }}</label></div>{% endfor %}</div>
+  {% if u %}<div class="col-md-1"><label class="form-label small mb-0">Ativo</label><select name="ativo" class="form-select form-select-sm"><option value="1">sim</option><option value="0" {{ 'selected' if not u.ativo }}>não</option></select></div>{% endif %}
+  <div class="col-md-1"><button class="btn btn-sm btn-primary w-100">{{ 'Salvar' if u else 'Criar' }}</button></div>
+</form>
+{% endmacro %}
+
+<div class="card mb-3"><table class="table table-sm align-middle mb-0">
+  <thead class="table-light"><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Permissões</th><th></th></tr></thead>
+  {% for u in rows %}
+  <tr class="{{ 'text-muted' if not u.ativo }}"><td>{{ u.nome }}{% if not u.ativo %} (inativo){% endif %}</td><td>{{ u.login }}</td>
+    <td><span class="badge {{ 'bg-dark' if u.perfil == 'master' else 'bg-secondary' }}">{{ u.perfil }}</span></td>
+    <td class="small">{% if u.perfil == 'master' %}todas{% else %}{% for k, n in permissoes if u[k] %}{{ n }}{{ ', ' if not loop.last }}{% else %}só lançar e consultar{% endfor %}{% endif %}</td>
+    <td><button class="btn btn-sm btn-outline-secondary py-0" data-bs-toggle="collapse" data-bs-target="#u{{ u.id }}"><i class="bi bi-pencil"></i></button></td></tr>
+  <tr class="collapse" id="u{{ u.id }}"><td colspan="5" class="bg-light">{{ form_user(u) }}</td></tr>
+  {% endfor %}
+</table></div>
+<div class="card card-body mb-4"><h6>Novo usuário</h6>{{ form_user(None) }}</div>
+
+<div class="card"><div class="card-header small fw-semibold">Últimas ações no financeiro</div>
+  <div style="max-height:300px;overflow:auto"><table class="table table-sm small mb-0">
+    {% for l in log %}<tr><td class="text-nowrap">{{ l.em }}</td><td>{{ l.usuario }}</td><td>{{ l.acao }}</td><td class="text-muted">{{ l.detalhe or '' }}</td></tr>{% endfor %}
+  </table></div></div>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% set ep = request.endpoint %}
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item"><a class="nav-link {{ 'active' if ep=='fin.pessoas' }}" href="{{ url_for('fin.pessoas') }}">Fornecedores e clientes</a></li>
+  {% if fin_pode('master') %}
+  <li class="nav-item"><a class="nav-link {{ 'active' if ep=='fin.plano' }}" href="{{ url_for('fin.plano') }}">Plano de contas</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if ep=='fin.contas' }}" href="{{ url_for('fin.contas') }}">Bancos e caixas</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if ep=='fin.usuarios' }}" href="{{ url_for('fin.usuarios') }}">Usuários</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if ep=='fin.config' }}" href="{{ url_for('fin.config') }}">Empresa</a></li>
+  {% endif %}
+</ul>

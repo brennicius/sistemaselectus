@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Financeiro{% endblock %}
+{% block content %}
+{% include 'fin/_topo.html' %}
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div><h1><i class="bi bi-bank me-2"></i>Financeiro</h1><p>Resumo de contas a pagar, a receber e saldos.</p></div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('fin.importar') }}" class="btn btn-primary"><i class="bi bi-filetype-xml me-1"></i>Importar notas</a>
+    <a href="{{ url_for('fin.novo', natureza='pagar') }}" class="btn btn-outline-danger"><i class="bi bi-plus"></i> A pagar</a>
+    <a href="{{ url_for('fin.novo', natureza='receber') }}" class="btn btn-outline-success"><i class="bi bi-plus"></i> A receber</a>
+  </div>
+</div>
+
+{% if sem_cnpj and fin_pode('master') %}<div class="alert alert-warning py-2"><i class="bi bi-exclamation-triangle me-1"></i>Cadastre o CNPJ da empresa em <a href="{{ url_for('fin.config') }}">Cadastros → Empresa</a>.</div>{% endif %}
+{% if sem_contas and fin_pode('master') %}<div class="alert alert-warning py-2"><i class="bi bi-exclamation-triangle me-1"></i>Cadastre os bancos e o saldo inicial em <a href="{{ url_for('fin.contas') }}">Cadastros → Bancos e caixas</a>.</div>{% endif %}
+{% if pend_nf %}<div class="alert alert-info py-2"><i class="bi bi-receipt me-1"></i>{{ pend_nf }} nota(s) da Entrada NF (estoque) ainda sem conta a pagar. <a href="{{ url_for('fin.importar') }}#pendentes">Gerar agora</a></div>{% endif %}
+{% if sem_plano %}<div class="alert alert-secondary py-2"><i class="bi bi-tags me-1"></i>{{ sem_plano }} lançamento(s) sem plano de contas. <a href="{{ url_for('fin.lista', natureza='pagar', plano='sem', status='todos') }}">A pagar</a> · <a href="{{ url_for('fin.lista', natureza='receber', plano='sem', status='todos') }}">A receber</a></div>{% endif %}
+
+{% if saldos is not none %}
+<div class="row g-3 mb-4">
+  {% for s in saldos %}
+  <div class="col-md-3"><div class="card"><div class="card-body py-3">
+    <div class="small text-muted">{{ s.conta.nome }}</div>
+    <div class="fs-4 fw-bold {{ 'text-danger' if s.saldo < 0 }}">{{ s.saldo|brl }}</div>
+  </div></div></div>
+  {% endfor %}
+  {% if saldos|length > 1 %}
+  <div class="col-md-3"><div class="card border-primary"><div class="card-body py-3">
+    <div class="small text-muted">Total</div>
+    <div class="fs-4 fw-bold">{{ saldos|sum(attribute='saldo')|brl }}</div>
+  </div></div></div>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="row g-3">
+{% for nat, r, cor, titulo in [('pagar', pagar, 'danger', 'A pagar'), ('receber', receber, 'success', 'A receber')] %}
+  <div class="col-md-6"><div class="card"><div class="card-header fw-semibold text-{{ cor }}">{{ titulo }}</div>
+    <table class="table mb-0">
+      <tr><td><a href="{{ url_for('fin.lista', natureza=nat, status='atrasados') }}">Atrasado</a></td><td class="text-end text-danger fw-semibold">{{ r.atrasado[0]|brl }}</td><td class="text-end text-muted small">{{ r.atrasado[1] }}</td></tr>
+      <tr><td>Vence hoje</td><td class="text-end fw-semibold">{{ r.hoje[0]|brl }}</td><td class="text-end text-muted small">{{ r.hoje[1] }}</td></tr>
+      <tr><td>Próximos 7 dias</td><td class="text-end">{{ r.semana[0]|brl }}</td><td class="text-end text-muted small">{{ r.semana[1] }}</td></tr>
+      <tr class="table-light"><td><a href="{{ url_for('fin.lista', natureza=nat) }}">Total em aberto</a></td><td class="text-end fw-bold">{{ r.total[0]|brl }}</td><td class="text-end text-muted small">{{ r.total[1] }}</td></tr>
+    </table>
+  </div></div>
+{% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+<form method="POST" class="row g-2 align-items-end">
+  <input type="hidden" name="id" value="{{ c.id if c else '' }}">
+  <div class="col-md-3"><label class="form-label small mb-0">Nome</label><input name="nome" value="{{ c.nome if c else '' }}" class="form-control form-control-sm" placeholder="Ex.: Itaú, Caixa da loja" required></div>
+  <div class="col-md-1"><label class="form-label small mb-0">Tipo</label><select name="tipo" class="form-select form-select-sm">
+    {% for t in ['banco','caixa','aplicação'] %}<option {{ 'selected' if c and c.tipo == t }}>{{ t }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><label class="form-label small mb-0">Banco</label><input name="banco" value="{{ c.banco or '' if c else '' }}" class="form-control form-control-sm"></div>
+  <div class="col-md-1"><label class="form-label small mb-0">Agência</label><input name="agencia" value="{{ c.agencia or '' if c else '' }}" class="form-control form-control-sm"></div>
+  <div class="col-md-1"><label class="form-label small mb-0">Conta</label><input name="conta" value="{{ c.conta or '' if c else '' }}" class="form-control form-control-sm"></div>
+  <div class="col-md-1"><label class="form-label small mb-0">Saldo inicial</label><input name="saldo_inicial" value="{{ ('%.2f'|format(c.saldo_inicial)).replace('.', ',') if c else '0,00' }}" class="form-control form-control-sm"></div>
+  <div class="col-md-2"><label class="form-label small mb-0">Data do saldo</label><input type="date" name="data_saldo_inicial" value="{{ c.data_saldo_inicial if c else hoje }}" class="form-control form-control-sm"></div>
+  {% if c %}<div class="col-md-1"><label class="form-label small mb-0">Ativa</label><select name="ativo" class="form-select form-select-sm"><option value="1">sim</option><option value="0" {{ 'selected' if not c.ativo }}>não</option></select></div>{% endif %}
+  <div class="col-md-{{ 12 if not c else 12 }}"><button class="btn btn-sm btn-primary">{{ 'Salvar' if c else 'Adicionar conta' }}</button></div>
+</form>

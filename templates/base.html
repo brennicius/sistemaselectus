@@ -152,7 +152,7 @@
     <a href="{{ url_for('descartes_lista') }}" class="{{ 'active' if 'descarte' in request.endpoint }}">
       <i class="bi bi-trash3"></i> Descartes
     </a>
-    <a href="{{ url_for('nf_lista') }}" class="{{ 'active' if 'nf' in request.endpoint }}">
+    <a href="{{ url_for('nf_lista') }}" class="{{ 'active' if request.endpoint.startswith('nf') }}">
       <i class="bi bi-receipt"></i> Entrada NF
     </a>
     <a href="{{ url_for('ep_lista') }}" class="{{ 'active' if 'ep_' in request.endpoint }}">
@@ -208,7 +208,24 @@
     <a href="{{ url_for('consolidado') }}" class="{{ 'active' if 'consolidado' in request.endpoint }}">
       <i class="bi bi-table"></i> Consolidado
     </a>
-    <a href="{{ url_for('fluxo_caixa') }}" class="{{ 'active' if 'fluxo' in request.endpoint }}">
+    {% set fin_open = request.endpoint and request.endpoint.startswith('fin.') %}
+    <button class="sidebar-group-toggle d-flex align-items-center justify-content-between w-100"
+            type="button" data-bs-toggle="collapse" data-bs-target="#sub-fin"
+            aria-expanded="{{ 'true' if fin_open else 'false' }}">
+      <span><i class="bi bi-bank me-2"></i>Financeiro</span>
+      <i class="bi bi-chevron-{{ 'down' if fin_open else 'right' }}" style="font-size:.75rem"></i>
+    </button>
+    <div class="collapse {{ 'show' if fin_open else '' }}" id="sub-fin">
+      {% set ep = request.endpoint or '' %}
+      <a href="{{ url_for('fin.painel') }}" class="sidebar-sub {{ 'active' if ep == 'fin.painel' }}"><i class="bi bi-speedometer2 me-2"></i>Painel</a>
+      <a href="{{ url_for('fin.lista', natureza='pagar') }}" class="sidebar-sub {{ 'active' if ep == 'fin.lista' and request.view_args.get('natureza') == 'pagar' }}"><i class="bi bi-arrow-up-circle me-2"></i>Contas a pagar</a>
+      <a href="{{ url_for('fin.lista', natureza='receber') }}" class="sidebar-sub {{ 'active' if ep == 'fin.lista' and request.view_args.get('natureza') == 'receber' }}"><i class="bi bi-arrow-down-circle me-2"></i>Contas a receber</a>
+      <a href="{{ url_for('fin.importar') }}" class="sidebar-sub {{ 'active' if ep == 'fin.importar' }}"><i class="bi bi-filetype-xml me-2"></i>Importar notas</a>
+      <a href="{{ url_for('fin.fluxo') }}" class="sidebar-sub {{ 'active' if ep == 'fin.fluxo' }}"><i class="bi bi-graph-up me-2"></i>Fluxo de caixa</a>
+      <a href="{{ url_for('fin.dre') }}" class="sidebar-sub {{ 'active' if ep == 'fin.dre' }}"><i class="bi bi-clipboard-data me-2"></i>DRE</a>
+      <a href="{{ url_for('fin.pessoas') }}" class="sidebar-sub {{ 'active' if ep in ('fin.pessoas','fin.plano','fin.contas','fin.usuarios','fin.config') }}"><i class="bi bi-gear me-2"></i>Cadastros</a>
+    </div>
+    <a href="{{ url_for('fluxo_caixa') }}" class="{{ 'active' if 'fluxo' in request.endpoint and not request.endpoint.startswith('fin.') }}">
       <i class="bi bi-cash-coin"></i> Fluxo de Caixa
       <i class="bi bi-lock-fill ms-auto" style="font-size:.7rem;opacity:.5"></i>
     </a>

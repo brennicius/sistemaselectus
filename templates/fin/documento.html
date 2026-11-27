@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% set pagar = d.natureza == 'pagar' %}
+{% block title %}{{ d.modelo or 'Documento' }} {{ d.numero or '' }}{% endblock %}
+{% block content %}
+{% include 'fin/_topo.html' %}
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <a href="{{ url_for('fin.lista', natureza=d.natureza) }}" class="small"><i class="bi bi-arrow-left"></i> Contas a {{ d.natureza }}</a>
+    <h1 class="mt-1">{{ d.modelo or 'Lançamento' }} {{ d.numero or '' }} — {{ d.pessoa }}
+      {% if d.cancelado %}<span class="badge bg-danger">CANCELADO</span>{% endif %}</h1>
+    <p>{{ 'A pagar' if pagar else 'A receber' }} · emissão {{ d.data_emissao|data_br }} · total {{ d.valor_total|brl }}
+      {% if d.cnpj_cpf %} · {{ d.cnpj_cpf }}{% endif %} · origem: {{ d.origem }}{% if d.criado_por %} por {{ d.criado_por }}{% endif %}</p>
+  </div>
+  <div class="d-flex gap-2">
+    {% if fin_pode('perm_excluir') %}
+    <form method="POST" onsubmit="return confirm('Confirmar?')"><input type="hidden" name="acao" value="cancelar">
+      <button class="btn btn-sm btn-outline-warning">{{ 'Reativar' if d.cancelado else 'Marcar cancelado' }}</button></form>
+    <form method="POST" onsubmit="return confirm('Excluir este lançamento e suas parcelas?')"><input type="hidden" name="acao" value="excluir">
+      <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Excluir</button></form>
+    {% endif %}
+  </div>
+</div>
+
+{% if pagar %}
+<div class="alert {{ 'alert-success' if nf_entrada and nf_entrada.status == 'confirmada' else 'alert-info' }} py-2 small">
+  <i class="bi bi-box-seam me-1"></i>
+  {% if nf_entrada %}
+    Estoque: NF na Entrada NF — <strong>{{ 'entrada confirmada' if nf_entrada.status == 'confirmada' else 'aguardando confirmação dos itens' }}</strong>.
+    <a href="{{ url_for('nf_confirmar', nf_id=nf_entrada.id) }}">Abrir na Entrada NF</a>
+  {% elif d.xml %}
+    Esta nota não foi enviada ao estoque.
+    <form method="POST" class="d-inline"><input type="hidden" name="acao" value="estoque"><button class="btn btn-sm btn-primary py-0 ms-2">Enviar itens para a Entrada NF</button></form>
+  {% else %}
+    Lançamento sem itens de estoque.
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="row g-3">
+<div class="col-lg-5">
+  <form method="POST" class="card card-body">
+    <input type="hidden" name="acao" value="dados">
+    <h6>Classificação</h6>
+    <label class="form-label small mb-0">Plano de contas</label>
+    <select name="plano_conta_id" class="form-select form-select-sm mb-1"><option value="">— sem classificação —</option>
+      {% for p in planos %}<option value="{{ p.id }}" {{ 'selected' if p.id == d.plano_conta_id }}>{{ p.codigo }} {{ p.nome }}</option>{% endfor %}</select>
+    <div class="form-check small mb-2"><input class="form-check-input" type="checkbox" name="lembrar_plano" id="lp" {{ 'checked' if not d.plano_pessoa }}><label class="form-check-label" for="lp">usar como padrão para {{ d.pessoa }}</label></div>
+    <div class="row g-2">
+      <div class="col-6"><label class="form-label small mb-0">Tipo</label><select name="modelo" class="form-select form-select-sm">{% for m in modelos %}<option {{ 'selected' if m == d.modelo }}>{{ m }}</option>{% endfor %}</select></div>
+      <div class="col-6"><label class="form-label small mb-0">Número</label><input name="numero" value="{{ d.numero or '' }}" class="form-control form-control-sm"></div>
+      <div class="col-6"><label class="form-label small mb-0">Competência</label><input type="date" name="data_competencia" value="{{ d.data_competencia or '' }}" class="form-control form-control-sm"></div>
+      <div class="col-12"><label class="form-label small mb-0">Descrição</label><input name="descricao" value="{{ d.descricao or '' }}" class="form-control form-control-sm"></div>
+    </div>
+    <button class="btn btn-sm btn-primary mt-2">Salvar</button>
+  </form>
+  {% if itens %}
+  <div class="card mt-3"><div class="card-header small fw-semibold">Itens da nota ({{ itens|length }})</div>
+    <div style="max-height:320px;overflow:auto"><table class="table table-sm small mb-0">
+      {% for it in itens %}<tr><td>{{ it.descricao }}</td><td class="text-end text-nowrap">{{ it.qtd|num_br(3) }} {{ it.unid }}</td><td class="text-end">{{ it.total|brl }}</td></tr>{% endfor %}
+    </table></div></div>
+  {% endif %}
+</div>
+
+<div class="col-lg-7">
+  <div class="card"><div class="card-header fw-semibold">Parcelas</div>
+  <table class="table table-sm align-middle mb-0">
+    <thead class="table-light"><tr><th>#</th><th>Vencimento</th><th class="text-end">Valor</th><th>Forma</th><th>Situação</th><th></th></tr></thead>
+    {% for p in parcelas %}
+    <tr>
+      <td>{{ p.numero }}</td><td class="{{ 'text-danger' if p.status == 'atrasado' }}">{{ p.vencimento|data_br }}</td>
+      <td class="text-end">{{ p.valor|brl }}</td><td class="small">{{ p.forma_pagamento or '' }}</td>
+      <td class="small">{% if p.data_pagamento %}<span class="badge bg-success">{{ 'Pago' if pagar else 'Recebido' }}</span> {{ p.data_pagamento|data_br }} · {{ p.valor_pago|brl }}
+          <div class="text-muted" style="font-size:.72rem">{{ p.conta_nome }}{% if p.juros %} · juros {{ p.juros|brl }}{% endif %}{% if p.desconto %} · desc. {{ p.desconto|brl }}{% endif %} · por {{ p.baixado_por }}</div>
+        {% elif p.status == 'atrasado' %}<span class="badge bg-danger">Atrasado</span>{% else %}<span class="badge bg-secondary">Em aberto</span>{% endif %}</td>
+      <td class="text-end text-nowrap">
+        {% if not p.data_pagamento %}
+          <button class="btn btn-sm btn-outline-secondary py-0" type="button" data-bs-toggle="collapse" data-bs-target="#ed{{ p.id }}"><i class="bi bi-pencil"></i></button>
+          {% if fin_pode('perm_baixar') %}<button class="btn btn-sm btn-success py-0" type="button" data-bs-toggle="collapse" data-bs-target="#bx{{ p.id }}">{{ 'Pagar' if pagar else 'Receber' }}</button>{% endif %}
+          {% if fin_pode('perm_excluir') %}<form method="POST" class="d-inline" onsubmit="return confirm('Excluir parcela?')"><input type="hidden" name="acao" value="del_parcela"><input type="hidden" name="parcela_id" value="{{ p.id }}"><button class="btn btn-sm btn-outline-danger py-0"><i class="bi bi-x"></i></button></form>{% endif %}
+        {% elif fin_pode('perm_baixar') %}
+          <form method="POST" class="d-inline" onsubmit="return confirm('Estornar esta baixa?')"><input type="hidden" name="acao" value="estornar"><input type="hidden" name="parcela_id" value="{{ p.id }}"><button class="btn btn-sm btn-outline-warning py-0">Estornar</button></form>
+        {% endif %}
+      </td>
+    </tr>
+    {% if not p.data_pagamento %}
+    <tr class="collapse" id="ed{{ p.id }}"><td colspan="6" class="bg-light">
+      <form method="POST" class="row g-2 align-items-end"><input type="hidden" name="acao" value="parcela"><input type="hidden" name="parcela_id" value="{{ p.id }}">
+        <div class="col-md-4"><label class="form-label small mb-0">Vencimento</label><input type="date" name="vencimento" value="{{ p.vencimento }}" class="form-control form-control-sm"></div>
+        <div class="col-md-3"><label class="form-label small mb-0">Valor</label><input name="valor" value="{{ '%.2f'|format(p.valor)|replace('.', ',') }}" class="form-control form-control-sm"></div>
+        <div class="col-md-3"><label class="form-label small mb-0">Forma</label><select name="forma_pagamento" class="form-select form-select-sm"><option value=""></option>{% for f in formas %}<option {{ 'selected' if f == p.forma_pagamento }}>{{ f }}</option>{% endfor %}</select></div>
+        <div class="col-md-2"><button class="btn btn-sm btn-primary w-100">Salvar</button></div>
+      </form></td></tr>
+    {% if fin_pode('perm_baixar') %}
+    <tr class="collapse" id="bx{{ p.id }}"><td colspan="6" style="background:#eef8f0">
+      <form method="POST" class="row g-2 align-items-end"><input type="hidden" name="acao" value="baixar"><input type="hidden" name="parcela_id" value="{{ p.id }}">
+        <div class="col-md-3"><label class="form-label small mb-0">Data</label><input type="date" name="data_pagamento" value="{{ hoje }}" class="form-control form-control-sm"></div>
+        <div class="col-md-3"><label class="form-label small mb-0">Conta</label><select name="conta_bancaria_id" class="form-select form-select-sm" required><option value="">Escolha…</option>{% for c in contas %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}</select></div>
+        <div class="col-md-2"><label class="form-label small mb-0">Juros/multa</label><input name="juros" class="form-control form-control-sm" placeholder="0,00"></div>
+        <div class="col-md-2"><label class="form-label small mb-0">Desconto</label><input name="desconto" class="form-control form-control-sm" placeholder="0,00"></div>
+        <div class="col-md-2"><label class="form-label small mb-0">Forma</label><select name="forma_pagamento" class="form-select form-select-sm"><option value="">(manter)</option>{% for f in formas %}<option>{{ f }}</option>{% endfor %}</select></div>
+        <div class="col-md-8"><input name="obs" class="form-control form-control-sm" placeholder="Observação (opcional)"></div>
+        <div class="col-md-4"><button class="btn btn-sm btn-success w-100">Confirmar {{ 'pagamento' if pagar else 'recebimento' }}</button></div>
+      </form></td></tr>
+    {% endif %}
+    {% endif %}
+    {% endfor %}
+  </table>
+  <form method="POST" class="card-footer row g-2 align-items-end mx-0"><input type="hidden" name="acao" value="add_parcela">
+    <div class="col-md-4"><label class="form-label small mb-0">Nova parcela — vencimento</label><input type="date" name="vencimento" class="form-control form-control-sm" value="{{ hoje }}"></div>
+    <div class="col-md-3"><label class="form-label small mb-0">Valor</label><input name="valor" class="form-control form-control-sm"></div>
+    <div class="col-md-3"><label class="form-label small mb-0">Forma</label><select name="forma_pagamento" class="form-select form-select-sm"><option value=""></option>{% for f in formas %}<option>{{ f }}</option>{% endfor %}</select></div>
+    <div class="col-md-2"><button class="btn btn-sm btn-outline-primary w-100">Adicionar</button></div>
+  </form>
+  </div>
+</div>
+</div>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Bancos e caixas{% endblock %}
+{% block content %}
+{% include 'fin/_topo.html' %}
+<div class="page-header"><h1><i class="bi bi-gear me-2"></i>Cadastros</h1></div>
+{% include 'fin/_cad_tabs.html' %}
+<p class="text-muted small">Informe o saldo de cada conta numa data. O fluxo de caixa parte desse saldo e soma o que foi baixado a partir dessa data.</p>
+<div class="card mb-3"><table class="table table-sm align-middle mb-0">
+  <thead class="table-light"><tr><th>Nome</th><th>Tipo</th><th>Banco / Ag. / Conta</th><th class="text-end">Saldo inicial</th><th>Em</th><th class="text-end">Saldo hoje</th><th></th></tr></thead>
+  {% for c in contas %}
+  <tr class="{{ 'text-muted' if not c.ativo }}"><td>{{ c.nome }}{% if not c.ativo %} (inativa){% endif %}</td><td>{{ c.tipo }}</td>
+    <td class="small">{{ c.banco or '' }} {{ c.agencia or '' }} {{ c.conta or '' }}</td>
+    <td class="text-end">{{ c.saldo_inicial|brl }}</td><td>{{ c.data_saldo_inicial|data_br }}</td>
+    <td class="text-end fw-semibold">{{ saldos.get(c.id, 0)|brl }}</td>
+    <td><button class="btn btn-sm btn-outline-secondary py-0" data-bs-toggle="collapse" data-bs-target="#c{{ c.id }}"><i class="bi bi-pencil"></i></button></td></tr>
+  <tr class="collapse" id="c{{ c.id }}"><td colspan="7" class="bg-light">{% with c=c %}{% include 'fin/_form_conta.html' %}{% endwith %}</td></tr>
+  {% else %}<tr><td colspan="7" class="text-center text-muted py-3">Nenhuma conta cadastrada.</td></tr>{% endfor %}
+</table></div>
+<div class="card card-body"><h6>Nova conta</h6>{% with c=None %}{% include 'fin/_form_conta.html' %}{% endwith %}</div>
+{% endblock %}

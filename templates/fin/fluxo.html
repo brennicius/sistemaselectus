@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Fluxo de caixa{% endblock %}
+{% block content %}
+{% include 'fin/_topo.html' %}
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div><h1><i class="bi bi-graph-up me-2"></i>Fluxo de caixa</h1>
+    <p>Realizado (pagamentos e recebimentos baixados) + previsto (parcelas em aberto pelo vencimento). Parcelas atrasadas entram como previstas para hoje.</p></div>
+  {% if fin_pode('perm_baixar') and contas|length > 1 %}
+  <button class="btn btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#transf"><i class="bi bi-arrow-left-right me-1"></i>Transferência entre contas</button>
+  {% endif %}
+</div>
+
+<form method="POST" action="{{ url_for('fin.transferencia') }}" id="transf" class="collapse card card-body mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-2"><label class="form-label small mb-0">Data</label><input type="date" name="data" class="form-control form-control-sm" value="{{ saldos and '' }}"></div>
+    <div class="col-md-3"><label class="form-label small mb-0">De</label><select name="origem_id" class="form-select form-select-sm">{% for c in contas %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}</select></div>
+    <div class="col-md-3"><label class="form-label small mb-0">Para</label><select name="destino_id" class="form-select form-select-sm">{% for c in contas %}<option value="{{ c.id }}" {{ 'selected' if loop.index == 2 }}>{{ c.nome }}</option>{% endfor %}</select></div>
+    <div class="col-md-2"><label class="form-label small mb-0">Valor</label><input name="valor" class="form-control form-control-sm" required></div>
+    <div class="col-md-2"><button class="btn btn-sm btn-primary w-100">Registrar</button></div>
+  </div>
+</form>
+
+<div class="row g-3 mb-3">
+  {% for s in saldos %}<div class="col-md-3"><div class="card"><div class="card-body py-2"><div class="small text-muted">Saldo hoje — {{ s.conta.nome }}</div><div class="fs-5 fw-bold {{ 'text-danger' if s.saldo < 0 }}">{{ s.saldo|brl }}</div></div></div></div>{% endfor %}
+  {% if atras_sai or atras_ent %}<div class="col-md-3"><div class="card border-danger"><div class="card-body py-2 small">
+    <div class="text-danger fw-semibold">Em atraso</div>a pagar {{ atras_sai|brl }}<br>a receber {{ atras_ent|brl }}</div></div></div>{% endif %}
+</div>
+
+<form class="card card-body py-2 mb-3" method="GET">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-2"><label class="form-label small mb-0">Agrupar por</label>
+      <select name="agrup" class="form-select form-select-sm" onchange="this.form.de.value='';this.form.ate.value='';this.form.submit()">
+        {% for k, n in [('dia','Dia'),('semana','Semana'),('mes','Mês')] %}<option value="{{ k }}" {{ 'selected' if agrup == k }}>{{ n }}</option>{% endfor %}</select></div>
+    <div class="col-md-2"><label class="form-label small mb-0">De</label><input type="date" name="de" value="{{ de }}" class="form-control form-control-sm"></div>
+    <div class="col-md-2"><label class="form-label small mb-0">Até</label><input type="date" name="ate" value="{{ ate }}" class="form-control form-control-sm"></div>
+    <div class="col-md-3"><label class="form-label small mb-0">Conta</label>
+      <select name="conta" class="form-select form-select-sm"><option value="">Todas</option>
+        {% for c in contas %}<option value="{{ c.id }}" {{ 'selected' if conta_id == c.id }}>{{ c.nome }}</option>{% endfor %}</select></div>
+    <div class="col-md-1"><button class="btn btn-sm btn-secondary w-100">Ver</button></div>
+  </div>
+</form>
+
+<div class="card mb-3"><div class="card-body"><canvas id="graf" height="70"></canvas></div></div>
+
+<div class="card"><div class="table-responsive">
+<table class="table table-sm table-hover mb-0 text-end">
+  <thead class="table-light"><tr><th class="text-start">Período</th>
+    <th>Entradas realizadas</th><th>Saídas realizadas</th><th>Entradas previstas</th><th>Saídas previstas</th><th>Saldo</th></tr></thead>
+  <tr class="text-muted"><td class="text-start">Saldo inicial</td><td colspan="4"></td><td>{{ saldo_ini|brl }}</td></tr>
+  {% for l in linhas %}
+  <tr class="{{ 'table-light' if not l.futuro }}">
+    <td class="text-start">{{ label(l.periodo) }}</td>
+    <td class="text-success">{{ l.ent_real|brl if l.ent_real else '' }}</td>
+    <td class="text-danger">{{ l.sai_real|brl if l.sai_real else '' }}</td>
+    <td class="text-success fst-italic">{{ l.ent_prev|brl if l.ent_prev else '' }}</td>
+    <td class="text-danger fst-italic">{{ l.sai_prev|brl if l.sai_prev else '' }}</td>
+    <td class="fw-semibold {{ 'text-danger' if l.saldo < 0 }}">{{ l.saldo|brl }}</td>
+  </tr>
+  {% endfor %}
+</table></div></div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+if (window.Chart) new Chart(document.getElementById('graf'), {
+  type: 'line',
+  data: { labels: {{ serie_lbl|tojson }}, datasets: [{ label: 'Saldo projetado', data: {{ serie_val|tojson }},
+          borderColor: '#2e75b6', backgroundColor: 'rgba(46,117,182,.1)', fill: true, tension: .2, pointRadius: 2 }] },
+  options: { plugins: { legend: { display: false } },
+             scales: { y: { ticks: { callback: v => 'R$ ' + v.toLocaleString('pt-BR') } } } }
+});
+</script>
+{% endblock %}

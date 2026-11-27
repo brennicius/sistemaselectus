@@ -1,0 +1,9 @@
+{# barra do usuário do financeiro #}
+{% if fin_user %}
+<div class="d-flex justify-content-end align-items-center gap-2 small text-muted mb-2">
+  <i class="bi bi-person-circle"></i> {{ fin_user.nome }}
+  <span class="badge {{ 'bg-dark' if fin_user.perfil == 'master' else 'bg-secondary' }}">{{ fin_user.perfil }}</span>
+  <a href="{{ url_for('fin.minha_senha') }}" class="text-muted">trocar senha</a> ·
+  <a href="{{ url_for('fin.logout') }}" class="text-muted">sair</a>
+</div>
+{% endif %}

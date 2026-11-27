@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Plano de contas{% endblock %}
+{% block content %}
+{% include 'fin/_topo.html' %}
+<div class="page-header"><h1><i class="bi bi-gear me-2"></i>Cadastros</h1></div>
+{% include 'fin/_cad_tabs.html' %}
+<p class="text-muted small">Contas com subcontas (ex.: 3.1) são grupos e só somam. Os lançamentos vão nas contas do último nível (ex.: 3.1.02). Para criar uma subconta, use um código que comece pelo código do grupo. Os grupos 1 a 5 montam a DRE; 6 (investimentos) e 7 (não operacionais) aparecem abaixo do resultado.</p>
+<form method="POST" class="card card-body mb-3"><input type="hidden" name="acao" value="salvar">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-2"><label class="form-label small mb-0">Código</label><input name="codigo" class="form-control form-control-sm" placeholder="4.2.08" required></div>
+    <div class="col-md-5"><label class="form-label small mb-0">Nome</label><input name="nome" class="form-control form-control-sm" required></div>
+    <div class="col-md-2"><label class="form-label small mb-0">Tipo</label><select name="tipo" class="form-select form-select-sm"><option value="D">Despesa/saída</option><option value="R">Receita/entrada</option></select></div>
+    <div class="col-md-3"><button class="btn btn-sm btn-primary">Adicionar conta</button></div>
+  </div>
+</form>
+<div class="card"><table class="table table-sm align-middle mb-0">
+  <thead class="table-light"><tr><th>Código</th><th>Nome</th><th>Tipo</th><th class="text-end">Lançamentos</th><th></th></tr></thead>
+  {% for r in rows %}{% set nivel = r.codigo.count('.') %}
+  <tr class="{{ 'fw-bold table-light' if nivel == 0 else ('fw-semibold' if nivel == 1 else '') }} {{ 'text-decoration-line-through text-muted' if not r.ativo }}">
+    <td style="padding-left:{{ 8 + nivel*16 }}px">{{ r.codigo }}</td>
+    <td>
+      <form method="POST" class="d-flex gap-1 collapse" id="e{{ r.id }}"><input type="hidden" name="acao" value="salvar"><input type="hidden" name="id" value="{{ r.id }}">
+        <input name="codigo" value="{{ r.codigo }}" class="form-control form-control-sm" style="width:90px">
+        <input name="nome" value="{{ r.nome }}" class="form-control form-control-sm">
+        <select name="tipo" class="form-select form-select-sm" style="width:80px"><option value="D">D</option><option value="R" {{ 'selected' if r.tipo == 'R' }}>R</option></select>
+        <button class="btn btn-sm btn-primary">OK</button></form>
+      <span>{{ r.nome }}</span></td>
+    <td>{{ 'Receita' if r.tipo == 'R' else 'Despesa' }}</td><td class="text-end">{{ r.usos or '' }}</td>
+    <td class="text-end text-nowrap">
+      <button class="btn btn-sm btn-outline-secondary py-0" data-bs-toggle="collapse" data-bs-target="#e{{ r.id }}"><i class="bi bi-pencil"></i></button>
+      <form method="POST" class="d-inline"><input type="hidden" name="acao" value="toggle"><input type="hidden" name="id" value="{{ r.id }}">
+        <button class="btn btn-sm btn-outline-{{ 'danger' if r.ativo else 'success' }} py-0" title="{{ 'Desativar' if r.ativo else 'Reativar' }}"><i class="bi bi-{{ 'eye-slash' if r.ativo else 'eye' }}"></i></button></form>
+    </td></tr>
+  {% endfor %}
+</table></div>
+{% endblock %}

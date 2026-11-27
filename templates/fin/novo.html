@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% set pagar = natureza == 'pagar' %}
+{% block title %}Novo lançamento{% endblock %}
+{% block content %}
+{% include 'fin/_topo.html' %}
+<div class="page-header"><h1><i class="bi bi-plus-circle me-2"></i>Novo lançamento a {{ natureza }}</h1>
+  <p>{% if nf_entrada %}A partir da NF {{ nf_entrada.numero }} da Entrada NF (estoque).{% else %}Para contas sem XML: aluguel, salários, impostos, notas em PDF etc.{% endif %}</p></div>
+
+<form method="POST" class="card card-body" style="max-width:980px">
+  {% if nf_entrada %}<input type="hidden" name="nf_entrada_id" value="{{ nf_entrada.id }}">{% endif %}
+  <div class="row g-2">
+    <div class="col-md-5"><label class="form-label small">{{ 'Fornecedor' if pagar else 'Cliente' }}</label>
+      <input name="pessoa" list="lst-pessoas" class="form-control" required value="{{ nf_entrada.fornecedor if nf_entrada else '' }}" oncomplete="off" onchange="pessoaPlano(this.value)">
+      <datalist id="lst-pessoas">{% for p in pessoas %}<option value="{{ p.nome }}" data-plano="{{ p.plano_conta_id or '' }}" data-doc="{{ p.cnpj_cpf or '' }}">{% endfor %}</datalist></div>
+    <div class="col-md-3"><label class="form-label small">CNPJ/CPF</label><input name="cnpj" id="f-cnpj" class="form-control" value="{{ nf_entrada.cnpj if nf_entrada and nf_entrada.cnpj else '' }}"></div>
+    <div class="col-md-2"><label class="form-label small">Tipo</label>
+      <select name="modelo" class="form-select">{% for m in modelos %}<option {{ 'selected' if (nf_entrada and m == 'NF-e') }}>{{ m }}</option>{% endfor %}</select></div>
+    <div class="col-md-2"><label class="form-label small">Número</label><input name="numero" class="form-control" value="{{ nf_entrada.numero if nf_entrada else '' }}"></div>
+    <div class="col-md-2"><label class="form-label small">Emissão</label><input type="date" name="data_emissao" class="form-control" value="{{ nf_entrada.data_emissao if nf_entrada and nf_entrada.data_emissao else hoje }}"></div>
+    <div class="col-md-2"><label class="form-label small">Competência</label><input type="date" name="data_competencia" class="form-control" placeholder="igual à emissão"></div>
+    <div class="col-md-5"><label class="form-label small">Plano de contas</label>
+      <select name="plano_conta_id" id="f-plano" class="form-select"><option value="">— escolher —</option>
+        {% for p in planos %}<option value="{{ p.id }}">{{ p.codigo }} {{ p.nome }}</option>{% endfor %}</select>
+      <div class="form-check small mt-1"><input class="form-check-input" type="checkbox" name="lembrar_plano" id="lp" checked><label for="lp" class="form-check-label">usar este plano como padrão para este {{ 'fornecedor' if pagar else 'cliente' }}</label></div></div>
+    <div class="col-md-3"><label class="form-label small">Descrição</label><input name="descricao" class="form-control"></div>
+  </div>
+
+  <h6 class="mt-3">Parcelas</h6>
+  <div class="row g-2 mb-2 align-items-end">
+    <div class="col-md-2"><label class="form-label small mb-0">Valor total</label><input id="g-total" class="form-control form-control-sm" value="{{ '%.2f'|format(nf_entrada.total)|replace('.', ',') if nf_entrada and nf_entrada.total else '' }}"></div>
+    <div class="col-md-2"><label class="form-label small mb-0">Nº de parcelas</label><input id="g-n" type="number" min="1" value="1" class="form-control form-control-sm"></div>
+    <div class="col-md-2"><label class="form-label small mb-0">1º vencimento</label><input id="g-venc" type="date" value="{{ hoje }}" class="form-control form-control-sm"></div>
+    <div class="col-md-2"><label class="form-label small mb-0">Intervalo (dias)</label><input id="g-int" type="number" value="30" class="form-control form-control-sm"></div>
+    <div class="col-md-2"><button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="gerar()">Gerar parcelas</button></div>
+  </div>
+  <table class="table table-sm"><thead><tr><th>#</th><th>Vencimento</th><th>Valor</th><th>Forma</th></tr></thead><tbody id="parcs"></tbody></table>
+  <div><button class="btn btn-primary"><i class="bi bi-save me-1"></i>Salvar lançamento</button>
+    <a href="{{ url_for('fin.lista', natureza=natureza) }}" class="btn btn-link">Cancelar</a></div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const FORMAS = {{ formas|tojson }};
+function linha(i, venc, valor){
+  return `<tr><td><input type="hidden" name="num_${i}" value="${i}">${i}</td>
+  <td><input type="date" name="venc_${i}" value="${venc}" class="form-control form-control-sm"></td>
+  <td><input name="valor_${i}" value="${valor}" class="form-control form-control-sm"></td>
+  <td><select name="forma_${i}" class="form-select form-select-sm"><option value=""></option>${FORMAS.map(f=>`<option>${f}</option>`).join('')}</select></td></tr>`;
+}
+function num(s){ s=(s||'').trim(); if(s.includes(',')) s=s.replace(/\./g,'').replace(',','.'); return parseFloat(s)||0; }
+function gerar(){
+  const tot=num(document.getElementById('g-total').value), n=Math.max(1,parseInt(document.getElementById('g-n').value)||1);
+  const v0=document.getElementById('g-venc').value, iv=parseInt(document.getElementById('g-int').value)||30;
+  const base=Math.floor(tot/n*100)/100; let html='';
+  for(let i=1;i<=n;i++){
+    const d=new Date(v0+'T12:00:00'); d.setDate(d.getDate()+iv*(i-1));
+    const v=(i===n? (tot-base*(n-1)) : base).toFixed(2).replace('.',',');
+    html+=linha(i, d.toISOString().slice(0,10), v);
+  }
+  document.getElementById('parcs').innerHTML=html;
+}
+function pessoaPlano(nome){
+  const o=[...document.querySelectorAll('#lst-pessoas option')].find(x=>x.value===nome);
+  if(!o) return;
+  if(o.dataset.plano) document.getElementById('f-plano').value=o.dataset.plano;
+  if(o.dataset.doc && !document.getElementById('f-cnpj').value) document.getElementById('f-cnpj').value=o.dataset.doc;
+}
+gerar();
+</script>
+{% endblock %}

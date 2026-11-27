@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Empresa{% endblock %}
+{% block content %}
+{% include 'fin/_topo.html' %}
+<div class="page-header"><h1><i class="bi bi-gear me-2"></i>Cadastros</h1></div>
+{% include 'fin/_cad_tabs.html' %}
+<form method="POST" class="card card-body" style="max-width:560px">
+  <div class="mb-2"><label class="form-label small">Razão social</label><input name="razao" value="{{ razao }}" class="form-control"></div>
+  <div class="mb-3"><label class="form-label small">CNPJ</label><input name="cnpj" value="{{ cnpj }}" class="form-control" required>
+    <div class="form-text">Na importação, nota com este CNPJ como emitente vira conta a receber. As demais viram conta a pagar.</div></div>
+  <div><button class="btn btn-primary">Salvar</button></div>
+</form>
+{% endblock %}

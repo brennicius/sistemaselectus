@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}DRE {{ ano }}{% endblock %}
+{% block content %}
+{% include 'fin/_topo.html' %}
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div><h1><i class="bi bi-clipboard-data me-2"></i>DRE gerencial {{ ano }}</h1>
+    <p>{% if regime == 'caixa' %}Regime de caixa: pelo que foi efetivamente pago e recebido, na data da baixa.{% else %}Regime de competência: pelo valor das notas, no mês de competência.{% endif %}</p></div>
+  <form class="d-flex gap-2" method="GET">
+    <select name="regime" class="form-select form-select-sm" onchange="this.form.submit()">
+      <option value="caixa" {{ 'selected' if regime == 'caixa' }}>Caixa</option>
+      <option value="competencia" {{ 'selected' if regime == 'competencia' }}>Competência</option></select>
+    <input type="number" name="ano" value="{{ ano }}" class="form-control form-control-sm" style="width:90px" onchange="this.form.submit()">
+  </form>
+</div>
+{% if sem_plano %}<div class="alert alert-warning py-2 small">Há valores sem plano de contas ({{ sem_plano|sum|brl }}) que não entram na DRE. Classifique em Contas a pagar/receber → filtro "Sem classificação".</div>{% endif %}
+<div class="card"><div class="table-responsive">
+<table class="table table-sm mb-0 text-end" style="font-size:.82rem">
+  <thead class="table-light"><tr><th class="text-start">Conta</th>{% for m in meses %}<th>{{ MESES[loop.index0] }}</th>{% endfor %}<th>Total</th></tr></thead>
+  {% set ns = namespace(grupo=None) %}
+  {% for l in linhas %}
+    {% set g = l.codigo.split('.')[0] %}
+    {% if ns.grupo and g != ns.grupo and ns.grupo in marcos %}
+      {% set mk = marcos[ns.grupo] %}
+      <tr class="table-primary fw-bold"><td class="text-start">{{ mk[0] }}</td>{% for v in mk[1] %}<td class="{{ 'text-danger' if v < 0 }}">{{ v|num_br(0) if v else '–' }}</td>{% endfor %}<td>{{ mk[1]|sum|num_br(0) }}</td></tr>
+    {% endif %}
+    {% set ns.grupo = g %}
+    <tr class="{{ 'fw-bold table-light' if l.nivel == 0 else ('fw-semibold' if l.nivel == 1 else '') }}">
+      <td class="text-start" style="padding-left:{{ 8 + l.nivel*16 }}px">{{ l.codigo }} {{ l.nome }}</td>
+      {% for v in l.vals %}<td>{{ v|num_br(0) if v else '' }}</td>{% endfor %}<td>{{ l.total|num_br(0) if l.total else '' }}</td></tr>
+  {% endfor %}
+  {% if ns.grupo in marcos %}{% set mk = marcos[ns.grupo] %}
+  <tr class="table-primary fw-bold"><td class="text-start">{{ mk[0] }}</td>{% for v in mk[1] %}<td class="{{ 'text-danger' if v < 0 }}">{{ v|num_br(0) if v else '–' }}</td>{% endfor %}<td>{{ mk[1]|sum|num_br(0) }}</td></tr>{% endif %}
+</table></div></div>
+{% endblock %}

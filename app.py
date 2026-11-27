@@ -6517,6 +6517,9 @@ def fluxo_caixa():
 
 init_db()
 
+import financeiro
+financeiro.init_app(app, get_db)
+
 if __name__ == '__main__':
     import webbrowser, threading
     threading.Timer(1.2, lambda: webbrowser.open('http://localhost:5000')).start()

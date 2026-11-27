@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Importar notas{% endblock %}
+{% block content %}
+{% include 'fin/_topo.html' %}
+<div class="page-header"><h1><i class="bi bi-filetype-xml me-2"></i>Importar notas (XML)</h1>
+  <p>Envie um ou vários XML de NF-e/NFC-e, ou um ZIP com vários (como o exportado pelo SAC Varejo). O sistema identifica sozinho se a nota foi <strong>emitida</strong> (conta a receber) ou <strong>recebida</strong> (conta a pagar) pelo CNPJ da empresa. XML de cancelamento marca a nota como cancelada.</p></div>
+
+<form method="POST" enctype="multipart/form-data" class="card card-body mb-4" style="max-width:760px">
+  <input type="file" name="arquivos" class="form-control mb-2" accept=".xml,.zip" multiple required>
+  <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="estoque" id="est" checked>
+    <label class="form-check-label" for="est">Notas recebidas: enviar os itens para a <strong>Entrada NF</strong> (estoque) para confirmar a entrada</label>
+    <div class="form-text">Desmarque para notas que não são de mercadoria (energia, serviços, equipamentos). Dá para enviar depois, pela tela do lançamento.</div></div>
+  <div><button class="btn btn-primary"><i class="bi bi-upload me-1"></i>Importar</button></div>
+</form>
+
+{% if resultado %}
+<div class="card mb-4"><div class="card-header fw-semibold">Resultado da importação</div>
+<table class="table table-sm mb-0">
+  {% for st, doc_id, msg in resultado %}
+  <tr><td style="width:110px">
+    {% if st == 'ok' %}<span class="badge bg-success">importada</span>
+    {% elif st == 'duplicado' %}<span class="badge bg-secondary">já existia</span>
+    {% elif st == 'cancelado' %}<span class="badge bg-warning text-dark">cancelada</span>
+    {% elif st == 'ignorado' %}<span class="badge bg-light text-dark">ignorado</span>
+    {% else %}<span class="badge bg-danger">erro</span>{% endif %}</td>
+    <td>{{ msg }}</td>
+    <td class="text-end">{% if doc_id %}<a href="{{ url_for('fin.documento', doc_id=doc_id) }}">abrir</a>{% endif %}</td></tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+
+<div id="pendentes" class="card">
+  <div class="card-header fw-semibold">Notas da Entrada NF (PDF ou manual) sem conta a pagar</div>
+  <table class="table table-sm align-middle mb-0">
+    <thead class="table-light"><tr><th>Emissão</th><th>Nota</th><th>Fornecedor</th><th class="text-end">Total</th><th>Estoque</th><th></th></tr></thead>
+    {% for n in pend %}
+    <tr><td>{{ n.data_emissao|data_br }}</td><td>{{ n.numero }}{% if n.serie %}/{{ n.serie }}{% endif %}</td><td>{{ n.fornecedor }}</td>
+      <td class="text-end">{{ n.total|brl }}</td><td class="small">{{ n.status }}</td>
+      <td class="text-end"><a class="btn btn-sm btn-outline-primary py-0" href="{{ url_for('fin.novo', natureza='pagar', nf_entrada=n.id) }}">Gerar conta a pagar</a></td></tr>
+    {% else %}
+    <tr><td colspan="6" class="text-muted text-center py-3">Nenhuma nota pendente.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}
