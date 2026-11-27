@@ -177,7 +177,9 @@
           <th>Conversão de Embalagem</th>
           <th class="text-center">Unid. Uso</th>
           <th class="text-end">R$ / Unid. Uso</th>
-          <th class="text-end" style="min-width:120px">Estoque Atual</th>
+          <th class="text-end" style="min-width:120px">Estoque Cozinha</th>
+          <th class="text-end" style="min-width:120px">Estoque Central</th>
+          <th class="text-end" style="min-width:90px">Estoque Total</th>
           <th class="text-end" style="min-width:120px">Estoque Mín.</th>
           <th class="text-center">Ações</th>
         </tr>
@@ -303,15 +305,32 @@
             {% endif %}
           </td>
           <td class="text-end">
-            <div class="d-flex justify-content-end align-items-center gap-1 estoque-row" data-id="{{ ins.id }}">
+            <div class="d-flex justify-content-end align-items-center gap-1 estoque-row" data-id="{{ ins.id }}" data-url="estoque">
               <input type="number" step="0.01" min="0"
                      class="form-control form-control-sm text-end estoque-input"
                      value="{{ ins.estoque_atual if ins.estoque_atual else '' }}"
-                     placeholder="0" style="width:80px">
-              <button class="btn btn-sm btn-success save-estoque-btn" title="Salvar">
+                     placeholder="0" style="width:80px" title="Estoque da Cozinha">
+              <button class="btn btn-sm btn-success save-estoque-btn" title="Salvar estoque da Cozinha">
                 <i class="bi bi-check-lg"></i>
               </button>
             </div>
+            <div class="text-muted small text-end">{{ ins.unidade_uso }}</div>
+          </td>
+          <td class="text-end">
+            <div class="d-flex justify-content-end align-items-center gap-1 estoque-row" data-id="{{ ins.id }}" data-url="estoque_central">
+              <input type="number" step="0.01" min="0"
+                     class="form-control form-control-sm text-end estoque-input"
+                     value="{{ ins.estoque_central if ins.estoque_central else '' }}"
+                     placeholder="0" style="width:80px" title="Estoque da Central">
+              <button class="btn btn-sm btn-success save-estoque-btn" title="Salvar estoque da Central">
+                <i class="bi bi-check-lg"></i>
+              </button>
+            </div>
+            <div class="text-muted small text-end">{{ ins.unidade_uso }}</div>
+          </td>
+          {% set _est_total = (ins.estoque_atual or 0) + (ins.estoque_central or 0) %}
+          <td class="text-end align-middle">
+            <span class="fw-bold font-monospace{% if not _est_total %} text-muted{% endif %}">{{ ('%.1f'|format(_est_total)).replace('.', ',') }}</span>
             <div class="text-muted small text-end">{{ ins.unidade_uso }}</div>
           </td>
           <td class="text-end">
@@ -417,7 +436,7 @@ function salvarEstoque(row) {
   const id  = row.dataset.id;
   const val = row.querySelector('.estoque-input').value;
   const btn = row.querySelector('.save-estoque-btn');
-  fetch(`/insumos/${id}/estoque`, {
+  fetch(`/insumos/${id}/${row.dataset.url || 'estoque'}`, {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({estoque: val === '' ? 0 : parseFloat(val)})
   }).then(r=>r.json()).then(d => {
