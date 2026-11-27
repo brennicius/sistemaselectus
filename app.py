@@ -9,7 +9,42 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 FLUXO_SENHA = 'Panda2023!'
 
-DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cozinha.db')
+# Banco: no Railway, DB_PATH aponta para o Volume persistente (/data/cozinha.db),
+# que sobrevive aos deploys. Localmente, sem DB_PATH, usa o cozinha.db da pasta.
+_DB_REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cozinha.db')
+DB = os.environ.get('DB_PATH') or _DB_REPO
+DB_PERSISTENTE = bool(os.environ.get('DB_PATH'))
+BACKUP_DIR = os.path.join(os.path.dirname(DB), 'backups')
+
+if DB != _DB_REPO and not os.path.exists(DB):
+    # Primeira subida com Volume vazio: semeia com o banco do repositório
+    import shutil as _shutil
+    os.makedirs(os.path.dirname(DB), exist_ok=True)
+    if os.path.exists(_DB_REPO):
+        _shutil.copy2(_DB_REPO, DB)
+        print(f'[DB] Volume vazio: copiado {_DB_REPO} -> {DB}', flush=True)
+print(f'[DB] usando {DB} (persistente={DB_PERSISTENTE})', flush=True)
+
+
+def _backup_db(motivo='manual', manter=30):
+    """Copia o banco atual para BACKUP_DIR e mantém só os N mais recentes."""
+    import shutil as _sh
+    if not os.path.exists(DB):
+        return None
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    nome = f"cozinha_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}_{motivo}.db"
+    destino = os.path.join(BACKUP_DIR, nome)
+    src = sqlite3.connect(DB)
+    dst = sqlite3.connect(destino)
+    src.backup(dst)  # cópia consistente mesmo com o app em uso
+    dst.close(); src.close()
+    arqs = sorted(f for f in os.listdir(BACKUP_DIR) if f.endswith('.db'))
+    for velho in arqs[:-manter]:
+        try:
+            os.remove(os.path.join(BACKUP_DIR, velho))
+        except Exception:
+            pass
+    return destino
 
 CATS1_INSUMO = ['Fornecedor', 'Mercado', 'Administrativo']
 
@@ -5856,6 +5891,9 @@ def debug_embalagens():
 @app.route('/sistema/importar', methods=['POST'])
 def sistema_importar():
     import sqlite3 as _sqlite3, shutil, tempfile
+    if request.form.get('senha', '') != FLUXO_SENHA:
+        flash('Senha incorreta. A base não foi substituída.', 'danger')
+        return redirect(request.referrer or url_for('index'))
     f = request.files.get('arquivo')
     if not f:
         flash('Nenhum arquivo enviado.', 'danger')
@@ -5872,10 +5910,31 @@ def sistema_importar():
         os.unlink(tmp.name)
         flash(f'Arquivo inválido: {e}', 'danger')
         return redirect(request.referrer or url_for('index'))
+    try:
+        bkp = _backup_db('antes_importar')
+    except Exception as e:
+        os.unlink(tmp.name)
+        flash(f'Não consegui fazer o backup da base atual ({e}). Importação cancelada.', 'danger')
+        return redirect(request.referrer or url_for('index'))
     shutil.copy2(tmp.name, DB)
     os.unlink(tmp.name)
-    flash('Base importada com sucesso! O sistema foi atualizado.', 'success')
+    init_db()  # aplica tabelas/colunas novas caso o arquivo seja mais antigo
+    extra = f' Backup da base anterior: {os.path.basename(bkp)}.' if bkp else ''
+    flash('Base importada com sucesso! O sistema foi atualizado.' + extra, 'success')
     return redirect(url_for('index'))
+
+
+@app.route('/sistema/info')
+def sistema_info():
+    bkps = []
+    if os.path.isdir(BACKUP_DIR):
+        bkps = sorted(f for f in os.listdir(BACKUP_DIR) if f.endswith('.db'))[-5:]
+    return jsonify({
+        'banco': DB,
+        'persistente': DB_PERSISTENTE,
+        'tamanho_kb': round(os.path.getsize(DB) / 1024) if os.path.exists(DB) else None,
+        'ultimos_backups': bkps,
+    })
 
 
 # ─────────────── CAFÉ — EXPORTAR / IMPORTAR ──────────────────────────────────
